@@ -1,0 +1,92 @@
+# Builds the dashboard as a static site and publishes it to GitHub Pages.
+#
+# The demo has no Python process behind it, so the engine is run in demo mode
+# during the build and its real API responses are captured as JSON fixtures.
+# That keeps the deployed numbers honest: the detectors, sizing and risk scoring
+# genuinely ran to produce them, rather than being hand-written to look good.
+
+name: Deploy demo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install engine dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run the engine's test suite
+        run: python -m pytest tests/ -q
+        working-directory: backend
+
+      - name: Capture demo fixtures from the real engine
+        run: python -m scripts.generate_demo_fixtures
+        working-directory: backend
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dashboard dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+
+      - name: Type-check
+        run: npx tsc --noEmit
+        working-directory: frontend
+
+      - name: Build static demo
+        run: npm run build:demo
+        working-directory: frontend
+        env:
+          # Pages serves the site from /<repo>, so assets need that prefix.
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+
+      - name: Disable Jekyll
+        # Without this, Pages strips the _next/ directory and the site loads
+        # with no JavaScript or CSS at all.
+        run: touch frontend/out/.nojekyll
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turn Pages on for the repo if it is not already, so a fresh clone
+          # deploys without anyone visiting the settings page first.
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

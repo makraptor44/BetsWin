@@ -1,0 +1,176 @@
+{
+ "stored": {
+  "window_days": 30,
+  "total_detected": 4,
+  "avg_margin": 0.035561292132059774,
+  "max_margin": 0.07602941893768289,
+  "avg_confidence": 85.5,
+  "theoretical_turnover": 1999.96,
+  "theoretical_profit": 71.13,
+  "settled_count": 0,
+  "realised_pnl": 0.0,
+  "by_kind": [
+   {
+    "kind": "binary_complement",
+    "n": 1,
+    "avg_margin": 0.016260162601626105,
+    "profit": 8.13
+   },
+   {
+    "kind": "cross_venue",
+    "n": 1,
+    "avg_margin": 0.07602941893768289,
+    "profit": 38.01
+   },
+   {
+    "kind": "dutch_no",
+    "n": 1,
+    "avg_margin": 0.013686156937116722,
+    "profit": 6.87
+   },
+   {
+    "kind": "dutch_yes",
+    "n": 1,
+    "avg_margin": 0.03626943005181338,
+    "profit": 18.12
+   }
+  ],
+  "by_venue": {
+   "polymarket": 3,
+   "kalshi": 2
+  },
+  "by_day": [
+   {
+    "day": "2026-08-27",
+    "n": 4,
+    "avg_margin": 0.035561292132059774,
+    "profit": 71.13
+   }
+  ]
+ },
+ "margin_histogram": [
+  {
+   "from": 0.0,
+   "to": 0.005,
+   "count": 0
+  },
+  {
+   "from": 0.005,
+   "to": 0.01,
+   "count": 0
+  },
+  {
+   "from": 0.01,
+   "to": 0.015,
+   "count": 1
+  },
+  {
+   "from": 0.015,
+   "to": 0.02,
+   "count": 1
+  },
+  {
+   "from": 0.02,
+   "to": 0.025,
+   "count": 0
+  },
+  {
+   "from": 0.025,
+   "to": 0.03,
+   "count": 0
+  },
+  {
+   "from": 0.03,
+   "to": 0.035,
+   "count": 0
+  },
+  {
+   "from": 0.035,
+   "to": 0.04,
+   "count": 1
+  },
+  {
+   "from": 0.04,
+   "to": 0.045,
+   "count": 0
+  },
+  {
+   "from": 0.045,
+   "to": 0.05,
+   "count": 0
+  },
+  {
+   "from": 0.05,
+   "to": 0.055,
+   "count": 0
+  },
+  {
+   "from": 0.055,
+   "to": 0.06,
+   "count": 1
+  }
+ ],
+ "recent_scans": [
+  {
+   "id": 1,
+   "started_at": "2026-08-27T11:46:07.514185+00:00",
+   "duration": 1.425,
+   "events_scanned": 12,
+   "markets_scanned": 19,
+   "quotes_scanned": 38,
+   "arbs_found": 4,
+   "new_arbs": 4,
+   "errors": "[]"
+  },
+  {
+   "id": 2,
+   "started_at": "2026-08-27T11:46:08.940837+00:00",
+   "duration": 1.36,
+   "events_scanned": 12,
+   "markets_scanned": 19,
+   "quotes_scanned": 38,
+   "arbs_found": 4,
+   "new_arbs": 0,
+   "errors": "[]"
+  },
+  {
+   "id": 3,
+   "started_at": "2026-08-27T11:46:10.303031+00:00",
+   "duration": 1.334,
+   "events_scanned": 12,
+   "markets_scanned": 19,
+   "quotes_scanned": 38,
+   "arbs_found": 4,
+   "new_arbs": 0,
+   "errors": "[]"
+  },
+  {
+   "id": 4,
+   "started_at": "2026-08-27T11:46:11.639070+00:00",
+   "duration": 1.337,
+   "events_scanned": 12,
+   "markets_scanned": 19,
+   "quotes_scanned": 38,
+   "arbs_found": 4,
+   "new_arbs": 0,
+   "errors": "[]"
+  }
+ ],
+ "live": {
+  "count": 4,
+  "by_kind": {
+   "cross_venue": 1,
+   "dutch_yes": 1,
+   "binary_complement": 1,
+   "dutch_no": 1
+  },
+  "by_venue": {
+   "polymarket": 3,
+   "kalshi": 2
+  },
+  "total_profit_available": 71.13,
+  "total_stake_required": 1999.96,
+  "avg_margin": 0.03556,
+  "avg_confidence": 85.5
+ }
+}

@@ -1,0 +1,28 @@
+services:
+  engine:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      HOST: 0.0.0.0
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Scan history and price tape survive container replacement.
+      - ./backend/data:/app/data
+      - ./backend/logs:/app/logs
+
+  dashboard:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - engine
+    environment:
+      # Server-side rewrites reach the engine over the compose network.
+      NEXT_PUBLIC_API_URL: http://engine:8000
+      # The browser cannot resolve "engine", so the socket points at the host.
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws
+    ports:
+      - "3000:3000"

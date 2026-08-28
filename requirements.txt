@@ -1,0 +1,9 @@
+# BetsWin - Python dependencies for the arbitrage engine.
+#
+#     pip install -r requirements.txt
+#
+# The engine lives in backend/. This file is the entry point so an install works
+# from the repository root; backend/requirements.txt stays self-contained so the
+# Docker build (whose context is backend/) keeps working unchanged.
+
+-r backend/requirements.txt

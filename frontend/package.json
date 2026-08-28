@@ -1,0 +1,29 @@
+{
+  "name": "betswin-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard for the BetsWin prediction-market arbitrage engine",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "build:demo": "NEXT_PUBLIC_STATIC_DEMO=true next build",
+    "preview:demo": "npx serve out"
+  },
+  "dependencies": {
+    "next": "16.3.3",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.13",
+    "@types/node": "22.18.1",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.9.2"
+  }
+}

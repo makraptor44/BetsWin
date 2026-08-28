@@ -1,0 +1,399 @@
+@import "tailwindcss";
+
+/*
+  BetsWin design tokens.
+
+  Dark-first, because this is a monitoring surface that people leave open. The
+  palette is deliberately narrow: one accent for interactive affordances, and a
+  semantic ramp (positive / caution / danger) reserved exclusively for risk, so
+  colour always means the same thing. Margins are never coloured by size alone --
+  a fat margin is a warning, not a win (Part I s5.3).
+*/
+
+:root {
+  --bg: #f7f8fa;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #eef0f4;
+  --border: #dfe3ea;
+  --border-strong: #c6ccd8;
+  --text: #10131a;
+  --text-muted: #5c6577;
+  --text-faint: #8b93a5;
+
+  --accent: #3b5bfd;
+  --accent-soft: rgba(59, 91, 253, 0.1);
+  --accent-text: #2c47d6;
+
+  --positive: #0f8f5f;
+  --positive-soft: rgba(15, 143, 95, 0.12);
+  --caution: #a8730a;
+  --caution-soft: rgba(168, 115, 10, 0.13);
+  --danger: #c4362f;
+  --danger-soft: rgba(196, 54, 47, 0.12);
+  --neutral-soft: rgba(92, 101, 119, 0.1);
+
+  --venue-polymarket: #6b4df6;
+  --venue-kalshi: #0d8a72;
+  --venue-sportsbook: #b5561f;
+
+  --shadow-sm: 0 1px 2px rgba(16, 19, 26, 0.06);
+  --shadow-md: 0 4px 16px rgba(16, 19, 26, 0.08);
+  --radius: 10px;
+
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono",
+    Menlo, Consolas, monospace;
+}
+
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  --bg: #0b0d12;
+  --bg-elevated: #14171f;
+  --bg-sunken: #090a0e;
+  --border: #232833;
+  --border-strong: #333a49;
+  --text: #e8ebf2;
+  --text-muted: #9aa3b6;
+  --text-faint: #656e83;
+
+  --accent: #6b86ff;
+  --accent-soft: rgba(107, 134, 255, 0.14);
+  --accent-text: #93a6ff;
+
+  --positive: #2ecc84;
+  --positive-soft: rgba(46, 204, 132, 0.14);
+  --caution: #e0a227;
+  --caution-soft: rgba(224, 162, 39, 0.15);
+  --danger: #ff6b60;
+  --danger-soft: rgba(255, 107, 96, 0.14);
+  --neutral-soft: rgba(154, 163, 182, 0.12);
+
+  --venue-polymarket: #9b7dff;
+  --venue-kalshi: #35c9aa;
+  --venue-sportsbook: #ff9558;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* An explicit light choice must beat the dark default above. */
+:root[data-theme="light"] {
+  --bg: #f7f8fa;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #eef0f4;
+  --border: #dfe3ea;
+  --border-strong: #c6ccd8;
+  --text: #10131a;
+  --text-muted: #5c6577;
+  --text-faint: #8b93a5;
+  --accent: #3b5bfd;
+  --accent-soft: rgba(59, 91, 253, 0.1);
+  --accent-text: #2c47d6;
+  --positive: #0f8f5f;
+  --positive-soft: rgba(15, 143, 95, 0.12);
+  --caution: #a8730a;
+  --caution-soft: rgba(168, 115, 10, 0.13);
+  --danger: #c4362f;
+  --danger-soft: rgba(196, 54, 47, 0.12);
+  --neutral-soft: rgba(92, 101, 119, 0.1);
+  --venue-polymarket: #6b4df6;
+  --venue-kalshi: #0d8a72;
+  --venue-sportsbook: #b5561f;
+  --shadow-sm: 0 1px 2px rgba(16, 19, 26, 0.06);
+  --shadow-md: 0 4px 16px rgba(16, 19, 26, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* ------------------------------------------------------------- primitives */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-hover {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-sunken);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 0.88;
+}
+
+.btn-sm {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input.mono {
+  font-family: var(--font-mono);
+}
+
+select.input {
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+.label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  background: var(--neutral-soft);
+  color: var(--text-muted);
+}
+
+.chip-positive {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+.chip-caution {
+  background: var(--caution-soft);
+  color: var(--caution);
+}
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.chip-accent {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* Wide content must scroll inside its own container, never the page body. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table.data th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  background: var(--bg-elevated);
+}
+
+table.data td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+table.data tbody tr:last-child td {
+  border-bottom: none;
+}
+
+table.data tbody tr.clickable {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+table.data tbody tr.clickable:hover {
+  background: var(--bg-sunken);
+}
+
+.num-positive {
+  color: var(--positive);
+}
+.num-negative {
+  color: var(--danger);
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-sunken) 25%,
+    var(--border) 50%,
+    var(--bg-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.pulse-dot {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slide-in 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}

@@ -1,0 +1,751 @@
+"""HTTP + WebSocket API (Part II s20.3: "a small FastAPI app showing live arbs,
+deployed bankroll, and P&L by book and by sport").
+
+The Next.js frontend is the only consumer. Everything the dashboard renders is
+served from here; there is no second source of truth.
+
+One deliberate omission: there is no place-bet endpoint. Part II s19.2 is
+unambiguous that automating placement at venues whose terms forbid it gets
+accounts closed and balances confiscated. This system detects, sizes and alerts;
+execution is recorded, not performed.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from contextlib import asynccontextmanager
+from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
+
+from fastapi import Body, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from . import odds as om
+from .backtest import BacktestParams, replay, sweep
+from .config import settings
+from .fees import configure_from_settings, fee_model_for
+from .models import Arb, ArbKind, EngineStatus, Event
+from .scanner import Scanner
+from .sizing import resize, size_arb
+
+configure_from_settings(settings)
+
+scanner: Optional[Scanner] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global scanner
+    scanner = Scanner()
+    if settings.autostart_scanner:
+        # Run one cycle immediately so the dashboard is populated on first load.
+        asyncio.create_task(_bootstrap(scanner))
+    logger.info(f"api ready on {settings.host}:{settings.port} (demo={settings.demo_mode})")
+    try:
+        yield
+    finally:
+        if scanner is not None:
+            await scanner.close()
+
+
+async def _bootstrap(s: Scanner) -> None:
+    try:
+        await s.scan_once()
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"initial scan failed: {exc}")
+    await s.start()
+
+
+app = FastAPI(
+    title="BetsWin Arbitrage Engine",
+    version="1.0.0",
+    description=(
+        "Scans US prediction markets (Polymarket, Kalshi) and sportsbooks for "
+        "arbitrage, sizes each opportunity against real order-book depth, and "
+        "scores it for the failure modes that erode theoretical edge."
+    ),
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def _engine() -> Scanner:
+    if scanner is None:
+        raise HTTPException(503, "engine not started")
+    return scanner
+
+
+# ------------------------------------------------------------------- health
+
+
+@app.get("/api/health", tags=["system"])
+async def health() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "version": app.version,
+        "demo_mode": settings.demo_mode,
+        "time": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/status", response_model=EngineStatus, tags=["system"])
+async def status() -> EngineStatus:
+    return _engine().status()
+
+
+@app.get("/api/config", tags=["system"])
+async def get_config() -> dict[str, Any]:
+    """Everything the UI needs to render and explain the engine's behaviour."""
+    return {
+        "bankroll": settings.bankroll,
+        "default_stake": settings.default_stake,
+        "min_arb_margin": settings.min_arb_margin,
+        "max_arb_margin": settings.max_arb_margin,
+        "suspect_margin": settings.suspect_margin,
+        "min_confidence": settings.min_confidence,
+        "max_stake_fraction_per_event": settings.max_stake_fraction_per_event,
+        "poll_interval_seconds": settings.poll_interval_seconds,
+        "alert_min_margin": settings.alert_min_margin,
+        "alert_min_confidence": settings.alert_min_confidence,
+        "assumed_void_rate": settings.assumed_void_rate,
+        "assumed_void_loss": settings.assumed_void_loss,
+        "fuzzy_match_threshold": settings.fuzzy_match_threshold,
+        "demo_mode": settings.demo_mode,
+        "sources": {
+            "polymarket": settings.enable_polymarket,
+            "kalshi": settings.enable_kalshi,
+            "sportsbook": settings.odds_api_enabled,
+        },
+        "telegram_enabled": settings.telegram_enabled,
+        "kinds": [k.value for k in ArbKind],
+    }
+
+
+class ConfigPatch(BaseModel):
+    bankroll: Optional[float] = Field(None, gt=0)
+    default_stake: Optional[float] = Field(None, gt=0)
+    min_arb_margin: Optional[float] = Field(None, ge=0, le=1)
+    max_arb_margin: Optional[float] = Field(None, ge=0, le=1)
+    suspect_margin: Optional[float] = Field(None, ge=0, le=1)
+    min_confidence: Optional[int] = Field(None, ge=0, le=100)
+    max_stake_fraction_per_event: Optional[float] = Field(None, gt=0, le=1)
+    poll_interval_seconds: Optional[int] = Field(None, ge=10, le=3600)
+    alert_min_margin: Optional[float] = Field(None, ge=0, le=1)
+    alert_min_confidence: Optional[int] = Field(None, ge=0, le=100)
+    assumed_void_rate: Optional[float] = Field(None, ge=0, le=1)
+    assumed_void_loss: Optional[float] = Field(None, ge=0, le=1)
+
+
+@app.patch("/api/config", tags=["system"])
+async def patch_config(patch: ConfigPatch) -> dict[str, Any]:
+    """Live-tune thresholds. Applies to the next scan cycle."""
+    changed: dict[str, Any] = {}
+    for key, value in patch.model_dump(exclude_none=True).items():
+        setattr(settings, key, value)
+        changed[key] = value
+    if changed:
+        logger.info(f"config updated: {changed}")
+    return {"updated": changed, "config": await get_config()}
+
+
+# --------------------------------------------------------------------- arbs
+
+
+@app.get("/api/arbs", tags=["arbs"])
+async def list_arbs(
+    kind: Optional[str] = None,
+    venue: Optional[str] = None,
+    category: Optional[str] = None,
+    min_margin: float = 0.0,
+    min_confidence: int = 0,
+    max_hours_to_close: Optional[float] = None,
+    search: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Currently live opportunities, filtered."""
+    arbs = _engine().live_arbs()
+
+    if kind:
+        wanted = {k.strip() for k in kind.split(",") if k.strip()}
+        arbs = [a for a in arbs if a.kind.value in wanted]
+    if venue:
+        wanted = {v.strip() for v in venue.split(",") if v.strip()}
+        arbs = [a for a in arbs if wanted & set(a.venues)]
+    if category:
+        arbs = [a for a in arbs if a.category == category]
+    if min_margin:
+        arbs = [a for a in arbs if a.net_margin >= min_margin]
+    if min_confidence:
+        arbs = [a for a in arbs if a.confidence >= min_confidence]
+    if max_hours_to_close is not None:
+        arbs = [
+            a
+            for a in arbs
+            if a.hours_to_close is not None and a.hours_to_close <= max_hours_to_close
+        ]
+    if search:
+        needle = search.lower()
+        arbs = [a for a in arbs if needle in a.title.lower()]
+
+    total = len(arbs)
+    arbs = arbs[:limit]
+    return {
+        "count": len(arbs),
+        "total": total,
+        "arbs": [a.model_dump(mode="json") for a in arbs],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/arbs/{arb_id}", tags=["arbs"])
+async def get_arb(arb_id: str) -> dict[str, Any]:
+    arb = _engine().get_arb(arb_id)
+    if arb is None:
+        raise HTTPException(404, "opportunity is no longer live")
+
+    # The payout matrix makes the guarantee auditable: profit in every state.
+    total = arb.total_stake
+    matrix = []
+    for i, leg in enumerate(arb.legs):
+        if arb.kind is ArbKind.DUTCH_NO:
+            gross = sum(l.contracts for j, l in enumerate(arb.legs) if j != i)
+        else:
+            gross = leg.contracts
+        matrix.append(
+            {
+                "outcome": leg.outcome,
+                "venue": leg.venue,
+                "gross_return": round(gross, 2),
+                "total_stake": round(total, 2),
+                "profit": round(gross - total, 2),
+                "roi_pct": round(100.0 * (gross - total) / total, 3) if total else 0.0,
+            }
+        )
+
+    return {
+        "arb": arb.model_dump(mode="json"),
+        "payout_matrix": matrix,
+        "maths": _maths_for(arb),
+    }
+
+
+def _maths_for(arb: Arb) -> dict[str, Any]:
+    """The derivation behind the numbers, so the UI can show its working."""
+    eff = [l.effective_decimal_odds for l in arb.legs]
+    raw = [l.decimal_odds for l in arb.legs]
+    void_rate = settings.assumed_void_rate
+    void_loss = settings.assumed_void_loss
+    return {
+        "implied_probs": [round(om.decimal_to_prob(d), 5) for d in eff],
+        "book_quoted": round(om.book(raw), 5),
+        "book_effective": round(arb.book, 5),
+        "margin_gross": arb.margin,
+        "margin_net": arb.net_margin,
+        "vig_equivalent": round(om.vig(raw), 5),
+        "void_rate": void_rate,
+        "void_loss": void_loss,
+        "margin_after_voids": round(
+            om.margin_after_voids(arb.net_margin, void_rate, void_loss), 5
+        ),
+        "kelly_arb_fraction": round(
+            om.kelly_arb_fraction(arb.net_margin, void_rate, void_loss), 4
+        ),
+        "devig_fair_probs": [round(p, 5) for p in om.devig_proportional(raw)],
+        "bankroll_cap": round(
+            settings.bankroll * settings.max_stake_fraction_per_event, 2
+        ),
+    }
+
+
+class ResizeRequest(BaseModel):
+    total_stake: float = Field(..., gt=0)
+
+
+@app.post("/api/arbs/{arb_id}/resize", tags=["arbs"])
+async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
+    """Recompute equal-profit stakes at a different total. Backs the calculator."""
+    arb = _engine().get_arb(arb_id)
+    if arb is None:
+        raise HTTPException(404, "opportunity is no longer live")
+
+    eff = [l.effective_decimal_odds for l in arb.legs]
+    stakes = om.equal_profit_stakes(eff, req.total_stake)
+    rounded = [om.round_down_to_step(s, settings.stake_step) for s in stakes]
+    total = sum(rounded)
+
+    legs = []
+    payout_if: dict[str, float] = {}
+    contracts_list: list[float] = []
+    for leg, stake in zip(arb.legs, rounded):
+        fees = fee_model_for(leg.venue)
+        contracts = stake / leg.effective_price if leg.effective_price > 0 else 0.0
+        contracts_list.append(contracts)
+        legs.append(
+            {
+                **leg.model_dump(mode="json"),
+                "stake": round(stake, 2),
+                "contracts": round(contracts, 2),
+                "fee": round(fees.total_fee(leg.price, contracts), 2),
+            }
+        )
+
+    worst = None
+    for i, leg in enumerate(arb.legs):
+        if arb.kind is ArbKind.DUTCH_NO:
+            gross = sum(c for j, c in enumerate(contracts_list) if j != i)
+        else:
+            gross = contracts_list[i]
+        payout_if[f"{leg.outcome} ({leg.venue})"] = round(gross, 2)
+        profit = gross - total
+        worst = profit if worst is None else min(worst, profit)
+
+    return {
+        "total_stake": round(total, 2),
+        "legs": legs,
+        "payout_if": payout_if,
+        "worst_case_profit": round(worst or 0.0, 2),
+        "roi_pct": round(100.0 * (worst or 0.0) / total, 3) if total else 0.0,
+        "exceeds_depth": req.total_stake > arb.max_stake_available,
+        "max_stake_available": arb.max_stake_available,
+        "bankroll_cap": round(settings.bankroll * settings.max_stake_fraction_per_event, 2),
+    }
+
+
+class PlacementLog(BaseModel):
+    """Record a bet you placed by hand. The system never places bets itself."""
+
+    executed_prices: Optional[list[float]] = None
+    executed_stakes: Optional[list[float]] = None
+    note: Optional[str] = None
+
+
+@app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"])
+async def log_placement(arb_id: str, body: PlacementLog) -> dict[str, Any]:
+    """Log a manual placement so realised P&L can be reconciled later."""
+    eng = _engine()
+    arb = eng.get_arb(arb_id)
+    if arb is None:
+        raise HTTPException(404, "opportunity is no longer live")
+
+    row_id = await asyncio.to_thread(eng.store.upsert_arb, arb)
+    for i, leg in enumerate(arb.legs):
+        exec_price = (
+            body.executed_prices[i]
+            if body.executed_prices and i < len(body.executed_prices)
+            else None
+        )
+        exec_stake = (
+            body.executed_stakes[i]
+            if body.executed_stakes and i < len(body.executed_stakes)
+            else None
+        )
+        await asyncio.to_thread(
+            eng.store.record_placement,
+            row_id,
+            leg.venue,
+            leg.market_id,
+            leg.outcome,
+            leg.side.value,
+            leg.price,
+            leg.stake,
+            "manual",
+            exec_price,
+            exec_stake,
+            None,
+            body.note,
+        )
+    await asyncio.to_thread(eng.store.mark_placed, row_id, True)
+    return {"ok": True, "arb_row_id": row_id, "legs_logged": len(arb.legs)}
+
+
+class SettleRequest(BaseModel):
+    realised_pnl: float
+
+
+@app.post("/api/positions/{row_id}/settle", tags=["arbs"])
+async def settle_position(row_id: int, body: SettleRequest) -> dict[str, Any]:
+    eng = _engine()
+    await asyncio.to_thread(eng.store.settle, row_id, body.realised_pnl)
+    return {"ok": True}
+
+
+@app.get("/api/positions", tags=["arbs"])
+async def positions() -> dict[str, Any]:
+    eng = _engine()
+    rows = await asyncio.to_thread(eng.store.open_positions)
+    out = []
+    for r in rows:
+        r = dict(r)
+        r["legs"] = json.loads(r.pop("legs_json", "[]"))
+        r.pop("payload_json", None)
+        r["flags"] = json.loads(r.get("flags") or "[]")
+        r["venues"] = json.loads(r.get("venues") or "[]")
+        out.append(r)
+    return {"count": len(out), "positions": out}
+
+
+# ------------------------------------------------------------------ markets
+
+
+@app.get("/api/markets", tags=["markets"])
+async def list_markets(
+    venue: Optional[str] = None,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    only_mutually_exclusive: bool = False,
+    sort: str = Query("volume", pattern="^(volume|liquidity|book|close)$"),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict[str, Any]:
+    """Browse the normalised tape the detectors actually see."""
+    events = _engine().live_events()
+
+    if venue:
+        wanted = {v.strip() for v in venue.split(",") if v.strip()}
+        events = [e for e in events if e.venue in wanted]
+    if category:
+        events = [e for e in events if e.category == category]
+    if only_mutually_exclusive:
+        events = [e for e in events if e.mutually_exclusive]
+    if search:
+        needle = search.lower()
+        events = [e for e in events if needle in e.title.lower()]
+
+    rows = [_event_row(e) for e in events]
+    keys = {
+        "volume": lambda r: -r["volume_usd"],
+        "liquidity": lambda r: -r["liquidity_usd"],
+        "book": lambda r: r["best_book"],
+        "close": lambda r: r["close_time"] or "9999",
+    }
+    rows.sort(key=keys[sort])
+
+    return {
+        "count": min(len(rows), limit),
+        "total": len(rows),
+        "markets": rows[:limit],
+        "categories": sorted({e.category for e in events}),
+        "venues": sorted({e.venue for e in events}),
+    }
+
+
+def _event_row(e: Event) -> dict[str, Any]:
+    """Flatten an event for the market browser, including its tightest book."""
+    best_book = 99.0
+    outcomes: list[dict[str, Any]] = []
+    for market in e.markets:
+        quotes = [o.best() for o in market.outcomes]
+        quotes = [q for q in quotes if q is not None]
+        if len(quotes) >= 2:
+            b = sum(q.effective_price for q in quotes)
+            best_book = min(best_book, b)
+        for q in quotes:
+            outcomes.append(
+                {
+                    "name": q.outcome,
+                    "side": q.side.value,
+                    "price": round(q.price, 4),
+                    "effective_price": round(q.effective_price, 4),
+                    "decimal_odds": round(q.decimal_odds, 3),
+                    "implied_pct": round(q.effective_price * 100, 2),
+                    "size_available": round(q.size_available, 1),
+                    "venue": q.venue,
+                    "url": q.url,
+                }
+            )
+    return {
+        "id": e.id,
+        "venue": e.venue,
+        "title": e.title,
+        "category": e.category,
+        "mutually_exclusive": e.mutually_exclusive,
+        "market_count": len(e.markets),
+        "volume_usd": round(e.volume_usd, 2),
+        "liquidity_usd": round(e.liquidity_usd, 2),
+        "close_time": e.close_time.isoformat() if e.close_time else None,
+        "url": e.url,
+        "best_book": round(best_book, 5) if best_book < 99 else None,
+        "overround_pct": round((best_book - 1.0) * 100, 3) if best_book < 99 else None,
+        "outcomes": outcomes[:24],
+    }
+
+
+# ---------------------------------------------------------------- analytics
+
+
+@app.get("/api/analytics", tags=["analytics"])
+async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
+    eng = _engine()
+    stats = await asyncio.to_thread(eng.store.stats, days)
+    hist = await asyncio.to_thread(eng.store.margin_histogram, days)
+    scans = await asyncio.to_thread(eng.store.recent_scans, 60)
+
+    live = eng.live_arbs()
+    by_kind: dict[str, int] = {}
+    by_venue: dict[str, int] = {}
+    for a in live:
+        by_kind[a.kind.value] = by_kind.get(a.kind.value, 0) + 1
+        for v in a.venues:
+            by_venue[v] = by_venue.get(v, 0) + 1
+
+    return {
+        "stored": stats,
+        "margin_histogram": hist,
+        "recent_scans": list(reversed(scans)),
+        "live": {
+            "count": len(live),
+            "by_kind": by_kind,
+            "by_venue": by_venue,
+            "total_profit_available": round(sum(a.worst_case_profit for a in live), 2),
+            "total_stake_required": round(sum(a.total_stake for a in live), 2),
+            "avg_margin": round(
+                sum(a.net_margin for a in live) / len(live), 5
+            ) if live else 0.0,
+            "avg_confidence": round(
+                sum(a.confidence for a in live) / len(live), 1
+            ) if live else 0.0,
+        },
+    }
+
+
+class BacktestRequest(BaseModel):
+    days: int = Field(30, ge=1, le=365)
+    min_margin: float = Field(0.005, ge=0, le=1)
+    max_margin: float = Field(0.05, ge=0, le=1)
+    min_confidence: int = Field(0, ge=0, le=100)
+    kinds: Optional[list[str]] = None
+    void_rate: float = Field(0.02, ge=0, le=1)
+    void_loss: float = Field(0.30, ge=0, le=1)
+    stake_per_arb: Optional[float] = Field(None, gt=0)
+    simulations: int = Field(400, ge=10, le=5000)
+
+
+@app.post("/api/backtest", tags=["analytics"])
+async def run_backtest(req: BacktestRequest) -> dict[str, Any]:
+    """Replay stored opportunities under a void model (Part I s13.3)."""
+    eng = _engine()
+    params = BacktestParams(**req.model_dump())
+    result = await asyncio.to_thread(replay, eng.store, params)
+    return result.to_dict()
+
+
+@app.post("/api/backtest/sweep", tags=["analytics"])
+async def run_sweep(req: BacktestRequest) -> dict[str, Any]:
+    """Sweep the minimum-margin floor to find where the edge actually peaks."""
+    eng = _engine()
+    base = BacktestParams(**req.model_dump())
+    rows = await asyncio.to_thread(sweep, eng.store, (0.002, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.03), base)
+    return {"sweep": rows}
+
+
+@app.get("/api/history", tags=["analytics"])
+async def history(
+    days: int = Query(7, ge=1, le=365),
+    kind: Optional[str] = None,
+    min_margin: float = 0.0,
+    limit: int = Query(300, ge=1, le=2000),
+) -> dict[str, Any]:
+    eng = _engine()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = await asyncio.to_thread(
+        eng.store.recent_arbs, limit, kind, min_margin, since
+    )
+    out = []
+    for r in rows:
+        r = dict(r)
+        r["legs"] = json.loads(r.pop("legs_json", "[]"))
+        r["flags"] = json.loads(r.get("flags") or "[]")
+        r["venues"] = json.loads(r.get("venues") or "[]")
+        r.pop("payload_json", None)
+        out.append(r)
+    return {"count": len(out), "arbs": out}
+
+
+# ------------------------------------------------------------- calculators
+
+
+class StakeCalcRequest(BaseModel):
+    """Standalone equal-profit calculator (Part I s3.2)."""
+
+    decimal_odds: list[float] = Field(..., min_length=2)
+    total_stake: float = Field(1000.0, gt=0)
+    round_to: Optional[float] = None
+
+
+@app.post("/api/calc/stakes", tags=["calculators"])
+async def calc_stakes(req: StakeCalcRequest) -> dict[str, Any]:
+    ds = req.decimal_odds
+    if any(d <= 1.0 for d in ds):
+        raise HTTPException(400, "decimal odds must all be greater than 1.0")
+
+    b = om.book(ds)
+    stakes = om.equal_profit_stakes(ds, req.total_stake)
+    if req.round_to:
+        stakes = [om.round_to_step(s, req.round_to) for s in stakes]
+    total = sum(stakes)
+    return {
+        "book": round(b, 6),
+        "is_arbitrage": b < 1.0,
+        "margin": round(om.arb_margin(b), 6),
+        "overround_pct": round((b - 1.0) * 100, 4),
+        "vig_pct": round(om.vig(ds) * 100, 4),
+        "implied_probs": [round(om.decimal_to_prob(d), 5) for d in ds],
+        "fair_probs": [round(p, 5) for p in om.devig_proportional(ds)],
+        "stakes": [round(s, 2) for s in stakes],
+        "total_stake": round(total, 2),
+        "payouts": [round(p, 2) for p in om.payouts(stakes, ds)],
+        "profit_by_outcome": [round(p, 2) for p in om.profit_by_outcome(stakes, ds)],
+        "worst_case_profit": round(om.worst_case_profit(stakes, ds), 2),
+        "guaranteed_profit": round(om.guaranteed_profit(ds, total), 2),
+    }
+
+
+class KellyRequest(BaseModel):
+    probability: float = Field(..., gt=0, lt=1)
+    decimal_odds: float = Field(..., gt=1)
+    bankroll: Optional[float] = None
+    fraction: float = Field(0.25, gt=0, le=1)
+
+
+@app.post("/api/calc/kelly", tags=["calculators"])
+async def calc_kelly(req: KellyRequest) -> dict[str, Any]:
+    """Kelly sizing for value bets (Part I s7.3 / s12)."""
+    bankroll = req.bankroll or settings.bankroll
+    f = om.kelly_fraction(req.probability, req.decimal_odds)
+    return {
+        "edge": round(om.expected_value(req.probability, req.decimal_odds), 5),
+        "is_value_bet": om.is_value_bet(req.probability, req.decimal_odds),
+        "kelly_fraction": round(f, 5),
+        "kelly_stake": round(f * bankroll, 2),
+        "fractional_kelly": round(f * req.fraction, 5),
+        "fractional_stake": round(f * req.fraction * bankroll, 2),
+        "fair_odds": round(1.0 / req.probability, 4),
+        "bankroll": bankroll,
+    }
+
+
+class ConvertRequest(BaseModel):
+    value: float
+    from_format: str = Field(..., pattern="^(decimal|american|probability)$")
+
+
+@app.post("/api/calc/convert", tags=["calculators"])
+async def calc_convert(req: ConvertRequest) -> dict[str, Any]:
+    """Odds format conversion (Part I s2.1)."""
+    if req.from_format == "decimal":
+        d = req.value
+    elif req.from_format == "american":
+        d = om.american_to_decimal(req.value)
+    else:
+        if not 0 < req.value < 1:
+            raise HTTPException(400, "probability must be between 0 and 1")
+        d = om.prob_to_decimal(req.value)
+    if d <= 1.0:
+        raise HTTPException(400, "decimal odds must be greater than 1.0")
+    return {
+        "decimal": round(d, 5),
+        "american": round(om.decimal_to_american(d), 2),
+        "probability": round(om.decimal_to_prob(d), 5),
+        "contract_price": round(om.decimal_to_prob(d), 4),
+    }
+
+
+class VoidRequest(BaseModel):
+    margin: float = Field(..., gt=0, lt=1)
+    void_rate: float = Field(0.02, ge=0, le=1)
+    void_loss: float = Field(0.30, ge=0, le=1)
+    turnovers_per_year: float = Field(100.0, gt=0)
+
+
+@app.post("/api/calc/void-adjusted", tags=["calculators"])
+async def calc_void(req: VoidRequest) -> dict[str, Any]:
+    """Effective margin and Kelly bound once voids are priced in (Part I s13)."""
+    eff = om.margin_after_voids(req.margin, req.void_rate, req.void_loss)
+    return {
+        "nominal_margin": req.margin,
+        "effective_margin": round(eff, 6),
+        "edge_retained_pct": round(100.0 * eff / req.margin, 2) if req.margin else 0.0,
+        "kelly_arb_fraction": round(
+            om.kelly_arb_fraction(req.margin, req.void_rate, req.void_loss), 4
+        ),
+        "annualised_simple": round(om.annualised_return(eff, req.turnovers_per_year), 4),
+        "annualised_compounded": round(
+            om.compounded_return(eff, req.turnovers_per_year), 4
+        ),
+    }
+
+
+# ------------------------------------------------------------------ control
+
+
+@app.post("/api/scanner/scan", tags=["system"])
+async def force_scan() -> dict[str, Any]:
+    eng = _engine()
+    found = await eng.scan_once()
+    return {
+        "ok": True,
+        "new_arbs": len(found),
+        "stats": eng.last_scan.model_dump(mode="json") if eng.last_scan else None,
+    }
+
+
+@app.post("/api/scanner/start", tags=["system"])
+async def start_scanner() -> dict[str, Any]:
+    await _engine().start()
+    return {"ok": True, "running": True}
+
+
+@app.post("/api/scanner/stop", tags=["system"])
+async def stop_scanner() -> dict[str, Any]:
+    await _engine().stop()
+    return {"ok": True, "running": False}
+
+
+@app.post("/api/scanner/reset-breaker", tags=["system"])
+async def reset_breaker() -> dict[str, Any]:
+    _engine().breaker.reset()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- websocket
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket) -> None:
+    """Live push of new opportunities and scan telemetry."""
+    await ws.accept()
+    eng = _engine()
+    queue = eng.alerts.broadcaster.subscribe()
+    try:
+        await ws.send_json(
+            {
+                "type": "snapshot",
+                "data": {
+                    "status": eng.status().model_dump(mode="json"),
+                    "live": [a.model_dump(mode="json") for a in eng.live_arbs()[:100]],
+                },
+            }
+        )
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=25.0)
+            except asyncio.TimeoutError:
+                await ws.send_json({"type": "ping"})
+                continue
+            await ws.send_json(msg)
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"websocket closed: {exc}")
+    finally:
+        eng.alerts.broadcaster.unsubscribe(queue)
