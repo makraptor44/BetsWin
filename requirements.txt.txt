@@ -1,0 +1,22 @@
+# BetsWin - Python dependencies for the arbitrage engine (backend/arbengine).
+# Requires Python 3.11+ (the Docker image builds on 3.12).
+#
+#   pip install -r requirements.txt
+#
+# Every entry below is imported somewhere in backend/; the comment says where.
+# The dashboard (frontend/) is Node and installs separately with `npm install`.
+
+# ------------------------------------------------------------------ runtime
+fastapi>=0.115            # arbengine/api.py - HTTP + /ws WebSocket app
+uvicorn[standard]>=0.30   # arbengine/main.py - ASGI server (pulls in websockets)
+websockets>=12.0          # explicit: the /ws endpoint in arbengine/api.py
+httpx>=0.27               # sources/base.py, alerts.py - async HTTP client
+pydantic>=2.7             # models.py, api.py, config.py - schemas and validation
+pydantic-settings>=2.3    # config.py - Settings loaded from env
+python-dotenv>=1.0        # config.py - reads the .env file via pydantic-settings
+rapidfuzz>=3.9            # normalise.py - fuzzy title matching across venues
+tenacity>=8.3             # sources/base.py - retry/backoff on feed calls
+loguru>=0.7               # logging throughout the engine
+
+# ---------------------------------------------------------------- dev/tests
+pytest>=8.0               # backend/tests/
