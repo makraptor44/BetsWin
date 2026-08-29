@@ -17,8 +17,16 @@ import type {
   KellyResult,
   MarketRow,
   NearMiss,
+  PlaceBetPayload,
+  PlaceBetResult,
+  PositionsResponse,
   ResizeResult,
+  ResolvePayload,
+  ResolveResult,
+  SellBackPayload,
+  SellBackResult,
   StakeCalcResult,
+  UnwindQuoteResponse,
   VenueRegistry,
   VoidResult,
   ZoneKey,
@@ -241,6 +249,11 @@ export const api = {
           { note },
         ),
 
+  placeBet: (id: string, payload: PlaceBetPayload = { confirmed: true, retire: true }) =>
+    STATIC_DEMO
+      ? demoUnavailable("Placing a bet")
+      : post<PlaceBetResult>(`/api/arbs/${id}/place`, payload),
+
   markets: async (params: Record<string, unknown> = {}) => {
     type Res = {
       count: number;
@@ -315,11 +328,32 @@ export const api = {
           `/api/history${qs(params)}`,
         ),
 
-  positions: () =>
+  positions: (settled?: boolean) =>
     STATIC_DEMO
-      ? fixture<{ count: number; positions: Array<Record<string, unknown>> }>("positions")
-      : request<{ count: number; positions: Array<Record<string, unknown>> }>(
-          "/api/positions",
+      ? fixture<PositionsResponse>("positions")
+      : request<PositionsResponse>(`/api/positions${settled !== undefined ? `?settled=${settled}` : ""}`),
+
+  unwindQuote: (rowId: number) =>
+    STATIC_DEMO
+      ? demoUnavailable("Fetching unwind quote")
+      : request<UnwindQuoteResponse>(`/api/positions/${rowId}/unwind-quote`),
+
+  sellBackPosition: (rowId: number, payload: SellBackPayload = { confirmed: true }) =>
+    STATIC_DEMO
+      ? demoUnavailable("Selling back position")
+      : post<SellBackResult>(`/api/positions/${rowId}/sell-back`, payload),
+
+  resolvePosition: (rowId: number, payload: ResolvePayload = {}) =>
+    STATIC_DEMO
+      ? demoUnavailable("Resolving position")
+      : post<ResolveResult>(`/api/positions/${rowId}/resolve`, payload),
+
+  settlePosition: (rowId: number, realisedPnl: number) =>
+    STATIC_DEMO
+      ? demoUnavailable("Settling a position")
+      : post<{ ok: boolean; row_id: number; realised_pnl: number }>(
+          `/api/positions/${rowId}/settle`,
+          { realised_pnl: realisedPnl },
         ),
 
   scanNow: () =>

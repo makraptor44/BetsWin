@@ -182,6 +182,10 @@ class Scanner:
     def get_arb(self, arb_id: str) -> Optional[Arb]:
         return self._live.get(arb_id)
 
+    def retire_arb(self, arb_id: str) -> Optional[Arb]:
+        """Remove an opportunity from live memory once placed."""
+        return self._live.pop(arb_id, None)
+
     def status(self) -> EngineStatus:
         return EngineStatus(
             running=self._running,

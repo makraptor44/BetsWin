@@ -410,3 +410,129 @@ export interface ConvertResult {
   probability: number;
   contract_price: number;
 }
+
+export interface PositionPlacement {
+  id: number;
+  arb_id: number;
+  venue: string;
+  market_id: string;
+  outcome: string;
+  side: string;
+  requested_price: number;
+  requested_stake: number;
+  executed_price: number | null;
+  executed_stake: number | null;
+  external_ref: string | null;
+  status: string;
+  placed_at: string;
+  note: string | null;
+}
+
+export interface PositionItem {
+  id: number;
+  arb_key: string;
+  kind: ArbKind;
+  title: string;
+  category: string;
+  venues: string[];
+  zone: ZoneKey;
+  currency: string;
+  market_key: string;
+  detected_at: string;
+  last_seen: string;
+  close_time: string | null;
+  book: number;
+  margin: number;
+  net_margin: number;
+  total_stake: number;
+  profit: number;
+  worst_case_profit: number;
+  max_stake: number;
+  confidence: number;
+  flags: RiskFlag[];
+  legs: ArbLeg[];
+  placed: number;
+  settled: number;
+  realised_pnl: number | null;
+  placements?: PositionPlacement[];
+}
+
+export interface PositionsResponse {
+  count: number;
+  total_active_stake: number;
+  total_expected_profit: number;
+  total_realised_pnl: number;
+  positions: PositionItem[];
+}
+
+export interface PlaceBetPayload {
+  confirmed: boolean;
+  executed_prices?: number[];
+  executed_stakes?: number[];
+  note?: string;
+  retire?: boolean;
+}
+
+export interface PlaceBetResult {
+  ok: boolean;
+  arb_row_id: number;
+  legs_placed: number;
+  message: string;
+}
+
+export interface UnwindLeg {
+  venue: string;
+  outcome: string;
+  side: string;
+  contracts: number;
+  entry_price: number;
+  current_bid: number;
+  gross_proceeds: number;
+  fee: number;
+  net_proceeds: number;
+  stake: number;
+  pnl: number;
+}
+
+export interface UnwindQuoteResponse {
+  row_id: number;
+  title: string;
+  total_stake: number;
+  currency: string;
+  total_proceeds: number;
+  unwind_pnl: number;
+  roi_pct: number;
+  legs: UnwindLeg[];
+}
+
+export interface SellBackPayload {
+  confirmed: boolean;
+  custom_prices?: number[];
+  note?: string;
+}
+
+export interface SellBackResult {
+  ok: boolean;
+  row_id: number;
+  settlement_type: string;
+  realised_pnl: number;
+  total_proceeds: number;
+  message: string;
+}
+
+export interface ResolvePayload {
+  winning_outcome?: string;
+  custom_pnl?: number;
+  note?: string;
+}
+
+export interface ResolveResult {
+  ok: boolean;
+  row_id: number;
+  settlement_type: string;
+  winning_outcome?: string;
+  realised_pnl: number;
+  message: string;
+}
+
+

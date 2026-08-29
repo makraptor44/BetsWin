@@ -178,6 +178,11 @@ export const money = (n: number, currency: string, dp = 2) =>
     maximumFractionDigits: dp,
   });
 
+/** Like money() but prepends + for positive numbers to show signed P&L. */
+export const signedMoney = (n: number, currency: string, dp = 2) =>
+  `${n >= 0 ? "+" : ""}${money(n, currency, dp)}`;
+
+
 export function venueColor(venue: string): string {
   return `var(--venue-${venue}, var(--text-muted))`;
 }

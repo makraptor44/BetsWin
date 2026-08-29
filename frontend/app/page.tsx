@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ArbDetailPanel } from "@/components/ArbDetail";
 import { ArbCards, ArbTable } from "@/components/ArbTable";
+import { PlaceBetModal } from "@/components/PlaceBetModal";
 import { StatusBar } from "@/components/StatusBar";
 import { ActivityFeed, Watchlist } from "@/components/Watchlist";
 import { Card, EmptyState, ErrorState, Stat } from "@/components/ui";
@@ -24,6 +25,8 @@ const SORTS: Array<{ key: SortKey; label: string }> = [
 export default function OpportunitiesPage() {
   const engine = useEngine();
   const [selected, setSelected] = useState<Arb | null>(null);
+  const [placingArb, setPlacingArb] = useState<Arb | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<ArbKind | "all">("all");
@@ -121,9 +124,40 @@ export default function OpportunitiesPage() {
     setMinConfidence(0);
   };
 
+  const handleBetPlaced = (msg?: string) => {
+    setPlacingArb(null);
+    if (selected && placingArb && selected.id === placingArb.id) {
+      setSelected(null);
+    }
+    setToast(msg || "Bet successfully placed! Live opportunities refreshed.");
+    setTimeout(() => setToast(null), 5000);
+    // Trigger immediate refresh of opportunities
+    void engine.refresh();
+    void engine.scanNow();
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <StatusBar engine={engine} />
+
+      {toast && (
+        <div
+          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all"
+          style={{ background: "var(--positive)", color: "#fff" }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm">✓</span>
+            <span>{toast}</span>
+          </div>
+          <button
+            type="button"
+            className="hover:opacity-75 font-bold px-2 py-0.5"
+            onClick={() => setToast(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {engine.error && (
         <ErrorState message={engine.error} onRetry={() => void engine.refresh()} />
@@ -148,54 +182,34 @@ export default function OpportunitiesPage() {
         <Stat
           label="Best net margin"
           value={pct(totals.best)}
-          sub="after fees and slippage"
+          sub={totals.best > 0 ? "after all fees" : undefined}
         />
-        {/*
-          Deliberately not "last scan: 893 events". When there is no
-          arbitrage -- which is most of the time -- the number an operator
-          actually wants is how close the market came, because that is the one
-          that moves. It is never coloured green: a near miss is not money.
-        */}
         <Stat
-          label="Closest book"
-          value={
-            watchlist.length > 0
-              ? bps(watchlist[0].gap_bps)
-              : engine.status?.last_scan
-                ? "—"
-                : "…"
-          }
-          sub={
-            watchlist.length > 0
-              ? `${watchlist.length} within reach of crossing`
-              : engine.status?.last_scan
-                ? `${engine.status.last_scan.events_scanned.toLocaleString()} events, none close`
-                : "waiting for first scan"
-          }
+          label="Total stake"
+          value={usdCompact(totals.stake)}
+          sub="sized for visible depth"
         />
       </div>
 
-      <Card padded={false}>
-        <div
-          className="p-3 flex flex-wrap items-end gap-2.5 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div style={{ flex: "1 1 220px", minWidth: 180 }}>
+      <Card>
+        <div className="flex flex-wrap items-end gap-3 p-4 border-b" style={{ borderColor: "var(--border)" }}>
+          <div className="flex-1 min-w-[200px]">
             <label className="label" htmlFor="search">
               Search
             </label>
             <input
               id="search"
-              className="input"
-              placeholder="Market or outcome…"
+              className="input w-full"
+              type="search"
+              placeholder="Filter by event, outcome or player…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          <div style={{ width: 172 }}>
+          <div style={{ width: 148 }}>
             <label className="label" htmlFor="kind">
-              Type
+              Arb type
             </label>
             <select
               id="kind"
@@ -347,28 +361,40 @@ export default function OpportunitiesPage() {
               <ArbTable
                 arbs={filtered}
                 onSelect={setSelected}
+                onPlace={(arb) => setPlacingArb(arb)}
                 selectedId={selected?.id}
               />
             </div>
             <div className="lg:hidden p-3">
-              <ArbCards arbs={filtered} onSelect={setSelected} />
+              <ArbCards
+                arbs={filtered}
+                onSelect={setSelected}
+                onPlace={(arb) => setPlacingArb(arb)}
+              />
             </div>
           </>
         )}
       </Card>
 
-      {/*
-        Below the fold: what the engine did, not just what it found. These two
-        panels are the answer to "the terminal is busy but the dashboard is
-        empty" -- the tape is moving, it just is not crossing.
-      */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
         <Watchlist rows={watchlist} />
         <ActivityFeed entries={engine.activity} />
       </div>
 
       {selected && (
-        <ArbDetailPanel arb={selected} onClose={() => setSelected(null)} />
+        <ArbDetailPanel
+          arb={selected}
+          onClose={() => setSelected(null)}
+          onPlace={(arb) => setPlacingArb(arb)}
+        />
+      )}
+
+      {placingArb && (
+        <PlaceBetModal
+          arb={placingArb}
+          onClose={() => setPlacingArb(null)}
+          onSuccess={handleBetPlaced}
+        />
       )}
     </div>
   );
