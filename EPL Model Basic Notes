@@ -1,0 +1,72 @@
+Let the implied probability (i.e. price) be p_implied  and let the true probability be p_true  
+
+If p_true<p_implied
+ 
+Buy k(p_implied−p_true )^2   No shares
+ 
+Then when p_implied=p_true
+ 
+Sell those No shares and PnL = k(p_implied−p_true )^3
+
+
+If p_true>p_implied
+
+Buy k(p_true−p_implied )^2  Yes shares
+
+
+How to calculate p_true?
+Event type 1: Long term contract
+
+Our initial model will be trading long term
+
+Let's say the question/event is: Will team X win the premier league?, Will X place top 4 at the end of the season?
+
+Factors that determine p_true:
+	- Position in table, matches remaining 
+	- Team news - injuries, red cards, yellow cards
+	- Each player has a value V
+	- The player's value V is dependent upon the previous matches and is a linear combination of weights of performances of the past 10 matches let's say. We want to weight recent performances heavier than older performances. If the player did not play or played less than 10 minutes then give this performance rating 0.
+	- The team's value is thus the sum of each of the player's values and the manager's value (dependent on the previous 5 performances and gives you a rating)
+	- H2H between matches - this should be a linear combination with more recent matches weighted much more significantly 
+	- Home or Away - this changes the team's value by a constant amount of points i.e. if home add points and if away 
+	- Transfer market - the team's value is changed according to the particular player (his previous 5 performances)
+
+All of these factors will combine together to create club value C
+
+Data to source
+	- Player ratings for the past 10 performances
+	- Position in table
+	- Wins 
+	- Losses
+	- Goal difference
+	- Fixtures between team X and other teams in premier league
+
+Then for each fixture you compare the club value and then determine a probability of X winning, tie or losing?
+
+The probability of winning will be a normal distribution and to calculate the probability you integrate from -infinity to the difference between club values
+
+Note that the club value changes
+
+You then perform many simulations using Monte Carlo and then the probability is the number of paths which lead to first place against all possible positions
+
+This method can be used to determine the probability that Chelsea places top 4. 
+
+You essentially create a value for each club and the value changes depending on news, transfer market, player ratings, wins/losses.
+
+I would then like you to backtest this strategy to optimise the weights on all these factors.
+	
+
+For shorter term contracts: Will X win against Y?
+
+Again you have a club's value before the game
+
+You now need club's value total which combines the club's value overall before the game and the club's value in the game. After the game the club's value total will be affected by the club's value in game as they 
+
+Factors now that affect:
+	- Current scoreline e.g. the goal difference G_X - G_Y is added to the club's value of X is G_X > G_Y
+	- Changes in formation e.g. if defensive after taking the lead this will increase club's in game value, or if more attacking formation when losing this changes club's in game value
+	- Subs made - if subs are made the club's in game value changes by swapping the value of the player subbed on and player subbed off and then adding additional points to the club's in game value 
+	- H2H history - remembering to weight recent H2H more than older performances.
+	- Home or Away match
+
+Then weight each of these factors to calculate the club's in game value. Compare both values to calculate a probability of winning. 
