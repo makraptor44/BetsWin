@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -46,6 +46,11 @@ class ArbKind(str, Enum):
     CROSS_VENUE = "cross_venue"
     # Classic best-price-per-outcome across sportsbooks (Part I s3/s4).
     SPORTSBOOK = "sportsbook"
+    # A joint-event contract mispriced relative to a Gaussian-copula correlation
+    # estimated from history -- see correlation_arb.py. NOT risk-free: this is a
+    # directional bet, sized by fractional Kelly, that the market's implied
+    # correlation converges toward the prior.
+    CORRELATION = "correlation"
 
 
 class Side(str, Enum):
@@ -226,6 +231,7 @@ class RiskFlag(str, Enum):
     FEE_SENSITIVE = "fee_sensitive"            # fees consume most of the edge
     ROUNDING_EXPOSURE = "rounding_exposure"    # s8.3: stakes rounded, unequal profit
     SINGLE_JURISDICTION = "single_jurisdiction"  # both legs need one specific country
+    STATISTICAL_EDGE = "statistical_edge"      # directional, not risk-free -- full stake at risk
 
 
 class Arb(BaseModel):
@@ -233,6 +239,11 @@ class Arb(BaseModel):
 
     id: str
     kind: ArbKind
+    #: "arbitrage" legs lock a profit regardless of outcome (worst_case_profit is
+    #: a guarantee). "directional" is a modelled edge with real variance --
+    #: worst_case_profit is the loss if the bet is simply wrong. Every field
+    #: below is populated for both, but only means "guaranteed" for the former.
+    strategy: Literal["arbitrage", "directional"] = "arbitrage"
     title: str
     category: str = "other"
     venues: tuple[str, ...] = ()

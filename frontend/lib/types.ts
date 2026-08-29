@@ -5,7 +5,8 @@ export type ArbKind =
   | "dutch_yes"
   | "dutch_no"
   | "cross_venue"
-  | "sportsbook";
+  | "sportsbook"
+  | "correlation";
 
 export type RiskFlag =
   | "suspect_margin"
@@ -18,7 +19,16 @@ export type RiskFlag =
   | "near_resolution"
   | "fee_sensitive"
   | "rounding_exposure"
-  | "single_jurisdiction";
+  | "single_jurisdiction"
+  | "statistical_edge";
+
+/**
+ * "arbitrage" legs lock a profit regardless of outcome -- worst_case_profit
+ * is a guarantee. "directional" (currently only `correlation`) is a modelled
+ * edge with real variance: worst_case_profit is what you lose if the bet is
+ * simply wrong, not a guaranteed floor.
+ */
+export type ArbStrategy = "arbitrage" | "directional";
 
 export interface ArbLeg {
   venue: string;
@@ -50,6 +60,7 @@ export type ZoneKey =
 export interface Arb {
   id: string;
   kind: ArbKind;
+  strategy: ArbStrategy;
   title: string;
   category: string;
   venues: string[];
@@ -402,6 +413,43 @@ export interface VoidResult {
   kelly_arb_fraction: number;
   annualised_simple: number;
   annualised_compounded: number;
+}
+
+export interface CorrelationCalcResult {
+  rho_impl: number;
+  rho_prior: number;
+  fair_joint_price: number;
+  p_joint_market: number;
+  edge: number;
+  edge_pct: number;
+  action: "BUY" | "SELL" | "HOLD";
+}
+
+export interface CorrelationPair {
+  key: string;
+  label: string;
+  venue: string;
+  market_id_a: string;
+  outcome_a: string;
+  market_id_b: string;
+  outcome_b: string;
+  market_id_joint: string;
+  outcome_joint: string;
+  rho_prior_override: number | null;
+  min_edge: number | null;
+  kelly_fraction: number | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CorrelationOutcome {
+  id: number;
+  pair_key: string;
+  label: string;
+  outcome_a: number;
+  outcome_b: number;
+  recorded_at: string;
 }
 
 export interface ConvertResult {

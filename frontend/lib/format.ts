@@ -73,6 +73,7 @@ export const KIND_LABEL: Record<ArbKind, string> = {
   dutch_no: "Dutch book (fade all)",
   cross_venue: "Cross-venue",
   sportsbook: "Sportsbook",
+  correlation: "Correlation edge",
 };
 
 export const KIND_BLURB: Record<ArbKind, string> = {
@@ -86,6 +87,8 @@ export const KIND_BLURB: Record<ArbKind, string> = {
     "The same question priced on two venues: buy YES on the cheaper one and NO on the other. Confirm both resolve on identical criteria before staking.",
   sportsbook:
     "Best price on each outcome taken from different books, in the classic cross-bookmaker form.",
+  correlation:
+    "A joint-event contract priced against a correlation that diverges from a historical prior. NOT risk-free — a directional bet sized by fractional Kelly. The full stake is lost if it's wrong.",
 };
 
 export const FLAG_LABEL: Record<RiskFlag, string> = {
@@ -100,6 +103,7 @@ export const FLAG_LABEL: Record<RiskFlag, string> = {
   fee_sensitive: "Fee sensitive",
   rounding_exposure: "Rounding exposure",
   single_jurisdiction: "One jurisdiction",
+  statistical_edge: "Not risk-free",
 };
 
 /** Which flags are outright warnings versus things merely worth knowing. */
@@ -115,6 +119,7 @@ export const FLAG_SEVERITY: Record<RiskFlag, "danger" | "caution"> = {
   fee_sensitive: "caution",
   rounding_exposure: "caution",
   single_jurisdiction: "caution",
+  statistical_edge: "danger",
 };
 
 export const VENUE_LABEL: Record<string, string> = {

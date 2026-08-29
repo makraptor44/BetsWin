@@ -27,6 +27,7 @@ from loguru import logger
 
 from .alerts import AlertManager
 from .config import settings
+from .correlation_detector import scan_correlation_pairs
 from .detector import candidate_events, scan
 from .models import Arb, ArbKind, EngineStatus, Event, NearMiss, ScanStats, utcnow
 from .sources import (
@@ -95,6 +96,9 @@ class Scanner:
         self.sources: list[Source] = list(sources) if sources is not None else self._build_sources()
         self.breaker = CircuitBreaker()
 
+        if settings.demo_mode:
+            self._seed_demo_correlation_pair()
+
         self._seen: dict[str, datetime] = {}
         self._live: dict[str, Arb] = {}
         self._events: list[Event] = []
@@ -107,6 +111,19 @@ class Scanner:
         self.last_scan: Optional[ScanStats] = None
         self.total_detected = 0
         self.venue_limits: dict[str, float] = {}
+
+    def _seed_demo_correlation_pair(self) -> None:
+        """Demo mode gets one correlation-arb pair pre-configured, matching the
+        triple of markets in `demo_data.demo_events` -- otherwise the feature
+        would be invisible in demo mode, since pairs are never auto-discovered.
+        """
+        from .demo_data import demo_correlation_outcomes, demo_correlation_pair
+
+        pair = demo_correlation_pair()
+        self.store.upsert_correlation_pair(pair)
+        if not self.store.list_correlation_outcomes(pair["key"]):
+            for label, outcome_a, outcome_b in demo_correlation_outcomes():
+                self.store.add_correlation_outcome(pair["key"], label, outcome_a, outcome_b)
 
     @staticmethod
     def _build_sources() -> list[Source]:
@@ -288,7 +305,10 @@ class Scanner:
         result = await asyncio.to_thread(
             scan, events, settings.default_stake, self.venue_limits
         )
-        found = result.arbs
+        correlation_arbs = await asyncio.to_thread(
+            scan_correlation_pairs, events, self.store, self.venue_limits
+        )
+        found = result.arbs + correlation_arbs
         self._near_misses = result.near_misses
         self._cross_zone_rejected = result.cross_zone_rejected
 

@@ -101,8 +101,13 @@ export function ArbTable({
                 {money(a.total_stake, a.currency, 0)}
               </td>
               <td
-                className="mono num-positive"
+                className={`mono ${a.worst_case_profit >= 0 ? "num-positive" : "num-negative"}`}
                 style={{ textAlign: "right", fontWeight: 600 }}
+                title={
+                  a.strategy === "directional"
+                    ? "Worst case: the full stake, lost if the bet is wrong -- not a guaranteed profit"
+                    : undefined
+                }
               >
                 {money(a.worst_case_profit, a.currency)}
               </td>
@@ -210,7 +215,11 @@ export function ArbCards({
           >
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               {money(a.total_stake, a.currency, 0)} →{" "}
-              <span className="num-positive mono font-semibold">
+              <span
+                className={`mono font-semibold ${
+                  a.worst_case_profit >= 0 ? "num-positive" : "num-negative"
+                }`}
+              >
                 {money(a.worst_case_profit, a.currency)}
               </span>
             </span>

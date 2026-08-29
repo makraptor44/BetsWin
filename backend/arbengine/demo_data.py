@@ -261,6 +261,52 @@ def demo_events() -> list[Event]:
         )
     )
 
+    # 9. A correlation-arb triple: two marginals plus their joint contract, all
+    #    on one venue so a single operator can hold the position. The prices
+    #    are synthetic, like every other fixture in this file -- they exist to
+    #    exercise correlation_detector.py end to end, not to represent a real
+    #    market view. See `demo_correlation_pair` / `demo_correlation_outcomes`
+    #    for the matching pair configuration and history seeded alongside it.
+    events.append(
+        Event(
+            id="kalshi:demo-gop-pres",
+            venue="kalshi",
+            title="Republican nominee wins the 2028 presidency",
+            category="politics",
+            close_time=now + timedelta(days=430),
+            volume_usd=5_100_000,
+            liquidity_usd=310_000,
+            url="https://example.invalid/kalshi/demo-gop-pres",
+            markets=(_binary("kalshi", "KXDEMO-PRES28", "Yes", "No", 0.62, 0.40, 7000, rng),),
+        )
+    )
+    events.append(
+        Event(
+            id="kalshi:demo-gop-senate",
+            venue="kalshi",
+            title="Republicans hold a Senate majority after 2028",
+            category="politics",
+            close_time=now + timedelta(days=430),
+            volume_usd=3_600_000,
+            liquidity_usd=240_000,
+            url="https://example.invalid/kalshi/demo-gop-senate",
+            markets=(_binary("kalshi", "KXDEMO-SEN28", "Yes", "No", 0.65, 0.37, 6500, rng),),
+        )
+    )
+    events.append(
+        Event(
+            id="kalshi:demo-gop-both",
+            venue="kalshi",
+            title="Republicans win the presidency AND hold the Senate in 2028",
+            category="politics",
+            close_time=now + timedelta(days=430),
+            volume_usd=2_200_000,
+            liquidity_usd=160_000,
+            url="https://example.invalid/kalshi/demo-gop-both",
+            markets=(_binary("kalshi", "KXDEMO-BOTH28", "Yes", "No", 0.48, 0.54, 4000, rng),),
+        )
+    )
+
     # 8. Realistic non-arbitrage noise, so the detector has to reject things.
     topics = [
         ("Will SpaceX land Starship on the Moon before 2029?", "science", 0.34),
@@ -302,3 +348,41 @@ def demo_events() -> list[Event]:
         )
 
     return events
+
+
+def demo_correlation_pair() -> dict:
+    """Configuration for the correlation-arb triple added in `demo_events`."""
+    return {
+        "key": "demo_gop_pres_senate",
+        "label": "GOP presidency + Senate (2028, demo)",
+        "venue": "kalshi",
+        "market_id_a": "KXDEMO-PRES28:Y",
+        "outcome_a": "Yes",
+        "market_id_b": "KXDEMO-SEN28:Y",
+        "outcome_b": "Yes",
+        "market_id_joint": "KXDEMO-BOTH28:Y",
+        "outcome_joint": "Yes",
+        "rho_prior_override": None,
+        "min_edge": None,
+        "kelly_fraction": None,
+        "enabled": True,
+    }
+
+
+def demo_correlation_outcomes() -> list[tuple[str, bool, bool]]:
+    """Synthetic past instances of (GOP wins presidency, GOP holds Senate).
+
+    Illustrative, not a claim about real election history -- it exists so
+    `estimate_rho_prior_from_outcomes` has something to compute against in
+    demo mode. (label, outcome_a, outcome_b).
+    """
+    return [
+        ("Cycle 1", True, True),
+        ("Cycle 2", False, False),
+        ("Cycle 3", True, True),
+        ("Cycle 4", False, True),
+        ("Cycle 5", True, True),
+        ("Cycle 6", True, False),
+        ("Cycle 7", False, False),
+        ("Cycle 8", True, True),
+    ]

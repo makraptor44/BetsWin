@@ -8,7 +8,7 @@ from arbengine.config import settings
 from arbengine.fees import BpsFeeModel, KalshiFeeModel, configure_from_settings, fee_model_for
 from arbengine.models import DepthLevel, Quote, Side
 from arbengine.normalise import canonical_text, extract_numbers, match_titles
-from arbengine.sizing import book_capacity, resize, size_arb, walk_book
+from arbengine.sizing import book_capacity, resize, size_arb, size_correlation_trade, walk_book
 
 configure_from_settings(settings)
 
@@ -194,6 +194,53 @@ class TestResize:
         s = size_arb([q("polymarket", "Yes", 0.47), q("polymarket", "No", 0.51)], target_stake=400)
         big = resize(s, s.max_stake_available * 10)
         assert big.depth_limited
+
+
+class TestSizeCorrelationTrade:
+    def test_positive_edge_produces_a_sized_trade(self):
+        # Market prices this at 0.45; the model says it's worth 0.55 -- a real edge.
+        quote = q("kalshi", "Yes", 0.45)
+        s = size_correlation_trade(quote, "YES", fair_probability=0.55)
+        assert s is not None
+        assert s.side == "YES"
+        assert s.stake > 0
+        assert s.expected_value > 0
+
+    def test_worst_case_is_the_full_stake_lost(self):
+        """Unlike an arb, this is directional: wrong means losing everything staked."""
+        quote = q("kalshi", "Yes", 0.45)
+        s = size_correlation_trade(quote, "YES", fair_probability=0.55)
+        assert s is not None
+        assert s.worst_case_profit == pytest.approx(-s.stake)
+
+    def test_no_edge_returns_none(self):
+        # Model agrees with the market -- Kelly says stake nothing.
+        quote = q("kalshi", "Yes", 0.50)
+        assert size_correlation_trade(quote, "YES", fair_probability=0.50) is None
+
+    def test_negative_edge_returns_none(self):
+        # Market is more optimistic than the model -- no bet on this side.
+        quote = q("kalshi", "Yes", 0.60)
+        assert size_correlation_trade(quote, "YES", fair_probability=0.50) is None
+
+    def test_bankroll_cap_is_respected(self):
+        quote = q("kalshi", "Yes", 0.10, size=1_000_000)
+        s = size_correlation_trade(quote, "YES", fair_probability=0.90, kelly_fraction=1.0)
+        assert s is not None
+        assert s.stake <= settings.bankroll * settings.max_stake_fraction_per_event + 0.01
+
+    def test_thin_book_limits_the_size_and_flags_it(self):
+        thin = q("kalshi", "Yes", 0.45, levels=[DepthLevel(price=0.45, size=50)])
+        s = size_correlation_trade(thin, "YES", fair_probability=0.80, kelly_fraction=1.0)
+        assert s is not None
+        assert s.depth_limited
+
+    def test_fractional_kelly_stakes_less_than_full_kelly(self):
+        quote = q("kalshi", "Yes", 0.45, size=1_000_000)
+        full = size_correlation_trade(quote, "YES", fair_probability=0.55, kelly_fraction=1.0)
+        fractional = size_correlation_trade(quote, "YES", fair_probability=0.55, kelly_fraction=0.25)
+        assert full is not None and fractional is not None
+        assert fractional.stake < full.stake
 
 
 class TestNormalise:
