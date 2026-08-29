@@ -24,9 +24,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from . import correlation_arb as ca
 from . import odds as om
 from .backtest import BacktestParams, replay, sweep
 from .config import settings
+from .correlation_detector import evaluate_pair
 from .fees import configure_from_settings, fee_model_for
 from .models import Arb, ArbKind, EngineStatus, Event
 from .scanner import Scanner
@@ -333,23 +335,40 @@ async def get_arb(arb_id: str) -> dict[str, Any]:
         raise HTTPException(404, "opportunity is no longer live")
 
     # The payout matrix makes the guarantee auditable: profit in every state.
+    # A directional position has no such guarantee -- built from `payout_if`
+    # instead of one row per leg, so the losing state (the whole stake) shows
+    # up as a row rather than being silently absent.
     total = arb.total_stake
     matrix = []
-    for i, leg in enumerate(arb.legs):
-        if arb.kind is ArbKind.DUTCH_NO:
-            gross = sum(l.contracts for j, l in enumerate(arb.legs) if j != i)
-        else:
-            gross = leg.contracts
-        matrix.append(
-            {
-                "outcome": leg.outcome,
-                "venue": leg.venue,
-                "gross_return": round(gross, 2),
-                "total_stake": round(total, 2),
-                "profit": round(gross - total, 2),
-                "roi_pct": round(100.0 * (gross - total) / total, 3) if total else 0.0,
-            }
-        )
+    if arb.strategy == "directional":
+        venue_name = arb.legs[0].venue if arb.legs else ""
+        for label, profit in arb.payout_if.items():
+            matrix.append(
+                {
+                    "outcome": label,
+                    "venue": venue_name,
+                    "gross_return": round(profit + total, 2),
+                    "total_stake": round(total, 2),
+                    "profit": round(profit, 2),
+                    "roi_pct": round(100.0 * profit / total, 3) if total else 0.0,
+                }
+            )
+    else:
+        for i, leg in enumerate(arb.legs):
+            if arb.kind is ArbKind.DUTCH_NO:
+                gross = sum(l.contracts for j, l in enumerate(arb.legs) if j != i)
+            else:
+                gross = leg.contracts
+            matrix.append(
+                {
+                    "outcome": leg.outcome,
+                    "venue": leg.venue,
+                    "gross_return": round(gross, 2),
+                    "total_stake": round(total, 2),
+                    "profit": round(gross - total, 2),
+                    "roi_pct": round(100.0 * (gross - total) / total, 3) if total else 0.0,
+                }
+            )
 
     return {
         "arb": arb.model_dump(mode="json"),
@@ -396,6 +415,12 @@ async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
     arb = _engine().get_arb(arb_id)
     if arb is None:
         raise HTTPException(404, "opportunity is no longer live")
+    if arb.strategy == "directional":
+        raise HTTPException(
+            400,
+            "equal-profit resizing does not apply to a directional position -- "
+            "it is sized by fractional Kelly, and every leg is not guaranteed to pay out",
+        )
 
     eff = [l.effective_decimal_odds for l in arb.legs]
     stakes = om.equal_profit_stakes(eff, req.total_stake)
@@ -818,6 +843,144 @@ async def calc_void(req: VoidRequest) -> dict[str, Any]:
             om.compounded_return(eff, req.turnovers_per_year), 4
         ),
     }
+
+
+# ---------------------------------------------------------- correlation arb
+
+
+class CorrelationCalcRequest(BaseModel):
+    """Standalone calculator: no pair needs to be configured to use this."""
+
+    p_a: float = Field(..., gt=0, lt=1)
+    p_b: float = Field(..., gt=0, lt=1)
+    p_joint_market: float = Field(..., gt=0, lt=1)
+    rho_prior: float = Field(..., ge=-1, le=1)
+    min_edge: float = Field(0.0, ge=0, le=1)
+
+
+@app.post("/api/calc/correlation", tags=["calculators"])
+async def calc_correlation(req: CorrelationCalcRequest) -> dict[str, Any]:
+    """rho_impl, the fair joint price under rho_prior, and the BUY/SELL/HOLD read."""
+    try:
+        sig = ca.evaluate(
+            req.p_a, req.p_b, req.p_joint_market, req.rho_prior, min_edge=req.min_edge
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {
+        "rho_impl": round(sig.rho_impl, 5),
+        "rho_prior": sig.rho_prior,
+        "fair_joint_price": round(sig.fair_joint_price, 5),
+        "p_joint_market": sig.p_joint_market,
+        "edge": round(sig.edge, 5),
+        "edge_pct": round(sig.edge_pct, 3),
+        "action": sig.action,
+    }
+
+
+class CorrelationPairRequest(BaseModel):
+    """Registers a correlation-arb candidate: one venue, three markets.
+
+    There is no automatic discovery of which markets share a joint contract,
+    so this has to be entered by hand -- market_id/outcome for the two
+    marginal events and for the "both happen" contract.
+    """
+
+    key: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z0-9_-]+$")
+    label: str = Field(..., min_length=1)
+    venue: str
+    market_id_a: str
+    outcome_a: str
+    market_id_b: str
+    outcome_b: str
+    market_id_joint: str
+    outcome_joint: str
+    rho_prior_override: Optional[float] = Field(None, ge=-1, le=1)
+    min_edge: Optional[float] = Field(None, ge=0, le=1)
+    kelly_fraction: Optional[float] = Field(None, gt=0, le=1)
+    enabled: bool = True
+
+
+@app.get("/api/correlation/pairs", tags=["correlation"])
+async def list_correlation_pairs() -> dict[str, Any]:
+    eng = _engine()
+    rows = await asyncio.to_thread(eng.store.list_correlation_pairs)
+    return {"count": len(rows), "pairs": rows}
+
+
+@app.post("/api/correlation/pairs", tags=["correlation"])
+async def upsert_correlation_pair(req: CorrelationPairRequest) -> dict[str, Any]:
+    eng = _engine()
+    await asyncio.to_thread(eng.store.upsert_correlation_pair, req.model_dump())
+    pair = await asyncio.to_thread(eng.store.get_correlation_pair, req.key)
+    return {"ok": True, "pair": pair}
+
+
+@app.delete("/api/correlation/pairs/{key}", tags=["correlation"])
+async def delete_correlation_pair(key: str) -> dict[str, Any]:
+    eng = _engine()
+    await asyncio.to_thread(eng.store.delete_correlation_pair, key)
+    return {"ok": True}
+
+
+@app.get("/api/correlation/pairs/{key}/preview", tags=["correlation"])
+async def preview_correlation_pair(key: str) -> dict[str, Any]:
+    """Evaluate a pair against the current tape without gating on min_edge/confidence.
+
+    Lets an operator sanity-check a pair (are the three markets actually
+    resolving on the tape? what does rho_impl look like right now?) before
+    trusting it to fire live.
+    """
+    eng = _engine()
+    pair = await asyncio.to_thread(eng.store.get_correlation_pair, key)
+    if pair is None:
+        raise HTTPException(404, "no such pair")
+    # min_edge=0 so a real mismatch still surfaces as BUY/SELL rather than HOLD.
+    preview_pair = {**pair, "min_edge": 0.0}
+    arb = await asyncio.to_thread(
+        evaluate_pair, preview_pair, eng.live_events(), eng.store, eng.venue_limits
+    )
+    return {"pair": pair, "would_trade": arb.model_dump(mode="json") if arb else None}
+
+
+class CorrelationOutcomeRequest(BaseModel):
+    """One real, resolved instance of a pair -- e.g. one past election cycle."""
+
+    label: str = Field(..., min_length=1)
+    outcome_a: bool
+    outcome_b: bool
+
+
+@app.get("/api/correlation/pairs/{key}/outcomes", tags=["correlation"])
+async def list_correlation_outcomes(key: str) -> dict[str, Any]:
+    eng = _engine()
+    if await asyncio.to_thread(eng.store.get_correlation_pair, key) is None:
+        raise HTTPException(404, "no such pair")
+    rows = await asyncio.to_thread(eng.store.list_correlation_outcomes, key)
+    rho = None
+    if len(rows) >= 2:
+        rho = ca.estimate_rho_prior_from_outcomes(
+            [int(r["outcome_a"]) for r in rows], [int(r["outcome_b"]) for r in rows]
+        )
+    return {"count": len(rows), "outcomes": rows, "rho_prior_from_history": rho}
+
+
+@app.post("/api/correlation/pairs/{key}/outcomes", tags=["correlation"])
+async def add_correlation_outcome(key: str, req: CorrelationOutcomeRequest) -> dict[str, Any]:
+    eng = _engine()
+    if await asyncio.to_thread(eng.store.get_correlation_pair, key) is None:
+        raise HTTPException(404, "no such pair")
+    row_id = await asyncio.to_thread(
+        eng.store.add_correlation_outcome, key, req.label, req.outcome_a, req.outcome_b
+    )
+    return {"ok": True, "id": row_id}
+
+
+@app.delete("/api/correlation/outcomes/{outcome_id}", tags=["correlation"])
+async def delete_correlation_outcome(outcome_id: int) -> dict[str, Any]:
+    eng = _engine()
+    await asyncio.to_thread(eng.store.delete_correlation_outcome, outcome_id)
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------ control

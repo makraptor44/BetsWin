@@ -114,7 +114,7 @@ function Body({ arb, detail }: { arb: Arb; detail: ArbDetailData }) {
       {arb.notes.length > 0 && <RiskNotes arb={arb} />}
       <StakeCalculator arb={arb} />
       <PayoutMatrix detail={detail} />
-      <Derivation detail={detail} />
+      {arb.strategy !== "directional" && <Derivation detail={detail} />}
       <Placement arb={arb} />
     </>
   );
@@ -122,14 +122,30 @@ function Body({ arb, detail }: { arb: Arb; detail: ArbDetailData }) {
 
 function Summary({ arb }: { arb: Arb }) {
   const cells = [
-    { label: "Net margin", value: pct(arb.net_margin), hint: "after fees & slippage" },
-    { label: "Gross margin", value: pct(arb.margin), hint: "at quoted prices" },
-    {
-      label: "Guaranteed profit",
-      value: money(arb.worst_case_profit, arb.currency),
-      hint: "worst case, after rounding",
-      tone: "positive" as const,
-    },
+    arb.strategy === "directional"
+      ? { label: "Edge", value: pct(arb.net_margin), hint: "vs. the historical prior" }
+      : { label: "Net margin", value: pct(arb.net_margin), hint: "after fees & slippage" },
+    arb.strategy === "directional"
+      ? {
+          label: "Expected value",
+          value: money(arb.profit, arb.currency),
+          hint: "probability-weighted, not guaranteed",
+          tone: arb.profit >= 0 ? ("positive" as const) : ("danger" as const),
+        }
+      : { label: "Gross margin", value: pct(arb.margin), hint: "at quoted prices" },
+    arb.strategy === "directional"
+      ? {
+          label: "Worst case",
+          value: money(arb.worst_case_profit, arb.currency),
+          hint: "the full stake, lost if this is wrong -- not guaranteed",
+          tone: "danger" as const,
+        }
+      : {
+          label: "Guaranteed profit",
+          value: money(arb.worst_case_profit, arb.currency),
+          hint: "worst case, after rounding",
+          tone: "positive" as const,
+        },
     {
       label: "Total stake",
       value: money(arb.total_stake, arb.currency, 0),
@@ -268,8 +284,14 @@ function StakeCalculator({ arb }: { arb: Arb }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const isDirectional = arb.strategy === "directional";
+
   // Debounce so dragging the slider does not fire a request per pixel.
+  // Equal-profit resizing has no meaning for a single directional leg -- it
+  // is sized by fractional Kelly, not by making every leg's profit equal --
+  // so the backend rejects it and there is nothing to fetch here.
   useEffect(() => {
+    if (isDirectional) return;
     let cancelled = false;
     setBusy(true);
     const t = setTimeout(() => {
@@ -292,12 +314,28 @@ function StakeCalculator({ arb }: { arb: Arb }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [arb.id, stake]);
+  }, [arb.id, stake, isDirectional]);
 
   const legs = result?.legs ?? arb.legs;
   const total = result?.total_stake ?? arb.total_stake;
   const profit = result?.worst_case_profit ?? arb.worst_case_profit;
   const max = Math.max(arb.max_stake_available, arb.total_stake);
+
+  if (isDirectional) {
+    return (
+      <div className="card p-4">
+        <div className="label" style={{ marginBottom: 6 }}>
+          Position size
+        </div>
+        <p className="text-[13px] leading-relaxed m-0" style={{ color: "var(--text-muted)" }}>
+          Already sized by fractional Kelly against the modelled edge — not an
+          equal-profit calculation, so there is no stake slider here. To take a
+          different size, scale {money(arb.total_stake, arb.currency)} up or
+          down directly; fees and slippage move roughly in proportion.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="card p-4">
@@ -414,13 +452,14 @@ function StakeCalculator({ arb }: { arb: Arb }) {
 }
 
 function PayoutMatrix({ detail }: { detail: ArbDetailData }) {
+  const isDirectional = detail.arb.strategy === "directional";
   return (
     <div className="card p-4">
       <div className="label">Payout in every state</div>
       <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-        The guarantee is only real if profit is positive in every row. This is the
-        check to run before committing, since rounded stakes make the outcomes
-        slightly unequal.
+        {isDirectional
+          ? "A directional position, not a lock: exactly one of these rows happens, and the negative one means the stake is gone, not just a smaller gain."
+          : "The guarantee is only real if profit is positive in every row. This is the check to run before committing, since rounded stakes make the outcomes slightly unequal."}
       </p>
       <div className="scroll-x">
         <table className="data">

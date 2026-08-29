@@ -98,6 +98,42 @@ CREATE TABLE IF NOT EXISTS price_history (
     price       REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_price_market ON price_history(venue, market_id, recorded_at DESC);
+
+-- Correlation-arb pair configuration (correlation_arb.py / correlation_detector.py).
+-- There is no automatic discovery of which markets share a joint contract, so
+-- each pair the scanner should watch is registered here explicitly.
+CREATE TABLE IF NOT EXISTS correlation_pairs (
+    key                TEXT PRIMARY KEY,
+    label              TEXT NOT NULL,
+    venue              TEXT NOT NULL,
+    market_id_a        TEXT NOT NULL,
+    outcome_a          TEXT NOT NULL,
+    market_id_b        TEXT NOT NULL,
+    outcome_b          TEXT NOT NULL,
+    market_id_joint    TEXT NOT NULL,
+    outcome_joint      TEXT NOT NULL,
+    rho_prior_override REAL,
+    min_edge           REAL,
+    kelly_fraction     REAL,
+    enabled            INTEGER NOT NULL DEFAULT 1,
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+);
+
+-- Historical resolved outcomes for one pair, used to estimate rho_prior via
+-- the tetrachoric-correlation method in correlation_arb.estimate_rho_prior_from_outcomes.
+-- These are real records the operator enters as events resolve, not fetched
+-- from anywhere -- there is no third-party feed of "how correlated were these
+-- two kinds of events historically".
+CREATE TABLE IF NOT EXISTS correlation_outcomes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    pair_key    TEXT NOT NULL REFERENCES correlation_pairs(key),
+    label       TEXT NOT NULL,
+    outcome_a   INTEGER NOT NULL,
+    outcome_b   INTEGER NOT NULL,
+    recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_corr_outcomes_pair ON correlation_outcomes(pair_key);
 """
 
 
@@ -367,6 +403,93 @@ class ArbStore:
                ORDER BY recorded_at DESC LIMIT ?""",
             (venue, market_id, limit),
         )
+
+    # ------------------------------------------------------- correlation arb
+
+    def upsert_correlation_pair(self, pair: dict[str, Any]) -> None:
+        """Create or replace a pair's configuration, keyed by `key`."""
+        now = datetime.now(timezone.utc).isoformat()
+        existing = self._rows(
+            "SELECT created_at FROM correlation_pairs WHERE key = ?", (pair["key"],)
+        )
+        created_at = existing[0]["created_at"] if existing else now
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO correlation_pairs
+                   (key, label, venue, market_id_a, outcome_a, market_id_b, outcome_b,
+                    market_id_joint, outcome_joint, rho_prior_override, min_edge,
+                    kelly_fraction, enabled, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       label=excluded.label, venue=excluded.venue,
+                       market_id_a=excluded.market_id_a, outcome_a=excluded.outcome_a,
+                       market_id_b=excluded.market_id_b, outcome_b=excluded.outcome_b,
+                       market_id_joint=excluded.market_id_joint,
+                       outcome_joint=excluded.outcome_joint,
+                       rho_prior_override=excluded.rho_prior_override,
+                       min_edge=excluded.min_edge, kelly_fraction=excluded.kelly_fraction,
+                       enabled=excluded.enabled, updated_at=excluded.updated_at""",
+                (
+                    pair["key"],
+                    pair["label"],
+                    pair["venue"],
+                    pair["market_id_a"],
+                    pair["outcome_a"],
+                    pair["market_id_b"],
+                    pair["outcome_b"],
+                    pair["market_id_joint"],
+                    pair["outcome_joint"],
+                    pair.get("rho_prior_override"),
+                    pair.get("min_edge"),
+                    pair.get("kelly_fraction"),
+                    1 if pair.get("enabled", True) else 0,
+                    created_at,
+                    now,
+                ),
+            )
+            self.conn.commit()
+
+    def list_correlation_pairs(self, enabled_only: bool = False) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM correlation_pairs"
+        if enabled_only:
+            sql += " WHERE enabled = 1"
+        sql += " ORDER BY key"
+        return self._rows(sql)
+
+    def get_correlation_pair(self, key: str) -> Optional[dict[str, Any]]:
+        rows = self._rows("SELECT * FROM correlation_pairs WHERE key = ?", (key,))
+        return rows[0] if rows else None
+
+    def delete_correlation_pair(self, key: str) -> None:
+        with self._lock:
+            self.conn.execute("DELETE FROM correlation_outcomes WHERE pair_key = ?", (key,))
+            self.conn.execute("DELETE FROM correlation_pairs WHERE key = ?", (key,))
+            self.conn.commit()
+
+    def add_correlation_outcome(
+        self, pair_key: str, label: str, outcome_a: bool, outcome_b: bool
+    ) -> int:
+        """Record one real, resolved instance of a pair (e.g. one past election)."""
+        return self._exec(
+            """INSERT INTO correlation_outcomes (pair_key, label, outcome_a, outcome_b, recorded_at)
+               VALUES (?,?,?,?,?)""",
+            (
+                pair_key,
+                label,
+                1 if outcome_a else 0,
+                1 if outcome_b else 0,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+
+    def list_correlation_outcomes(self, pair_key: str) -> list[dict[str, Any]]:
+        return self._rows(
+            "SELECT * FROM correlation_outcomes WHERE pair_key = ? ORDER BY id",
+            (pair_key,),
+        )
+
+    def delete_correlation_outcome(self, outcome_id: int) -> None:
+        self._exec("DELETE FROM correlation_outcomes WHERE id = ?", (outcome_id,))
 
     # ------------------------------------------------------------- analytics
 
