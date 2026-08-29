@@ -1,0 +1,8 @@
+# Canonical contributor identities.
+#
+# git (shortlog, blame, log --use-mailmap) and GitHub's contributor graph
+# resolve commit identities through this file. Entries map a committed
+# identity on the right to the canonical one on the left.
+
+tomwalsh07 <tomwalsh286@gmail.com> <tomwalsh286@gmail.com>
+tomwalsh07 <tomwalsh286@gmail.com> <noreply@anthropic.com>
