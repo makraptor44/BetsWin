@@ -15,10 +15,12 @@ import { ConfidenceBar, FlagChip, VenueChip, ZoneChip } from "./ui";
 export function ArbTable({
   arbs,
   onSelect,
+  onPlace,
   selectedId,
 }: {
   arbs: Arb[];
   onSelect: (arb: Arb) => void;
+  onPlace?: (arb: Arb) => void;
   selectedId?: string | null;
 }) {
   return (
@@ -37,6 +39,7 @@ export function ArbTable({
             <th>Confidence</th>
             <th>Risks</th>
             <th style={{ textAlign: "right" }}>Closes</th>
+            {onPlace && <th style={{ textAlign: "center" }}>Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -51,7 +54,7 @@ export function ArbTable({
                   : undefined
               }
             >
-              <td style={{ maxWidth: 380 }}>
+              <td style={{ maxWidth: 360 }}>
                 <div className="font-medium truncate" title={a.title}>
                   {a.title}
                 </div>
@@ -74,12 +77,6 @@ export function ArbTable({
                   ))}
                 </div>
               </td>
-              {/*
-                Where one operator could hold every account in this trade. Both
-                legs already share an execution zone -- the detector will not
-                build a set that does not -- so this narrows that to the
-                countries in which the trade is actually takeable.
-              */}
               <td>
                 <div className="flex flex-col gap-0.5">
                   <ZoneChip zone={a.zone} short />
@@ -119,7 +116,7 @@ export function ArbTable({
               <td>
                 <ConfidenceBar value={a.confidence} />
               </td>
-              <td style={{ maxWidth: 190 }}>
+              <td style={{ maxWidth: 170 }}>
                 <div className="flex gap-1 flex-wrap">
                   {a.flags.slice(0, 2).map((f) => (
                     <FlagChip key={f} flag={f} />
@@ -138,6 +135,21 @@ export function ArbTable({
               >
                 {untilLabel(a.close_time)}
               </td>
+              {onPlace && (
+                <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    style={{ whiteSpace: "nowrap", padding: "4px 10px" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlace(a);
+                    }}
+                  >
+                    Place Bet
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -150,18 +162,19 @@ export function ArbTable({
 export function ArbCards({
   arbs,
   onSelect,
+  onPlace,
 }: {
   arbs: Arb[];
   onSelect: (arb: Arb) => void;
+  onPlace?: (arb: Arb) => void;
 }) {
   return (
     <div className="flex flex-col gap-2.5">
       {arbs.map((a) => (
-        <button
+        <div
           key={a.id}
+          className="card card-hover p-3.5 text-left w-full cursor-pointer"
           onClick={() => onSelect(a)}
-          className="card card-hover p-3.5 text-left w-full"
-          style={{ cursor: "pointer" }}
         >
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="font-medium text-[13px] leading-snug">{a.title}</div>
@@ -201,9 +214,23 @@ export function ArbCards({
                 {money(a.worst_case_profit, a.currency)}
               </span>
             </span>
-            <ConfidenceBar value={a.confidence} />
+            <div className="flex items-center gap-2">
+              <ConfidenceBar value={a.confidence} />
+              {onPlace && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlace(a);
+                  }}
+                >
+                  Place
+                </button>
+              )}
+            </div>
           </div>
-        </button>
+        </div>
       ))}
     </div>
   );

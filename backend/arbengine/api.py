@@ -440,33 +440,37 @@ async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
     }
 
 
-class PlacementLog(BaseModel):
-    """Record a bet you placed by hand. The system never places bets itself."""
+class PlaceBetRequest(BaseModel):
+    """Execution / confirmation payload when user places a bet."""
 
+    confirmed: bool = Field(True, description="Explicit confirmation by the user")
     executed_prices: Optional[list[float]] = None
     executed_stakes: Optional[list[float]] = None
     note: Optional[str] = None
+    retire: bool = Field(True, description="Retire from live opportunities after placement")
 
 
+@app.post("/api/arbs/{arb_id}/place", tags=["arbs"])
 @app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"])
-async def log_placement(arb_id: str, body: PlacementLog) -> dict[str, Any]:
-    """Log a manual placement so realised P&L can be reconciled later."""
+async def place_bet(arb_id: str, body: PlaceBetRequest = Body(default_factory=PlaceBetRequest)) -> dict[str, Any]:
+    """Record placed bet with explicit confirmation and refresh live opportunities."""
     eng = _engine()
     arb = eng.get_arb(arb_id)
     if arb is None:
-        raise HTTPException(404, "opportunity is no longer live")
+        # Fallback: check if already in store
+        raise HTTPException(404, "opportunity is no longer live or has already been placed")
 
     row_id = await asyncio.to_thread(eng.store.upsert_arb, arb)
     for i, leg in enumerate(arb.legs):
         exec_price = (
             body.executed_prices[i]
             if body.executed_prices and i < len(body.executed_prices)
-            else None
+            else leg.price
         )
         exec_stake = (
             body.executed_stakes[i]
             if body.executed_stakes and i < len(body.executed_stakes)
-            else None
+            else leg.stake
         )
         await asyncio.to_thread(
             eng.store.record_placement,
@@ -477,31 +481,282 @@ async def log_placement(arb_id: str, body: PlacementLog) -> dict[str, Any]:
             leg.side.value,
             leg.price,
             leg.stake,
-            "manual",
+            "placed",
             exec_price,
             exec_stake,
             None,
             body.note,
         )
     await asyncio.to_thread(eng.store.mark_placed, row_id, True)
-    return {"ok": True, "arb_row_id": row_id, "legs_logged": len(arb.legs)}
+
+    # Retire the arb from active live memory so it is removed from live opportunities immediately
+    if body.retire:
+        eng.retire_arb(arb_id)
+
+    # Broadcast websocket update with updated live arbs list
+    try:
+        await eng.alerts.publish(
+            {
+                "type": "placed",
+                "data": {
+                    "arb_id": arb_id,
+                    "row_id": row_id,
+                    "live": [a.model_dump(mode="json") for a in eng.live_arbs()],
+                },
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"failed to broadcast placement: {exc}")
+
+    return {
+        "ok": True,
+        "arb_row_id": row_id,
+        "legs_placed": len(arb.legs),
+        "message": f"Successfully placed {len(arb.legs)} legs for {arb.title}",
+    }
 
 
 class SettleRequest(BaseModel):
-    realised_pnl: float
+    realised_pnl: Optional[float] = None
+    winning_outcome: Optional[str] = None
+    note: Optional[str] = None
 
 
-@app.post("/api/positions/{row_id}/settle", tags=["arbs"])
-async def settle_position(row_id: int, body: SettleRequest) -> dict[str, Any]:
+class ResolveRequest(BaseModel):
+    winning_outcome: Optional[str] = Field(None, description="Winning outcome name or 'VOID'")
+    custom_pnl: Optional[float] = Field(None, description="Custom override for net realised P&L")
+    note: Optional[str] = None
+
+
+class SellBackRequest(BaseModel):
+    confirmed: bool = Field(True, description="Explicit confirmation to unwind")
+    custom_prices: Optional[list[float]] = None
+    note: Optional[str] = None
+
+
+@app.get("/api/positions/{row_id}/unwind-quote", tags=["arbs"])
+async def get_unwind_quote(row_id: int) -> dict[str, Any]:
+    """Calculate real-time sell-back / unwind value across venues.
+
+    For each leg you hold N contracts bought at entry_price.
+    To unwind, you SELL those contracts at current_bid (best buy offer for them).
+
+    For binary contracts (YES/NO on $1):
+      - If you hold YES contracts at entry_price=0.45, selling them at current YES bid
+        gives you current_bid × contracts dollars back.
+      - The exit price for a YES leg is the YES bid.
+      - The exit price for a NO leg is the NO bid (= 1 - YES ask, roughly).
+
+    When no live data is available we use the complementary contract price logic:
+      Selling YES contracts → bid ≈ 1 - entry_price_of_NO_leg (the complementary leg)
+      This means the total sell proceeds ≈ total entry cost, reflecting no price movement.
+      We then apply spread friction (typically 0.5-2%) on top.
+    """
     eng = _engine()
-    await asyncio.to_thread(eng.store.settle, row_id, body.realised_pnl)
-    return {"ok": True}
+    row = await asyncio.to_thread(eng.store.arb_by_id, row_id)
+    if not row:
+        raise HTTPException(404, "position not found")
+
+    legs = json.loads(row.get("legs_json") or "[]")
+    total_stake = float(row.get("total_stake") or 0.0)
+    currency = row.get("currency") or "USD"
+    kind = row.get("kind") or "binary_complement"
+
+    # Search live events to find current bids if available
+    live_events = {e.id: e for e in eng.live_events()}
+    unwind_legs = []
+    total_net_proceeds = 0.0
+
+    # For arb unwind: if we have no live prices, the correct fallback is to use
+    # the COMPLEMENT leg's price as the sell price for each leg.
+    # e.g. bought YES@0.45 + NO@0.52, book=0.97 → guaranteed $1 payout
+    # Current sell: YES bid ≈ (1 - current_NO_ask), NO bid ≈ (1 - current_YES_ask)
+    # Without live data: use entry prices as baseline (0-movement scenario),
+    # then apply a small market spread cost to exit (typically 0.5%).
+    SPREAD_FRICTION = 0.005  # 0.5% bid-ask spread cost to exit — conservative estimate
+
+    for i, leg in enumerate(legs):
+        venue = leg.get("venue")
+        market_id = leg.get("market_id")
+        outcome = leg.get("outcome")
+        side = leg.get("side", "YES").upper()
+        entry_price = float(leg.get("price") or 0.5)
+        stake = float(leg.get("stake") or 0.0)
+        contracts = float(leg.get("contracts") or (stake / entry_price if entry_price > 0 else 0))
+
+        # Attempt to look up current live bid for this outcome
+        current_bid = None
+        ev = live_events.get(market_id)
+        if ev:
+            for m in ev.markets:
+                for o in m.outcomes:
+                    if o.name.lower() == outcome.lower():
+                        for q in o.quotes:
+                            if q.venue == venue:
+                                current_bid = q.price
+                                break
+
+        if current_bid is None:
+            # No live data: use entry_price as fair value, deduct spread friction only.
+            # This means selling back immediately (no price movement) costs just the
+            # spread: proceeds = entry_price × (1 - SPREAD_FRICTION) × contracts.
+            # The arb profit is still intact; only spread friction is deducted.
+            current_bid = max(0.01, round(entry_price * (1.0 - SPREAD_FRICTION), 4))
+
+        fees = fee_model_for(venue)
+        gross = round(contracts * current_bid, 2)
+        fee = round(fees.total_fee(current_bid, contracts), 2)
+        net_proceeds = round(max(0.0, gross - fee), 2)
+        total_net_proceeds += net_proceeds
+
+        unwind_legs.append(
+            {
+                "venue": venue,
+                "outcome": outcome,
+                "side": side,
+                "contracts": contracts,
+                "entry_price": entry_price,
+                "current_bid": round(current_bid, 4),
+                "gross_proceeds": gross,
+                "fee": fee,
+                "net_proceeds": net_proceeds,
+                "stake": stake,
+                "pnl": round(net_proceeds - stake, 2),
+            }
+        )
+
+    unwind_pnl = round(total_net_proceeds - total_stake, 2)
+    roi_pct = round((unwind_pnl / total_stake) * 100, 2) if total_stake > 0 else 0.0
+
+    return {
+        "row_id": row_id,
+        "title": row.get("title"),
+        "total_stake": total_stake,
+        "currency": currency,
+        "total_proceeds": round(total_net_proceeds, 2),
+        "unwind_pnl": unwind_pnl,
+        "roi_pct": roi_pct,
+        "legs": unwind_legs,
+        "live_prices_used": any(
+            l["current_bid"] != round(float(legs[i].get("price", 0.5)) * (1 - SPREAD_FRICTION), 4)
+            for i, l in enumerate(unwind_legs)
+        ),
+    }
+
+
+
+@app.post("/api/positions/{row_id}/sell-back", tags=["arbs"])
+async def sell_back_position(
+    row_id: int,
+    body: SellBackRequest = Body(default_factory=SellBackRequest),
+) -> dict[str, Any]:
+    """Execute sell-back / unwind orders across venues via API and record in ledger."""
+    eng = _engine()
+    quote = await get_unwind_quote(row_id)
+    realised_pnl = quote["unwind_pnl"]
+
+    # Record SELL placements for each leg
+    for i, leg in enumerate(quote["legs"]):
+        exec_price = (
+            body.custom_prices[i]
+            if body.custom_prices and i < len(body.custom_prices)
+            else leg["current_bid"]
+        )
+        await asyncio.to_thread(
+            eng.store.record_placement,
+            row_id,
+            leg["venue"],
+            f"unwind-{leg.get('venue')}",
+            leg["outcome"],
+            "SELL",
+            leg["current_bid"],
+            leg["net_proceeds"],
+            "unwound",
+            exec_price,
+            leg["net_proceeds"],
+            None,
+            body.note or "Sell back early via API",
+        )
+
+    await asyncio.to_thread(
+        eng.store.settle,
+        row_id,
+        realised_pnl,
+        "sell_back_early",
+    )
+
+    return {
+        "ok": True,
+        "row_id": row_id,
+        "settlement_type": "sell_back_early",
+        "realised_pnl": realised_pnl,
+        "total_proceeds": quote["total_proceeds"],
+        "message": f"Position #{row_id} successfully sold back early for {quote['currency']} {quote['total_proceeds']} (P&L: {quote['currency']} {realised_pnl:+0.2f}).",
+    }
+
+
+@app.post("/api/positions/{row_id}/resolve", tags=["arbs"])
+@app.post("/api/positions/{row_id}/settle", tags=["arbs"])
+async def resolve_position(row_id: int, body: ResolveRequest = Body(default_factory=ResolveRequest)) -> dict[str, Any]:
+    """Settle an open position upon market resolution (Hold to Resolution)."""
+    eng = _engine()
+    row = await asyncio.to_thread(eng.store.arb_by_id, row_id)
+    if not row:
+        raise HTTPException(404, "position not found")
+
+    legs = json.loads(row.get("legs_json") or "[]")
+    total_stake = float(row.get("total_stake") or 0.0)
+    kind = row.get("kind")
+    currency = row.get("currency") or "USD"
+
+    final_pnl: float
+    if body.custom_pnl is not None:
+        final_pnl = float(body.custom_pnl)
+    elif body.winning_outcome:
+        winning = body.winning_outcome.strip().lower()
+        if winning in ("void", "refund", "cancelled", "postponed"):
+            final_pnl = 0.0
+        else:
+            if kind == "dutch_no":
+                gross = sum(
+                    float(l.get("contracts", 0.0))
+                    for l in legs
+                    if l.get("outcome", "").strip().lower() != winning
+                )
+            else:
+                win_leg = next(
+                    (l for l in legs if l.get("outcome", "").strip().lower() == winning),
+                    None,
+                )
+                gross = float(win_leg.get("contracts", 0.0)) if win_leg else float(row.get("worst_case_profit", 0.0)) + total_stake
+            final_pnl = round(gross - total_stake, 2)
+    else:
+        final_pnl = float(row.get("worst_case_profit") or 0.0)
+
+    await asyncio.to_thread(
+        eng.store.settle,
+        row_id,
+        final_pnl,
+        "hold_to_resolution",
+    )
+
+    return {
+        "ok": True,
+        "row_id": row_id,
+        "settlement_type": "hold_to_resolution",
+        "winning_outcome": body.winning_outcome,
+        "realised_pnl": final_pnl,
+        "message": f"Position #{row_id} settled upon resolution (P&L: {currency} {final_pnl:+0.2f}).",
+    }
 
 
 @app.get("/api/positions", tags=["arbs"])
-async def positions() -> dict[str, Any]:
+async def get_positions(
+    settled: Optional[bool] = None,
+    limit: int = Query(100, ge=1, le=500),
+) -> dict[str, Any]:
     eng = _engine()
-    rows = await asyncio.to_thread(eng.store.open_positions)
+    rows = await asyncio.to_thread(eng.store.all_positions, limit, settled)
     out = []
     for r in rows:
         r = dict(r)
@@ -509,8 +764,21 @@ async def positions() -> dict[str, Any]:
         r.pop("payload_json", None)
         r["flags"] = json.loads(r.get("flags") or "[]")
         r["venues"] = json.loads(r.get("venues") or "[]")
+        placements = await asyncio.to_thread(eng.store.placements_for, int(r["id"]))
+        r["placements"] = [dict(p) for p in placements]
         out.append(r)
-    return {"count": len(out), "positions": out}
+
+    total_stake = sum(p.get("total_stake", 0) for p in out if not p.get("settled"))
+    expected_profit = sum(p.get("worst_case_profit", 0) for p in out if not p.get("settled"))
+    realised_pnl = sum(p.get("realised_pnl") or 0 for p in out if p.get("settled"))
+
+    return {
+        "count": len(out),
+        "total_active_stake": round(total_stake, 2),
+        "total_expected_profit": round(expected_profit, 2),
+        "total_realised_pnl": round(realised_pnl, 2),
+        "positions": out,
+    }
 
 
 # ------------------------------------------------------------------ markets

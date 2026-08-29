@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS arbs (
     payload_json      TEXT NOT NULL,
     placed            INTEGER NOT NULL DEFAULT 0,
     settled           INTEGER NOT NULL DEFAULT 0,
+    settlement_type   TEXT,
+    settled_at        TEXT,
     realised_pnl      REAL
 );
 CREATE INDEX IF NOT EXISTS ix_arbs_detected ON arbs(detected_at DESC);
@@ -120,6 +122,10 @@ class ArbStore:
             self.conn.commit()
         logger.info(f"storage: using {self.path}")
 
+    def close(self) -> None:
+        with self._lock:
+            self.conn.close()
+
     def _migrate(self) -> None:
         """Add columns a pre-existing database is missing.
 
@@ -133,6 +139,8 @@ class ArbStore:
         for column, ddl in (
             ("zone", "TEXT NOT NULL DEFAULT 'unknown'"),
             ("currency", "TEXT NOT NULL DEFAULT 'USD'"),
+            ("settlement_type", "TEXT"),
+            ("settled_at", "TEXT"),
         ):
             if column not in have:
                 self.conn.execute(f"ALTER TABLE arbs ADD COLUMN {column} {ddl}")
@@ -265,10 +273,17 @@ class ArbStore:
     def mark_placed(self, arb_id: int, placed: bool = True) -> None:
         self._exec("UPDATE arbs SET placed = ? WHERE id = ?", (1 if placed else 0, arb_id))
 
-    def settle(self, arb_id: int, realised_pnl: float) -> None:
+    def settle(
+        self,
+        arb_id: int,
+        realised_pnl: float,
+        settlement_type: str = "resolution",
+        settled_at: Optional[datetime] = None,
+    ) -> None:
+        dt = (settled_at or datetime.now(timezone.utc)).isoformat()
         self._exec(
-            "UPDATE arbs SET settled = 1, realised_pnl = ? WHERE id = ?",
-            (realised_pnl, arb_id),
+            "UPDATE arbs SET settled = 1, realised_pnl = ?, settlement_type = ?, settled_at = ? WHERE id = ?",
+            (realised_pnl, settlement_type, dt, arb_id),
         )
 
     # ------------------------------------------------------------ placements
@@ -320,6 +335,16 @@ class ArbStore:
         return self._rows(
             "SELECT * FROM arbs WHERE placed = 1 AND settled = 0 ORDER BY detected_at DESC"
         )
+
+    def all_positions(self, limit: int = 100, settled: Optional[bool] = None) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM arbs WHERE placed = 1"
+        params: list[Any] = []
+        if settled is not None:
+            sql += " AND settled = ?"
+            params.append(1 if settled else 0)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        return self._rows(sql, params)
 
     # ------------------------------------------------------------------ scans
 

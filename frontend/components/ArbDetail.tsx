@@ -31,9 +31,11 @@ import {
 export function ArbDetailPanel({
   arb,
   onClose,
+  onPlace,
 }: {
   arb: Arb;
   onClose: () => void;
+  onPlace?: (arb: Arb) => void;
 }) {
   const { data, loading, error } = useAsync<ArbDetailData>(
     () => api.arb(arb.id),
@@ -69,18 +71,26 @@ export function ArbDetailPanel({
           borderLeft: "1px solid var(--border)",
         }}
       >
-        <Header arb={arb} onClose={onClose} />
+        <Header arb={arb} onClose={onClose} onPlace={onPlace} />
         <div className="p-5 flex flex-col gap-5">
           {loading && <Skeleton rows={7} />}
           {error && <ErrorState message={error} />}
-          {data && <Body arb={data.arb} detail={data} />}
+          {data && <Body arb={data.arb} detail={data} onPlace={onPlace} />}
         </div>
       </div>
     </div>
   );
 }
 
-function Header({ arb, onClose }: { arb: Arb; onClose: () => void }) {
+function Header({
+  arb,
+  onClose,
+  onPlace,
+}: {
+  arb: Arb;
+  onClose: () => void;
+  onPlace?: (arb: Arb) => void;
+}) {
   return (
     <div
       className="sticky top-0 z-10 px-5 py-4 border-b"
@@ -97,15 +107,33 @@ function Header({ arb, onClose }: { arb: Arb; onClose: () => void }) {
           </div>
           <h2 className="text-[15px] font-semibold leading-snug">{arb.title}</h2>
         </div>
-        <button className="btn btn-sm shrink-0" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {onPlace && (
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => onPlace(arb)}
+            >
+              Place Bet
+            </button>
+          )}
+          <button className="btn btn-sm shrink-0" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function Body({ arb, detail }: { arb: Arb; detail: ArbDetailData }) {
+function Body({
+  arb,
+  detail,
+  onPlace,
+}: {
+  arb: Arb;
+  detail: ArbDetailData;
+  onPlace?: (arb: Arb) => void;
+}) {
   return (
     <>
       <Summary arb={arb} />
@@ -115,7 +143,7 @@ function Body({ arb, detail }: { arb: Arb; detail: ArbDetailData }) {
       <StakeCalculator arb={arb} />
       <PayoutMatrix detail={detail} />
       <Derivation detail={detail} />
-      <Placement arb={arb} />
+      <Placement arb={arb} onPlace={onPlace} />
     </>
   );
 }
@@ -558,7 +586,7 @@ function Derivation({ detail }: { detail: ArbDetailData }) {
   );
 }
 
-function Placement({ arb }: { arb: Arb }) {
+function Placement({ arb, onPlace }: { arb: Arb; onPlace?: (arb: Arb) => void }) {
   const [logged, setLogged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -580,9 +608,8 @@ function Placement({ arb }: { arb: Arb }) {
     <div className="card p-4">
       <div className="label">Place the legs</div>
       <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-        Open each venue and place the legs yourself. Fill the least liquid side
-        first — if it moves against you before the second leg lands, abandon the
-        trade and close the open leg rather than chasing the price.
+        Review and place the legs across each market. Confirming placement will
+        record all legs into your positions ledger and refresh live opportunities.
       </p>
       <div className="flex flex-col gap-2">
         {arb.legs.map((l, i) => (
@@ -615,16 +642,25 @@ function Placement({ arb }: { arb: Arb }) {
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-3">
-        <button
-          className="btn btn-sm"
-          onClick={log}
-          disabled={busy || logged}
-        >
-          {logged ? "✓ Logged" : busy ? "Saving…" : "Log as placed"}
-        </button>
+      <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+        {onPlace ? (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => onPlace(arb)}
+          >
+            Confirm &amp; Place Bet ⚡
+          </button>
+        ) : (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={log}
+            disabled={busy || logged}
+          >
+            {logged ? "✓ Logged" : busy ? "Saving…" : "Log as placed"}
+          </button>
+        )}
         <span className="text-xs" style={{ color: "var(--text-faint)" }}>
-          Records the trade so realised P&amp;L can be reconciled later.
+          Stores the execution in your Positions ledger and refreshes opportunities.
         </span>
       </div>
       {err && (
