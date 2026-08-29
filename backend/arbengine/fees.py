@@ -67,6 +67,49 @@ class BpsFeeModel(FeeModel):
         return variable + fixed
 
 
+class CommissionFeeModel(FeeModel):
+    """Betting-exchange commission, charged on net winnings rather than stake.
+
+    An exchange takes nothing when you lose and a percentage of your profit when
+    you win. For one contract bought at price `p` and paying $1:
+
+        win  -> gross profit (1 - p), commission c*(1 - p), net payout
+                1 - c*(1 - p)
+        lose -> nothing
+
+    So the all-in cost per $1 of NET payout is
+
+        p_eff = p / (1 - c*(1 - p))
+
+    which is `exchange_effective_odds` from Part I s6.1 expressed in price
+    space. Note the shape: unlike Kalshi's fee, this one is largest at long
+    odds, because that is where the winnings -- and therefore the commission --
+    are largest relative to the outlay.
+
+    One deliberate conservatism. Both Betfair and Smarkets charge commission on
+    NET winnings across a whole market, so a Dutch book that backs every outcome
+    pays commission only on the netted result, not leg by leg. Charging every
+    leg here overstates the bill and therefore understates the edge. That is the
+    right direction to be wrong in: it suppresses marginal opportunities rather
+    than manufacturing them.
+    """
+
+    name = "commission"
+
+    def __init__(self, commission: float = 0.02) -> None:
+        self.commission = commission
+
+    def fee_per_contract(self, price: float, contracts: float = 1.0) -> float:
+        c = self.commission
+        if c <= 0:
+            return 0.0
+        p = min(max(price, MIN_PRICE), MAX_PRICE)
+        denom = 1.0 - c * (1.0 - p)
+        if denom <= 0:
+            return MAX_PRICE - p
+        return p / denom - p
+
+
 class KalshiFeeModel(FeeModel):
     """Kalshi's published trading fee.
 
@@ -127,12 +170,16 @@ def configure_from_settings(settings) -> None:
     )
     # Sportsbooks price their margin into the odds; no separate fee.
     register_fee_model("sportsbook", _NO_FEE)
+    # Exchanges take a cut of winnings instead of quoting a margin.
+    register_fee_model("smarkets", CommissionFeeModel(settings.smarkets_commission))
+    register_fee_model("betfair", CommissionFeeModel(settings.betfair_commission))
 
 
 __all__ = [
     "FeeModel",
     "NoFeeModel",
     "BpsFeeModel",
+    "CommissionFeeModel",
     "KalshiFeeModel",
     "fee_model_for",
     "register_fee_model",

@@ -36,6 +36,32 @@ class Settings(BaseSettings):
     enable_polymarket: bool = True
     enable_kalshi: bool = True
 
+    # UK/EU exchange zone. Smarkets publishes market data without credentials;
+    # Betfair needs an application key and a session token and stays dark
+    # without them.
+    smarkets_api_url: str = "https://api.smarkets.com/v3"
+    betfair_api_url: str = "https://api.betfair.com/exchange/betting/json-rpc/v1"
+    betfair_login_url: str = "https://identitysso.betfair.com/api/login"
+    # Smarkets is on by default because its data needs no credentials and the
+    # zone is worthless with one venue in it. Betfair is off because it cannot
+    # read anything without a key, and a source that always fails is noise.
+    enable_smarkets: bool = True
+    enable_betfair: bool = False
+    betfair_app_key: str = ""
+    betfair_session_token: str = ""
+    betfair_username: str = ""
+    betfair_password: str = ""
+
+    # Which Smarkets event types to pull. Three-way football and politics
+    # markets are the useful ones: their outcomes genuinely partition the
+    # sample space, which is what the Dutch-book detector needs.
+    smarkets_event_types: str = "football_match,politics,politics_outright"
+    smarkets_max_events: int = 60
+
+    # Betfair event type ids: 1 = Soccer, 2378961 = Politics.
+    betfair_event_type_ids: str = "1,2378961"
+    betfair_max_markets: int = 60
+
     # The Odds API is optional; without a key the sportsbook source stays dark.
     odds_api_key: str = ""
     odds_api_url: str = "https://api.the-odds-api.com/v4"
@@ -64,6 +90,28 @@ class Settings(BaseSettings):
     # Cross-venue title matching (Part II §6.1).
     fuzzy_match_threshold: int = 82
 
+    # ------------------------------------------------------- execution zones
+    # A cross-venue arb is only real if one operator can place both legs. Venues
+    # are grouped into zones (see venues.py) that share a currency, a
+    # settlement convention and a plausible account footprint; pairing runs
+    # inside a zone and never across one. Turning this off will surface
+    # Betfair-vs-Kalshi style pairs whose "hedge" needs accounts in two
+    # jurisdictions and carries an unhedged FX leg.
+    enforce_zone_pairing: bool = True
+    # ISO-3166 alpha-2 of where you actually trade from. Blank means "do not
+    # filter by location"; set it and the engine hides anything you could not
+    # legitimately place from there.
+    operator_jurisdiction: str = ""
+    # Zones to scan, comma-separated. Blank means every zone with an enabled
+    # source behind it.
+    active_zones: str = ""
+
+    # Nothing beyond this is worth an order-book fetch, but books within it are
+    # worth WATCHING: they are the near misses the operator wants to see when
+    # no arbitrage exists, and the evidence that the engine is doing work.
+    near_miss_slack: float = 0.02
+    max_near_misses: int = 40
+
     # -------------------------------------------------------- stake / bankroll
     bankroll: float = 10_000.0
     default_stake: float = 500.0       # target turnover per opportunity
@@ -81,6 +129,10 @@ class Settings(BaseSettings):
     polymarket_gas_cost_usd: float = 0.0
     # Exchange commission for back/lay maths (Part I §6.1).
     exchange_commission: float = 0.02
+    # Per-exchange commission on net winnings. Both are the published standard
+    # rate; Betfair's drops with the loyalty discount and Smarkets' is flat.
+    smarkets_commission: float = 0.02
+    betfair_commission: float = 0.05
 
     # --------------------------------------------------------------- scanner
     poll_interval_seconds: int = 45
@@ -130,6 +182,28 @@ class Settings(BaseSettings):
     @property
     def odds_api_enabled(self) -> bool:
         return bool(self.odds_api_key)
+
+    @property
+    def smarkets_event_type_list(self) -> list[str]:
+        return [s.strip() for s in self.smarkets_event_types.split(",") if s.strip()]
+
+    @property
+    def betfair_event_type_id_list(self) -> list[str]:
+        return [s.strip() for s in self.betfair_event_type_ids.split(",") if s.strip()]
+
+    @property
+    def betfair_enabled(self) -> bool:
+        """Betfair needs an app key plus either a session token or a login."""
+        if not (self.enable_betfair and self.betfair_app_key):
+            return False
+        return bool(
+            self.betfair_session_token
+            or (self.betfair_username and self.betfair_password)
+        )
+
+    @property
+    def active_zone_list(self) -> list[str]:
+        return [z.strip() for z in self.active_zones.split(",") if z.strip()]
 
 
 @lru_cache(maxsize=1)

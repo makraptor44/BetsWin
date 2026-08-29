@@ -16,7 +16,9 @@
  "sources": {
   "polymarket": true,
   "kalshi": true,
-  "sportsbook": false
+  "sportsbook": false,
+  "smarkets": true,
+  "betfair": false
  },
  "telegram_enabled": false,
  "kinds": [
@@ -25,5 +27,10 @@
   "dutch_no",
   "cross_venue",
   "sportsbook"
- ]
+ ],
+ "enforce_zone_pairing": true,
+ "operator_jurisdiction": "",
+ "near_miss_slack": 0.02,
+ "smarkets_commission": 0.02,
+ "betfair_commission": 0.05
 }

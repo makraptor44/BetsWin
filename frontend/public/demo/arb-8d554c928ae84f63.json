@@ -105,6 +105,12 @@
     "net_payout": 127.16012870012871
    }
   ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
   "total_stake": 500.0,
   "book": 0.9864986250000001,
   "margin": 0.029601029601029616,
@@ -127,12 +133,12 @@
    "Fees and slippage consume 54% of the gross edge (2.96% -> 1.37%).",
    "5 legs must be filled before prices move."
   ],
-  "detected_at": "2026-08-27T11:46:08.929250Z",
-  "close_time": "2026-11-25T11:46:11.639092Z",
-  "last_seen": "2026-08-27T11:46:12.974956Z",
+  "detected_at": "2026-08-29T13:14:26.261679Z",
+  "close_time": "2026-11-27T13:14:32.874740Z",
+  "last_seen": "2026-08-29T13:14:36.153653Z",
   "is_suspect": false,
   "roi_pct": 1.374,
-  "hours_to_close": 2159.9996255291667
+  "hours_to_close": 2159.9990855508336
  },
  "payout_matrix": [
   {

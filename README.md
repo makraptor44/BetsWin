@@ -37,10 +37,12 @@ Very much open to change roles
 > produce those numbers; nothing is polling live venues. The calculators are fully
 > interactive.
 
-A working build of the system described above. It polls Polymarket and Kalshi,
-finds sets of positions that cost less than they are guaranteed to return, sizes
-each one against real order-book depth, and scores it for the failure modes that
-turn a theoretical edge into a real loss.
+A working build of the system described above. It polls Polymarket, Kalshi and
+Smarkets (Betfair too, with credentials), finds sets of positions that cost less
+than they are guaranteed to return, sizes each one against real order-book depth,
+and scores it for the failure modes that turn a theoretical edge into a real
+loss — including the one that matters most, whether a single person could
+actually place every leg.
 
 Built from the two PDFs in this repo: `arbitrage_betting_theory.pdf` for the
 mathematics and risk model, `arbitrage_betting_python.pdf` for the architecture.
@@ -60,12 +62,13 @@ The file layout follows the split agreed in the plan above:
 | Stake calculation, notifier, base source, odds API | `backend/arbengine/sizing.py`, `alerts.py`, `sources/base.py`, `sources/odds_api.py` |
 | Scanning, execution, entry point | `backend/arbengine/scanner.py`, `api.py`, `main.py` |
 | Backtest, storage, alerts | `backend/arbengine/backtest.py`, `storage.py`, `alerts.py` |
-| Normalisation, detection, exchange clients | `backend/arbengine/normalise.py`, `detector.py`, `sources/polymarket.py`, `sources/kalshi.py` |
+| Normalisation, detection, exchange clients | `backend/arbengine/normalise.py`, `detector.py`, `venues.py`, `sources/polymarket.py`, `sources/kalshi.py`, `sources/smarkets.py`, `sources/betfair.py` |
 
-One deviation from the plan: there is no `betfair.py`. The brief was US
-prediction markets, so the exchange clients are Polymarket and Kalshi. Betfair
-would slot in as another `Source` subclass without touching the detectors —
-that is the point of the `sources/base.py` interface.
+`betfair.py` is there as planned, alongside `smarkets.py`. Both slot in as
+`Source` subclasses without the detectors changing, which is the point of the
+`sources/base.py` interface. Smarkets' market-data API is public, so it works
+with no credentials; Betfair's needs an application key and stays dark without
+one.
 
 ## Quick start
 
@@ -89,7 +92,8 @@ Windows PowerShell:
 ```
 
 Dashboard at <http://localhost:3000>, API at <http://127.0.0.1:8000> (docs at
-`/docs`). No credentials needed — Polymarket and Kalshi market data are public.
+`/docs`). No credentials needed — Polymarket, Kalshi and Smarkets all publish
+market data publicly. Turn the UK exchange zone on with `ENABLE_SMARKETS=true`.
 
 Run `./start.sh --demo` for offline fixtures and no network. If a port is
 already taken the launcher moves to a free one and says so rather than dying.
@@ -107,12 +111,59 @@ falls below what the position pays.
 | **Binary complement** | `p(yes) + p(no) < 1` | One market whose own two sides cost less than the $1 they pay. A crossed book — rare, brief, and the cleanest structure available since both legs settle under one rulebook. |
 | **Dutch book (buy all)** | `Σ p(yesᵢ) < 1` | Every outcome of a mutually exclusive event bought at once for less than the $1 exactly one of them returns. |
 | **Dutch book (fade all)** | `Σ p(noᵢ) < n − 1` | The NO side of every outcome. Exactly one outcome occurs, so `n−1` legs settle. This is the direction that actually fires, because long-tail outcomes are systematically overpriced on the YES side. |
-| **Cross-venue** | `p(yes @ A) + p(no @ B) < 1` | The same question priced differently on two venues. |
+| **Cross-venue** | `p(yes @ A) + p(no @ B) < 1` | The same question priced differently on two venues *in the same execution zone*. |
 | **Sportsbook** | `Σ 1/dᵢ < 1` | Classic best-price-per-outcome across books. Needs `ODDS_API_KEY`. |
 
 Prices reaching the detectors are already fee-adjusted, so a "1.5% edge" is one
-that survives Kalshi's trading fee rather than a headline number that evaporates
-at execution.
+that survives Kalshi's trading fee (or Smarkets' commission) rather than a
+headline number that evaporates at execution.
+
+## Execution zones
+
+The single largest change to what this system will show you. A cross-venue
+arbitrage is only real if **one person can place both legs**. The detector is
+perfectly happy to pair a Kalshi contract against a Betfair price, and the
+arithmetic looks immaculate, but nobody can take that trade: the accounts sit in
+different jurisdictions, fund in different currencies, and the only way to hold
+both is to misrepresent where you are.
+
+So venues are partitioned into zones, and pairing runs **inside** a zone and
+never across one:
+
+| Zone | Venues | Currency | Structure |
+|---|---|---|---|
+| `us_prediction` | Polymarket · Kalshi | USD | $1 binary contracts |
+| `uk_exchange` | Betfair · Smarkets | GBP | back/lay exchange, commission on winnings |
+| `us_sportsbook` | The Odds API books | USD | fixed odds |
+
+```
+polymarket <-> kalshi      allowed
+betfair    <-> smarkets    allowed
+betfair    <-> kalshi      rejected — different zone
+```
+
+Three things follow, and they are the reason the rule is worth its cost:
+
+1. **Everything surfaced is placeable.** The alert stream gets smaller and its
+   hit rate goes up. An "opportunity" requiring a second passport is not an
+   opportunity.
+2. **No FX leg.** At the 1% margins these trades actually run at, an unhedged
+   currency exposure is *larger than the entire edge* — a 1% move in GBPUSD
+   erases a 1% arb. Pairing inside a currency removes the risk rather than
+   warning about it.
+3. **Settlement conventions agree.** Two $1-contract venues void and settle
+   alike. An exchange voiding a market and a contract market resolving it "NO"
+   are not the same event, and that difference cannot be hedged.
+
+Set `OPERATOR_JURISDICTION=GB` (or `US`, or whatever applies) and the engine
+narrows further to what you could legitimately place from where you are. The
+**Venues** page shows the whole registry, the pairing matrix with a reason for
+every verdict, and the pairs the rule declined on the last scan — so a blocked
+pair is auditable rather than an invisible absence.
+
+The rule is policy, not hard-coded blindness: `ENFORCE_ZONE_PAIRING=false`
+turns it off. The currency guard does not turn off, because hedging dollars with
+pounds is wrong arithmetic rather than a configurable preference.
 
 ## The parts that matter
 
@@ -178,6 +229,26 @@ celebrated. A circuit breaker halts scanning entirely if a burst of implausible
 margins appears, on the reasoning that the feed is more likely wrong than the
 market.
 
+### An empty dashboard has to look different from a broken one
+
+Zero opportunities is the normal state of a reasonably efficient market. On a
+typical live scan of ~890 events the engine finds two to four, and often none at
+all. A dashboard whose only live surface is an opportunities table therefore
+spends most of its time showing nothing — which is indistinguishable, from the
+browser, from a scanner that has silently died.
+
+So every cycle pushes three things, not one:
+
+- **The scan log.** Events read, cycle duration, feed errors. One line per
+  cycle, streamed over the same socket. If those numbers move, the engine works.
+- **The watchlist.** The tightest books on the tape and how far each is from
+  crossing, in basis points. These are not opportunities; they are the ones that
+  could become opportunities, and they move every cycle even when nothing does.
+- **How much of that distance is fees.** A book quoted at 0.982 that arrives at
+  1.007 after Smarkets' commission crossed on paper and lost to the fee
+  schedule. Showing the gross and net gaps side by side says which of the two
+  problems you are looking at.
+
 ### Void-adjusted edge is the number that matters
 
 An arbitrage is risk-free only if every leg settles. At a 2% void rate costing
@@ -191,10 +262,11 @@ void model rather than reporting the naive sum.
 backend/
   arbengine/
     odds.py         Odds mathematics — every formula from the theory volume
-    fees.py         Per-venue fee models (Kalshi's is the one that bites)
+    fees.py         Per-venue fee models (Kalshi's, and exchange commission)
+    venues.py       Venue registry and the execution-zone pairing rule
     models.py       Canonical Quote → Outcome → Market → Event → Arb
     normalise.py    Cross-venue title matching and its hard guards
-    detector.py     The four detectors, plus confidence scoring
+    detector.py     The four detectors, near misses, confidence scoring
     sizing.py       Order-book walking and equal-profit allocation
     storage.py      SQLite: arbs, placements, scans, price history
     alerts.py       Telegram push + in-process broadcast to the dashboard
@@ -202,10 +274,10 @@ backend/
     backtest.py     Void-model replay and threshold sweep
     api.py          FastAPI: REST + WebSocket
     demo_data.py    Deterministic offline fixtures
-    sources/        polymarket.py · kalshi.py · odds_api.py
-  tests/            104 tests, including the PDFs' worked examples
+    sources/        polymarket.py · kalshi.py · smarkets.py · betfair.py · odds_api.py
+  tests/            138 tests, including the PDFs' worked examples
 frontend/
-  app/              Opportunities · Markets · Analytics · Calculators · Settings
+  app/              Opportunities · Markets · Venues · Analytics · Calculators · Settings
   components/       Table, detail drawer, charts, design primitives
   lib/              API client, types, formatting, live-data hook, demo shim
 ```
@@ -220,8 +292,17 @@ The payout matrix is the check worth running before staking anything. The
 guarantee is only real if profit is positive in *every* row — after rounding,
 the outcomes are no longer exactly equal.
 
+Below the table, the **watchlist** carries the books that did not cross and the
+**scan activity** feed carries the cycles that produced them. Together they are
+the answer to "the terminal is busy but the dashboard is empty": the tape is
+moving, it just is not crossing.
+
 **Markets** browses the normalised tape the detectors see, with each event's
 combined book and overround.
+
+**Venues** is the execution-zone registry: which venues may be arbed against
+which, why, where each is available, and every pair the rule declined on the
+last scan.
 
 **Analytics** shows the margin distribution, detection volume, and a backtester
 that replays stored history under a void model.
@@ -229,7 +310,8 @@ that replays stored history under a void model.
 **Calculators** exposes the same arithmetic on arbitrary prices: equal-profit
 stakes, void-adjusted edge, Kelly sizing, and odds conversion.
 
-**Settings** tunes thresholds live, and shows what each setting implies.
+**Settings** tunes thresholds live, and shows what each setting implies —
+including the zone-pairing rule and the jurisdiction you trade from.
 
 ### CLI
 
@@ -237,7 +319,7 @@ stakes, void-adjusted edge, Kelly sizing, and odds conversion.
 cd backend
 python -m arbengine.main --scan      # one cycle, print results, exit
 python -m arbengine.main --demo      # serve with offline fixtures
-python -m pytest tests/ -q           # 104 tests
+python -m pytest tests/ -q           # 138 tests
 ```
 
 ## The demo deployment

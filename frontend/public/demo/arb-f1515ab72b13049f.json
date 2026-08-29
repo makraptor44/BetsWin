@@ -49,6 +49,12 @@
     "net_payout": 549.4033333333333
    }
   ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
   "total_stake": 499.99,
   "book": 0.9293426205644606,
   "margin": 0.09649122807017552,
@@ -71,12 +77,12 @@
    "Legs sit on different venues; confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
    "Markets were paired by title similarity (99/100), not by a shared identifier."
   ],
-  "detected_at": "2026-08-27T11:46:08.930272Z",
-  "close_time": "2026-10-11T11:46:11.639092Z",
-  "last_seen": "2026-08-27T11:46:12.974899Z",
+  "detected_at": "2026-08-29T13:14:26.263599Z",
+  "close_time": "2026-10-13T13:14:32.874740Z",
+  "last_seen": "2026-08-29T13:14:36.153583Z",
   "is_suspect": true,
   "roi_pct": 7.602152043040861,
-  "hours_to_close": 1079.9996266394444
+  "hours_to_close": 1079.9990866122223
  },
  "payout_matrix": [
   {

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Iterator, Optional, Sequence
 
@@ -37,6 +38,7 @@ from .models import (
     ArbKind,
     Event,
     Market,
+    NearMiss,
     Quote,
     RiskFlag,
     Side,
@@ -44,6 +46,7 @@ from .models import (
 )
 from .normalise import MatchResult, match_titles
 from .sizing import SizedArb, size_arb
+from .venues import PairVerdict, can_pair, legs_are_placeable, venue, zone_info
 
 # Quotes older than this are treated as possibly moved (Part I s9.3).
 _STALE_AFTER = timedelta(minutes=10)
@@ -77,6 +80,21 @@ def _binary_outcomes(market: Market) -> Optional[tuple[Quote, Quote]]:
     if a is None or b is None:
         return None
     return a, b
+
+
+def _placeable(quotes: Sequence[Quote]) -> PairVerdict:
+    """Can one operator actually place every leg of this set?
+
+    The gate that makes the rest of the numbers mean anything. A leg set whose
+    venues sit in different execution zones is not an arbitrage available to
+    anybody: it needs accounts in two jurisdictions and carries an unhedged FX
+    leg worth more than the edge. See venues.py.
+    """
+    if not settings.enforce_zone_pairing:
+        return PairVerdict(True, "Zone pairing is disabled in configuration.")
+    return legs_are_placeable(
+        (q.venue for q in quotes), settings.operator_jurisdiction
+    )
 
 
 # --------------------------------------------------------------- risk scoring
@@ -207,16 +225,43 @@ def _finalise(
     if not (settings.min_arb_margin <= sized.net_margin <= settings.max_arb_margin):
         return None
 
+    # Executability first. An unplaceable "arbitrage" is not a lower-confidence
+    # opportunity, it is not an opportunity, so it is dropped rather than
+    # surfaced with a warning nobody reads.
+    verdict = _placeable(quotes)
+    if not verdict.ok:
+        logger.debug(f"rejected {title!r}: {verdict.reason}")
+        return None
+
     confidence, flags, notes = _score(kind, sized, quotes, close_time, match)
+
+    # A trade only one country can place is worth surfacing, but it is worth
+    # saying so: it is unavailable to most operators and to any second account.
+    if verdict.jurisdictions and "*" not in verdict.jurisdictions:
+        if len(verdict.jurisdictions) <= 2:
+            flags = tuple(dict.fromkeys(flags + (RiskFlag.SINGLE_JURISDICTION,)))
+            notes = notes + (
+                "Placeable only from "
+                + ", ".join(verdict.jurisdictions)
+                + " -- both venues must accept an account there.",
+            )
+
     if confidence < settings.min_confidence:
         return None
+
+    venue_names = tuple(dict.fromkeys(q.venue for q in quotes))
+    currency = venue(venue_names[0]).currency if venue_names else "USD"
 
     return Arb(
         id=_arb_id(kind, quotes),
         kind=kind,
         title=title,
         category=category,
-        venues=tuple(dict.fromkeys(q.venue for q in quotes)),
+        venues=venue_names,
+        zone=verdict.zone.value,
+        zone_label=zone_info(verdict.zone).label,
+        currency=currency,
+        placeable_from=verdict.jurisdictions,
         market_key=market_key,
         legs=sized.legs,
         total_stake=sized.total_stake,
@@ -409,13 +454,25 @@ def _cross_pairs(
     return [(a_yes, b_no), (b_yes, a_no)]
 
 
-def detect_cross_venue(events: Sequence[Event], **kw) -> Iterator[Arb]:
+def detect_cross_venue(
+    events: Sequence[Event], rejected: Optional[list[str]] = None, **kw
+) -> Iterator[Arb]:
     """Same question on two venues: buy YES on one, NO on the other.
 
-    Titles are matched by `normalise.match_titles`, which enforces hard guards on
-    thresholds, dates and direction before any fuzzy comparison. The match score
-    travels with the opportunity and is discounted in the confidence score, since
-    a paired title is weaker evidence than a shared identifier (Part II s6.2).
+    Two gates, in this order:
+
+    1.  **Execution zone.** The venues must be ones a single operator can hold
+        accounts on from a single location, in a single currency -- Polymarket
+        against Kalshi, Betfair against Smarkets, never Betfair against Kalshi.
+        This runs first because it is a property of the venue pair, not of the
+        markets, so rejecting here skips an entire O(n*m) title comparison
+        rather than doing the expensive work and discarding it.
+
+    2.  **Title match.** `normalise.match_titles` enforces hard guards on
+        thresholds, dates and direction before any fuzzy comparison. The match
+        score travels with the opportunity and is discounted in the confidence
+        score, since a paired title is weaker evidence than a shared identifier
+        (Part II s6.2).
     """
     # Only single-market (genuinely binary) events pair cleanly. A multi-outcome
     # event would need per-outcome matching, which is a different problem.
@@ -434,8 +491,24 @@ def detect_cross_venue(events: Sequence[Event], **kw) -> Iterator[Arb]:
 
     seen: set[str] = set()
     for venue_a, venue_b in itertools.combinations(sorted(by_venue), 2):
+        if settings.enforce_zone_pairing:
+            verdict = can_pair(venue_a, venue_b, settings.operator_jurisdiction)
+            if not verdict.ok:
+                logger.debug(
+                    f"cross-venue: not pairing {venue_a} with {venue_b} -- "
+                    f"{verdict.reason}"
+                )
+                if rejected is not None:
+                    rejected.append(f"{venue_a}/{venue_b}: {verdict.reason}")
+                continue
+
         for ev_a, a_yes, a_no in by_venue[venue_a]:
             for ev_b, b_yes, b_no in by_venue[venue_b]:
+                # Same zone should already imply the same currency; check
+                # anyway, because a venue that starts quoting a second currency
+                # would otherwise introduce an FX leg silently.
+                if ev_a.currency != ev_b.currency:
+                    continue
                 match = match_titles(ev_a.title, ev_b.title)
                 if not match.ok:
                     continue
@@ -475,6 +548,128 @@ def detect_cross_venue(events: Sequence[Event], **kw) -> Iterator[Arb]:
 # ------------------------------------------------------------- orchestration
 
 
+@dataclass
+class ScanResult:
+    """Everything one detection pass produced, including what it did not find.
+
+    The near misses matter as much as the arbs on most cycles, because on most
+    cycles there are no arbs. Reporting only `arbs` makes a working scanner
+    indistinguishable from a broken one.
+    """
+
+    arbs: list[Arb] = field(default_factory=list)
+    near_misses: list[NearMiss] = field(default_factory=list)
+    cross_zone_rejected: list[str] = field(default_factory=list)
+
+    @property
+    def tightest_gap_bps(self) -> Optional[float]:
+        if not self.near_misses:
+            return None
+        return min(n.gap_bps for n in self.near_misses)
+
+
+def _near_miss(
+    ev: Event,
+    kind: ArbKind,
+    quotes: Sequence[Quote],
+    payout_multiple: float = 1.0,
+) -> Optional[NearMiss]:
+    """How far a book is from crossing, in basis points.
+
+    Only books that have NOT crossed are near misses. A book already below 1.0
+    is either in the opportunity list or was rejected by sizing, and either way
+    it does not belong in a watchlist of things that might cross next.
+    """
+    if len(quotes) < 2:
+        return None
+    eff = sum(q.effective_price for q in quotes) / payout_multiple
+    raw = sum(q.price for q in quotes) / payout_multiple
+    gap = (eff - 1.0) * 10_000.0
+    if not 0.0 <= gap <= settings.near_miss_slack * 10_000.0:
+        return None
+    cheapest = min(quotes, key=lambda q: q.effective_price)
+    return NearMiss(
+        id=hashlib.sha1(
+            f"{kind.value}|{ev.id}|{cheapest.market_id}".encode()
+        ).hexdigest()[:16],
+        title=ev.title,
+        venue=ev.venue,
+        zone=venue(ev.venue).zone.value,
+        category=ev.category,
+        kind=kind,
+        book=round(eff, 5),
+        gap_bps=round(gap, 1),
+        gap_bps_gross=round((raw - 1.0) * 10_000.0, 1),
+        best_outcome=cheapest.outcome,
+        outcomes=len(quotes),
+        liquidity_usd=round(ev.liquidity_usd, 2),
+        close_time=ev.close_time,
+        url=ev.url,
+    )
+
+
+def find_near_misses(events: Sequence[Event]) -> list[NearMiss]:
+    """The tightest books on the tape that did not quite cross.
+
+    Deliberately cheap: it reads the same top-of-book prices detection already
+    walked, does no sizing and no order-book work, and keeps only the closest
+    `max_near_misses`. Cost is a few milliseconds on a thousand events.
+
+    One row per event and structure, not one per market: a 40-outcome event
+    would otherwise contribute 40 near-identical binary rows and crowd out
+    every other event on the tape.
+    """
+    best: dict[tuple[str, ArbKind], NearMiss] = {}
+
+    def keep(nm: Optional[NearMiss]) -> None:
+        if nm is None:
+            return
+        key = (nm.title, nm.kind)
+        current = best.get(key)
+        if current is None or nm.gap_bps < current.gap_bps:
+            best[key] = nm
+
+    for ev in events:
+        try:
+            for market in ev.markets:
+                pair = _binary_outcomes(market)
+                if pair is None:
+                    continue
+                keep(_near_miss(ev, ArbKind.BINARY_COMPLEMENT, list(pair)))
+
+            if ev.mutually_exclusive and len(ev.markets) >= 2:
+                yes_quotes: list[Quote] = []
+                no_quotes: list[Quote] = []
+                for market in ev.markets:
+                    pair = _binary_outcomes(market)
+                    if pair is None:
+                        yes_quotes = []
+                        break
+                    yes_quotes.append(pair[0])
+                    no_quotes.append(pair[1])
+                n = len(yes_quotes)
+                if n >= 2:
+                    yes_sum = sum(q.effective_price for q in yes_quotes)
+                    # Same exhaustiveness guard as the detector: a set summing
+                    # far below 1 is missing outcomes, not close to arbing.
+                    if yes_sum >= _DUTCH_COMPLETENESS_FLOOR:
+                        keep(_near_miss(ev, ArbKind.DUTCH_YES, yes_quotes))
+                    if n >= 3:
+                        keep(
+                            _near_miss(
+                                ev,
+                                ArbKind.DUTCH_NO,
+                                no_quotes,
+                                payout_multiple=float(n - 1),
+                            )
+                        )
+        except Exception as exc:  # noqa: BLE001 - telemetry must never break a scan
+            logger.debug(f"near-miss scan failed on {ev.id}: {exc}")
+
+    out = sorted(best.values(), key=lambda n: n.gap_bps)
+    return out[: settings.max_near_misses]
+
+
 def scan_events(
     events: Sequence[Event],
     target_stake: Optional[float] = None,
@@ -482,30 +677,46 @@ def scan_events(
     kinds: Optional[set[ArbKind]] = None,
 ) -> list[Arb]:
     """Run every enabled detector over a normalised snapshot of the market."""
+    return scan(events, target_stake, venue_limits, kinds).arbs
+
+
+def scan(
+    events: Sequence[Event],
+    target_stake: Optional[float] = None,
+    venue_limits: Optional[dict[str, float]] = None,
+    kinds: Optional[set[ArbKind]] = None,
+) -> ScanResult:
+    """Detection pass: opportunities, near misses, and what was ruled out."""
     kw = {"target_stake": target_stake, "venue_limits": venue_limits}
     wanted = kinds or set(ArbKind)
-    found: list[Arb] = []
+    result = ScanResult()
 
     for ev in events:
         try:
             if ArbKind.BINARY_COMPLEMENT in wanted:
-                found.extend(detect_intra_market(ev, **kw))
+                result.arbs.extend(detect_intra_market(ev, **kw))
             if ArbKind.DUTCH_YES in wanted or ArbKind.DUTCH_NO in wanted:
-                found.extend(a for a in detect_dutch(ev, **kw) if a.kind in wanted)
+                result.arbs.extend(
+                    a for a in detect_dutch(ev, **kw) if a.kind in wanted
+                )
             if ArbKind.SPORTSBOOK in wanted:
-                found.extend(detect_sportsbook(ev, **kw))
+                result.arbs.extend(detect_sportsbook(ev, **kw))
         except Exception as exc:  # noqa: BLE001 - one bad event must not stop a scan
             logger.warning(f"detector failed on {ev.id}: {exc}")
 
     if ArbKind.CROSS_VENUE in wanted:
         try:
-            found.extend(detect_cross_venue(events, **kw))
+            result.arbs.extend(
+                detect_cross_venue(events, rejected=result.cross_zone_rejected, **kw)
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"cross-venue detector failed: {exc}")
 
+    result.near_misses = find_near_misses(events)
+
     # Best first: net margin, then confidence.
-    found.sort(key=lambda a: (a.net_margin * (a.confidence / 100.0)), reverse=True)
-    return found
+    result.arbs.sort(key=lambda a: (a.net_margin * (a.confidence / 100.0)), reverse=True)
+    return result
 
 
 def candidate_events(events: Sequence[Event], slack: float = 0.04) -> list[Event]:

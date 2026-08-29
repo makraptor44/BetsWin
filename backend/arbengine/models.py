@@ -29,6 +29,8 @@ class Venue(str, Enum):
     POLYMARKET = "polymarket"
     KALSHI = "kalshi"
     SPORTSBOOK = "sportsbook"
+    SMARKETS = "smarkets"
+    BETFAIR = "betfair"
 
 
 class ArbKind(str, Enum):
@@ -155,6 +157,9 @@ class Event(BaseModel):
     venue: str
     title: str
     category: str = "other"
+    #: Settlement currency. Legs are only ever combined within one currency:
+    #: at 1% margins an unhedged FX leg is larger than the edge.
+    currency: str = "USD"
     league: Optional[str] = None
     home: Optional[str] = None
     away: Optional[str] = None
@@ -220,6 +225,7 @@ class RiskFlag(str, Enum):
     NEAR_RESOLUTION = "near_resolution"        # settles imminently
     FEE_SENSITIVE = "fee_sensitive"            # fees consume most of the edge
     ROUNDING_EXPOSURE = "rounding_exposure"    # s8.3: stakes rounded, unequal profit
+    SINGLE_JURISDICTION = "single_jurisdiction"  # both legs need one specific country
 
 
 class Arb(BaseModel):
@@ -232,6 +238,16 @@ class Arb(BaseModel):
     venues: tuple[str, ...] = ()
     market_key: str = "binary"
     legs: tuple[ArbLeg, ...] = ()
+
+    # --- executability (see venues.py) -----------------------------------
+    #: Execution zone every leg belongs to. Legs never span zones.
+    zone: str = "unknown"
+    zone_label: str = ""
+    #: Settlement currency shared by every leg.
+    currency: str = "USD"
+    #: Places one operator could hold all the accounts. ("*",) means broadly
+    #: available; a short list means the trade is location-specific.
+    placeable_from: tuple[str, ...] = ()
 
     total_stake: float = 0.0
     book: float = 1.0             # B_combined (Part I s2.4)
@@ -293,6 +309,38 @@ class Arb(BaseModel):
 # ------------------------------------------------------------------ analytics
 
 
+class NearMiss(BaseModel):
+    """A book that is close to arbing but has not crossed.
+
+    Zero opportunities is the normal state of a reasonably efficient market, and
+    a dashboard that shows nothing in that state is indistinguishable from a
+    dashboard that is broken. Near misses are the evidence of work: they are the
+    tightest books the scanner found this cycle, ordered by how far they are
+    from crossing, so an operator can see the market breathing and know which
+    events are worth watching before they cross.
+    """
+
+    id: str
+    title: str
+    venue: str
+    zone: str = "unknown"
+    category: str = "other"
+    kind: ArbKind = ArbKind.BINARY_COMPLEMENT
+    #: Combined book. Below 1.0 is an arbitrage; this is what did not get there.
+    book: float = 1.0
+    #: How far from crossing, in basis points. 0 means it just crossed.
+    gap_bps: float = 0.0
+    #: Same gap using quoted prices, before fees. The difference between the two
+    #: is what the venue's fee schedule costs you.
+    gap_bps_gross: float = 0.0
+    best_outcome: str = ""
+    outcomes: int = 2
+    liquidity_usd: float = 0.0
+    close_time: Optional[datetime] = None
+    url: Optional[str] = None
+    seen_at: datetime = Field(default_factory=utcnow)
+
+
 class ScanStats(BaseModel):
     """Telemetry for one scan cycle."""
 
@@ -304,7 +352,14 @@ class ScanStats(BaseModel):
     quotes_scanned: int = 0
     arbs_found: int = 0
     new_arbs: int = 0
+    near_misses: int = 0
+    #: Tightest book seen this cycle, in basis points from crossing. The number
+    #: that moves every scan even when `arbs_found` is stuck at zero.
+    tightest_gap_bps: Optional[float] = None
     by_venue: dict[str, int] = Field(default_factory=dict)
+    by_zone: dict[str, int] = Field(default_factory=dict)
+    #: Cross-venue pairs rejected because the venues sit in different zones.
+    cross_zone_rejected: int = 0
     errors: list[str] = Field(default_factory=list)
     breaker_tripped: bool = False
 
@@ -321,3 +376,8 @@ class EngineStatus(BaseModel):
     sources: dict[str, bool] = Field(default_factory=dict)
     breaker_tripped: bool = False
     breaker_reason: Optional[str] = None
+    #: Execution zones with a live source behind them, and the pairing policy.
+    zones: list[str] = Field(default_factory=list)
+    operator_jurisdiction: str = ""
+    enforce_zone_pairing: bool = True
+    near_misses: int = 0

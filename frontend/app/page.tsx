@@ -5,9 +5,10 @@ import { useMemo, useState } from "react";
 import { ArbDetailPanel } from "@/components/ArbDetail";
 import { ArbCards, ArbTable } from "@/components/ArbTable";
 import { StatusBar } from "@/components/StatusBar";
+import { ActivityFeed, Watchlist } from "@/components/Watchlist";
 import { Card, EmptyState, ErrorState, Stat } from "@/components/ui";
-import { KIND_LABEL, pct, usd, usdCompact } from "@/lib/format";
-import type { Arb, ArbKind } from "@/lib/types";
+import { KIND_LABEL, ZONE_LABEL, bps, pct, usd, usdCompact } from "@/lib/format";
+import type { Arb, ArbKind, ZoneKey } from "@/lib/types";
 import { useEngine } from "@/lib/useEngine";
 
 type SortKey = "margin" | "profit" | "confidence" | "closing" | "size";
@@ -27,6 +28,10 @@ export default function OpportunitiesPage() {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<ArbKind | "all">("all");
   const [venue, setVenue] = useState<string>("all");
+  // Execution zone: which set of venues you can actually place from. Filtering
+  // by it is how an operator in one country stops looking at trades that need
+  // an account in another.
+  const [zone, setZone] = useState<ZoneKey | "all">("all");
   const [minMargin, setMinMargin] = useState(0);
   const [minConfidence, setMinConfidence] = useState(0);
   const [sort, setSort] = useState<SortKey>("margin");
@@ -41,6 +46,22 @@ export default function OpportunitiesPage() {
     [engine.arbs],
   );
 
+  const zones = useMemo(() => {
+    const fromArbs = engine.arbs.map((a) => a.zone);
+    const fromEngine = engine.status?.zones ?? [];
+    return Array.from(new Set([...fromEngine, ...fromArbs])).filter(
+      (z): z is ZoneKey => Boolean(z) && z !== "unknown",
+    );
+  }, [engine.arbs, engine.status]);
+
+  const watchlist = useMemo(
+    () =>
+      zone === "all"
+        ? engine.nearMisses
+        : engine.nearMisses.filter((n) => n.zone === zone),
+    [engine.nearMisses, zone],
+  );
+
   const filtered = useMemo(() => {
     let out = engine.arbs;
     if (search.trim()) {
@@ -52,6 +73,7 @@ export default function OpportunitiesPage() {
       );
     }
     if (kind !== "all") out = out.filter((a) => a.kind === kind);
+    if (zone !== "all") out = out.filter((a) => a.zone === zone);
     if (venue !== "all") out = out.filter((a) => a.venues.includes(venue));
     if (minMargin > 0) out = out.filter((a) => a.net_margin * 100 >= minMargin);
     if (minConfidence > 0) out = out.filter((a) => a.confidence >= minConfidence);
@@ -72,7 +94,7 @@ export default function OpportunitiesPage() {
       }
     });
     return sorted;
-  }, [engine.arbs, search, kind, venue, minMargin, minConfidence, sort]);
+  }, [engine.arbs, search, kind, zone, venue, minMargin, minConfidence, sort]);
 
   const totals = useMemo(() => {
     const profit = filtered.reduce((s, a) => s + a.worst_case_profit, 0);
@@ -85,6 +107,7 @@ export default function OpportunitiesPage() {
   const hasFilters =
     search.trim() !== "" ||
     kind !== "all" ||
+    zone !== "all" ||
     venue !== "all" ||
     minMargin > 0 ||
     minConfidence > 0;
@@ -92,6 +115,7 @@ export default function OpportunitiesPage() {
   const clearFilters = () => {
     setSearch("");
     setKind("all");
+    setZone("all");
     setVenue("all");
     setMinMargin(0);
     setMinConfidence(0);
@@ -126,17 +150,27 @@ export default function OpportunitiesPage() {
           value={pct(totals.best)}
           sub="after fees and slippage"
         />
+        {/*
+          Deliberately not "last scan: 893 events". When there is no
+          arbitrage -- which is most of the time -- the number an operator
+          actually wants is how close the market came, because that is the one
+          that moves. It is never coloured green: a near miss is not money.
+        */}
         <Stat
-          label="Last scan"
+          label="Closest book"
           value={
-            engine.status?.last_scan
-              ? `${engine.status.last_scan.events_scanned}`
-              : "—"
+            watchlist.length > 0
+              ? bps(watchlist[0].gap_bps)
+              : engine.status?.last_scan
+                ? "—"
+                : "…"
           }
           sub={
-            engine.status?.last_scan
-              ? `events in ${engine.status.last_scan.duration_seconds.toFixed(1)}s`
-              : "waiting for first scan"
+            watchlist.length > 0
+              ? `${watchlist.length} within reach of crossing`
+              : engine.status?.last_scan
+                ? `${engine.status.last_scan.events_scanned.toLocaleString()} events, none close`
+                : "waiting for first scan"
           }
         />
       </div>
@@ -177,6 +211,28 @@ export default function OpportunitiesPage() {
               ))}
             </select>
           </div>
+
+          {zones.length > 1 && (
+            <div style={{ width: 186 }}>
+              <label className="label" htmlFor="zone">
+                Execution zone
+              </label>
+              <select
+                id="zone"
+                className="input"
+                value={zone}
+                onChange={(e) => setZone(e.target.value as ZoneKey | "all")}
+                title="Venues you can hold accounts on from one location, in one currency. Legs are never combined across zones."
+              >
+                <option value="all">All zones</option>
+                {zones.map((z) => (
+                  <option key={z} value={z}>
+                    {ZONE_LABEL[z]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div style={{ width: 138 }}>
             <label className="label" htmlFor="venue">
@@ -271,7 +327,7 @@ export default function OpportunitiesPage() {
             <EmptyState
               icon="○"
               title="No arbitrage right now"
-              body="This is the normal state of a reasonably efficient market. The scanner keeps polling; opportunities appear here the moment a book crosses, and usually last seconds to minutes."
+              body="This is the normal state of a reasonably efficient market, not a fault. The scan activity and watchlist below show what the engine is reading and how close the tightest books are; opportunities appear here the moment one crosses, and usually last seconds to minutes."
               action={
                 engine.isStaticDemo ? undefined : (
                   <button
@@ -300,6 +356,16 @@ export default function OpportunitiesPage() {
           </>
         )}
       </Card>
+
+      {/*
+        Below the fold: what the engine did, not just what it found. These two
+        panels are the answer to "the terminal is busy but the dashboard is
+        empty" -- the tape is moving, it just is not crossing.
+      */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
+        <Watchlist rows={watchlist} />
+        <ActivityFeed entries={engine.activity} />
+      </div>
 
       {selected && (
         <ArbDetailPanel arb={selected} onClose={() => setSelected(null)} />

@@ -8,6 +8,12 @@ demonstrating the app when the live venues are quiet.
 Prices are shaped to fire every detector: a crossed binary book, a YES-side Dutch
 book, a NO-side Dutch book, a cross-venue pair, and a mass of ordinary
 non-arbitrage markets so the scanner has realistic noise to reject.
+
+The tape spans both execution zones -- Polymarket/Kalshi in USD contracts,
+Smarkets/Betfair in GBP exchange prices -- and deliberately includes one
+cross-zone pair that looks like the fattest arbitrage in the set and is rejected
+for being unplaceable. A fixture set that only contains opportunities cannot
+demonstrate a guard.
 """
 
 from __future__ import annotations
@@ -33,7 +39,8 @@ def _quote(
     ticker: Optional[str] = None,
 ) -> Quote:
     fees = fee_model_for(venue)
-    tick = 0.01 if venue == "kalshi" else 0.001
+    # Exchanges quote a finer ladder than a cent-tick contract market.
+    tick = 0.01 if venue == "kalshi" else 0.001 if venue == "polymarket" else 0.002
     depth = tuple(
         DepthLevel(price=round(price + i * tick, 4), size=round(size * (0.6 ** i), 2))
         for i in range(4)
@@ -150,7 +157,111 @@ def demo_events() -> list[Event]:
         )
     )
 
-    # 5. Realistic non-arbitrage noise, so the detector has to reject things.
+    # 5. The UK/EU exchange zone. Smarkets and Betfair are a legitimate pair:
+    #    one operator, one country, one currency, two ordinary accounts.
+    events.append(
+        Event(
+            id="smarkets:demo-ge-labour",
+            venue="smarkets",
+            title="Will Labour win the next UK general election?",
+            category="politics",
+            currency="GBP",
+            close_time=now + timedelta(days=300),
+            volume_usd=0.0,
+            liquidity_usd=48_000,
+            url="https://example.invalid/smarkets/ge-labour",
+            markets=(
+                _binary("smarkets", "demo-sm-labour", "Yes", "Not Yes", 0.52, 0.495, 7000, rng),
+            ),
+        )
+    )
+    events.append(
+        Event(
+            id="betfair:demo-ge-labour",
+            venue="betfair",
+            title="Labour to win the next UK general election",
+            category="politics",
+            currency="GBP",
+            close_time=now + timedelta(days=300),
+            volume_usd=0.0,
+            liquidity_usd=115_000,
+            url="https://example.invalid/betfair/ge-labour",
+            markets=(
+                _binary("betfair", "demo-bf-labour", "Yes", "Not Yes", 0.535, 0.447, 9000, rng),
+            ),
+        )
+    )
+
+    # 6. A three-way football book on Smarkets. Home/draw/away genuinely
+    #    partition the sample space, which is what the Dutch detector needs,
+    #    and commission on winnings is what decides whether it survives.
+    three_way = [("Arsenal", 0.515), ("Draw", 0.255), ("Brighton", 0.208)]
+    events.append(
+        Event(
+            id="smarkets:demo-football",
+            venue="smarkets",
+            title="Arsenal vs Brighton - Full-time result",
+            category="sports",
+            currency="GBP",
+            mutually_exclusive=True,
+            close_time=now + timedelta(days=3),
+            volume_usd=0.0,
+            liquidity_usd=86_000,
+            url="https://example.invalid/smarkets/arsenal-brighton",
+            markets=tuple(
+                _binary(
+                    "smarkets",
+                    f"demo-sm-3way-{i}",
+                    name,
+                    f"Not {name}",
+                    price,
+                    round(1.0 - price + 0.008, 4),
+                    6000,
+                    rng,
+                )
+                for i, (name, price) in enumerate(three_way)
+            ),
+        )
+    )
+
+    # 7. The trap the zone rule exists for.
+    #
+    #    These two describe the same question and price it 5.6% apart, which is
+    #    the fattest apparent edge in the whole fixture set. It is also
+    #    unplaceable: Kalshi settles in USD under CFTC rules, Betfair in GBP
+    #    under a UKGC licence, and no single operator holds both from one
+    #    country. Detection deliberately never pairs them -- see venues.py. The
+    #    pair shows up in /api/venues under `rejected_this_scan`, which is how
+    #    you can tell the guard fired rather than the matcher having missed it.
+    events.append(
+        Event(
+            id="kalshi:demo-mancity",
+            venue="kalshi",
+            title="Will Manchester City win the 2026-27 Premier League?",
+            category="sports",
+            close_time=now + timedelta(days=280),
+            volume_usd=310_000,
+            liquidity_usd=42_000,
+            url="https://example.invalid/kalshi/mancity-epl",
+            markets=(_binary("kalshi", "KXEPL-MCI", "Yes", "No", 0.40, 0.62, 3000, rng),),
+        )
+    )
+    events.append(
+        Event(
+            id="betfair:demo-mancity",
+            venue="betfair",
+            title="Manchester City to win the 2026-27 Premier League",
+            category="sports",
+            currency="GBP",
+            close_time=now + timedelta(days=280),
+            volume_usd=0.0,
+            liquidity_usd=210_000,
+            url="https://example.invalid/betfair/mancity-epl",
+            markets=(_binary("betfair", "demo-bf-mci", "Yes", "Not Yes", 0.47, 0.55, 8000, rng),),
+        )
+    )
+
+    # 8. Realistic non-arbitrage noise, so the detector has to reject things.
     topics = [
         ("Will SpaceX land Starship on the Moon before 2029?", "science", 0.34),
         ("Will GPT-6 be released in 2026?", "technology", 0.58),

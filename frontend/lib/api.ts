@@ -16,9 +16,12 @@ import type {
   EngineStatus,
   KellyResult,
   MarketRow,
+  NearMiss,
   ResizeResult,
   StakeCalcResult,
+  VenueRegistry,
   VoidResult,
+  ZoneKey,
 } from "./types";
 
 import {
@@ -99,6 +102,7 @@ const post = <T>(path: string, body: unknown) =>
 export interface ArbFilters {
   kind?: string;
   venue?: string;
+  zone?: string;
   category?: string;
   min_margin?: number;
   min_confidence?: number;
@@ -126,6 +130,10 @@ function filterArbs(all: Arb[], f: ArbFilters): Arb[] {
   if (f.venue) {
     const want = new Set(String(f.venue).split(",").map((s) => s.trim()));
     out = out.filter((a) => a.venues.some((v) => want.has(v)));
+  }
+  if (f.zone) {
+    const want = new Set(String(f.zone).split(",").map((s) => s.trim()));
+    out = out.filter((a) => want.has(a.zone));
   }
   if (f.category) out = out.filter((a) => a.category === f.category);
   if (f.min_margin) out = out.filter((a) => a.net_margin >= f.min_margin!);
@@ -180,6 +188,28 @@ export const api = {
   arb: (id: string) =>
     STATIC_DEMO ? fixture<ArbDetail>(`arb-${id}`) : request<ArbDetail>(`/api/arbs/${id}`),
 
+  /** Books that did not cross. On a normal cycle this is the entire output. */
+  nearMisses: async (zone?: string) => {
+    type Res = {
+      count: number;
+      total: number;
+      slack_bps: number;
+      near_misses: NearMiss[];
+    };
+    if (!STATIC_DEMO) return request<Res>(`/api/near-misses${qs({ zone })}`);
+    const all = await fixture<Res>("near-misses");
+    if (!zone) return all;
+    const want = new Set(zone.split(",").map((s) => s.trim()));
+    const rows = all.near_misses.filter((n) => want.has(n.zone));
+    return { ...all, count: rows.length, near_misses: rows };
+  },
+
+  /** The venue registry and the execution-zone pairing matrix. */
+  venues: () =>
+    STATIC_DEMO
+      ? fixture<VenueRegistry>("venues")
+      : request<VenueRegistry>("/api/venues"),
+
   resize: async (id: string, total_stake: number) => {
     if (!STATIC_DEMO) {
       return post<ResizeResult>(`/api/arbs/${id}/resize`, { total_stake });
@@ -218,12 +248,14 @@ export const api = {
       markets: MarketRow[];
       categories: string[];
       venues: string[];
+      zones: ZoneKey[];
     };
     if (!STATIC_DEMO) return request<Res>(`/api/markets${qs(params)}`);
 
     const all = await fixture<Res>("markets");
     let rows = all.markets;
     if (params.venue) rows = rows.filter((m) => m.venue === params.venue);
+    if (params.zone) rows = rows.filter((m) => m.zone === params.zone);
     if (params.category) rows = rows.filter((m) => m.category === params.category);
     if (params.only_mutually_exclusive)
       rows = rows.filter((m) => m.mutually_exclusive);

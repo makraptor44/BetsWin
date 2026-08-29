@@ -7,15 +7,26 @@ import {
   FLAG_LABEL,
   KIND_BLURB,
   KIND_LABEL,
+  VENUE_LABEL,
+  ZONE_LABEL,
+  money,
   num,
   pct,
+  placeableLabel,
   untilLabel,
   usd,
 } from "@/lib/format";
 import type { Arb, ArbDetail as ArbDetailData, ResizeResult } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
 
-import { ConfidenceBar, ErrorState, FlagChip, Skeleton, VenueChip } from "./ui";
+import {
+  ConfidenceBar,
+  ErrorState,
+  FlagChip,
+  Skeleton,
+  VenueChip,
+  ZoneChip,
+} from "./ui";
 
 export function ArbDetailPanel({
   arb,
@@ -82,6 +93,7 @@ function Header({ arb, onClose }: { arb: Arb; onClose: () => void }) {
             {arb.venues.map((v) => (
               <VenueChip key={v} venue={v} />
             ))}
+            <ZoneChip zone={arb.zone} short />
           </div>
           <h2 className="text-[15px] font-semibold leading-snug">{arb.title}</h2>
         </div>
@@ -97,6 +109,7 @@ function Body({ arb, detail }: { arb: Arb; detail: ArbDetailData }) {
   return (
     <>
       <Summary arb={arb} />
+      <Executability arb={arb} />
       <WhatThisIs arb={arb} />
       {arb.notes.length > 0 && <RiskNotes arb={arb} />}
       <StakeCalculator arb={arb} />
@@ -113,14 +126,18 @@ function Summary({ arb }: { arb: Arb }) {
     { label: "Gross margin", value: pct(arb.margin), hint: "at quoted prices" },
     {
       label: "Guaranteed profit",
-      value: usd(arb.worst_case_profit),
+      value: money(arb.worst_case_profit, arb.currency),
       hint: "worst case, after rounding",
       tone: "positive" as const,
     },
-    { label: "Total stake", value: usd(arb.total_stake, 0), hint: "sized for this book" },
+    {
+      label: "Total stake",
+      value: money(arb.total_stake, arb.currency, 0),
+      hint: "sized for this book",
+    },
     {
       label: "Depth ceiling",
-      value: usd(arb.max_stake_available, 0),
+      value: money(arb.max_stake_available, arb.currency, 0),
       hint: "what the book can absorb",
     },
     { label: "Closes in", value: untilLabel(arb.close_time), hint: "capital lock-up" },
@@ -143,6 +160,48 @@ function Summary({ arb }: { arb: Arb }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Can one person actually place this?
+ *
+ * The question every other number on this panel presumes an answer to. Both
+ * legs already share an execution zone -- the detector will not construct a set
+ * that does not -- so this states which zone, in what currency, and from where.
+ */
+function Executability({ arb }: { arb: Arb }) {
+  const broad = arb.placeable_from.includes("*");
+  return (
+    <div className="card p-4">
+      <div className="label">Where this can be placed</div>
+      <div className="flex flex-wrap items-center gap-2 mb-2.5">
+        <span className="chip">{ZONE_LABEL[arb.zone] ?? arb.zone}</span>
+        <span className="chip">{arb.currency}</span>
+        <span
+          className={`chip ${broad ? "" : "chip-caution"}`}
+          title="Jurisdictions in which one operator could hold every account this trade needs"
+        >
+          {placeableLabel(arb.placeable_from)}
+        </span>
+      </div>
+      <p className="text-[13px] leading-relaxed m-0" style={{ color: "var(--text-muted)" }}>
+        {arb.venues.length > 1 ? (
+          <>
+            Both legs sit on {arb.venues.map((v) => VENUE_LABEL[v] ?? v).join(" and ")},
+            which settle in the same currency under comparable rules. Legs are never
+            combined across execution zones, so this trade needs no second
+            jurisdiction and carries no currency exposure between its legs.
+          </>
+        ) : (
+          <>
+            Every leg is on {VENUE_LABEL[arb.venues[0]] ?? arb.venues[0]}, so there is
+            no cross-venue rulebook risk at all — one account, one settlement
+            source.
+          </>
+        )}
+      </p>
     </div>
   );
 }

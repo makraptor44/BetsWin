@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { Card, ErrorState, Field, SectionTitle, Skeleton, VenueChip } from "@/components/ui";
+import {
+  Card,
+  ErrorState,
+  Field,
+  SectionTitle,
+  Skeleton,
+  Toggle,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { pct, usd, VENUE_LABEL } from "@/lib/format";
 import type { EngineConfig } from "@/lib/types";
@@ -255,6 +262,60 @@ export default function SettingsPage() {
       {saveErr && <ErrorState message={saveErr} />}
 
       <Card>
+        <SectionTitle
+          title="Execution zones"
+          hint="Which venues may be arbed against each other. This is the rule that keeps every surfaced pair placeable by one person from one place."
+        />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field
+            label="Pair only within a zone"
+            hint="On: Polymarket pairs with Kalshi and Betfair with Smarkets, but never Betfair with Kalshi. Off: cross-venue detection compares everything, including pairs that need accounts in two jurisdictions and carry an unhedged currency leg."
+          >
+            <div className="flex items-center gap-2.5 pt-1">
+              <Toggle
+                checked={
+                  (draft.enforce_zone_pairing ??
+                    data.enforce_zone_pairing) as boolean
+                }
+                onChange={(v) => {
+                  setSaved(false);
+                  setDraft((d) => ({ ...d, enforce_zone_pairing: v }));
+                }}
+                label="Enforce execution-zone pairing"
+              />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {(draft.enforce_zone_pairing ?? data.enforce_zone_pairing)
+                  ? "Enforced"
+                  : "Disabled — pairs may be unplaceable"}
+              </span>
+            </div>
+          </Field>
+
+          <Field
+            label="Trading from"
+            hint="ISO country code, e.g. GB or US. Set it and the engine hides anything you could not legitimately place from there. Leave blank to see every zone."
+          >
+            <input
+              className="input mono"
+              maxLength={2}
+              placeholder="—"
+              value={
+                ((draft.operator_jurisdiction ??
+                  data.operator_jurisdiction) as string) ?? ""
+              }
+              onChange={(e) => {
+                setSaved(false);
+                setDraft((d) => ({
+                  ...d,
+                  operator_jurisdiction: e.target.value.toUpperCase().slice(0, 2),
+                }));
+              }}
+            />
+          </Field>
+        </div>
+      </Card>
+
+      <Card>
         <SectionTitle title="Data sources" hint="Configured in the backend environment" />
         <div className="flex flex-wrap gap-2 mb-3">
           {Object.entries(data.sources).map(([name, enabled]) => (
@@ -283,8 +344,10 @@ export default function SettingsPage() {
           ))}
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Polymarket and Kalshi need no credentials for market data. Sportsbook
-          coverage requires <code>ODDS_API_KEY</code>. Telegram alerts are{" "}
+          Polymarket, Kalshi and Smarkets need no credentials for market data.
+          Sportsbook coverage requires <code>ODDS_API_KEY</code>; Betfair
+          requires <code>BETFAIR_APP_KEY</code> and a session. Telegram alerts
+          are{" "}
           <strong>{data.telegram_enabled ? "enabled" : "not configured"}</strong>.
           {data.demo_mode && (
             <>
@@ -341,6 +404,25 @@ export default function SettingsPage() {
             label="Cross-venue match floor"
             value={`${data.fuzzy_match_threshold}/100`}
             note="Title similarity needed before two venues' markets are paired."
+          />
+          <Implication
+            label="Exchange commission"
+            value={`${pct(data.smarkets_commission, 1)} / ${pct(data.betfair_commission, 1)}`}
+            note="Smarkets and Betfair take this share of net winnings. Priced into every quote before detection."
+          />
+          <Implication
+            label="Watchlist reach"
+            value={`${(data.near_miss_slack * 10000).toFixed(0)} bps`}
+            note="How far from crossing a book can be and still be worth watching."
+          />
+          <Implication
+            label="Pairing rule"
+            value={
+              (draft.enforce_zone_pairing ?? data.enforce_zone_pairing)
+                ? "Same zone only"
+                : "Unrestricted"
+            }
+            note="Whether cross-venue legs must share a currency, a settlement convention and an account footprint."
           />
         </div>
       </Card>

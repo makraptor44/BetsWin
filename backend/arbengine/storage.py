@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS arbs (
     title             TEXT NOT NULL,
     category          TEXT NOT NULL DEFAULT 'other',
     venues            TEXT NOT NULL,
+    zone              TEXT NOT NULL DEFAULT 'unknown',
+    currency          TEXT NOT NULL DEFAULT 'USD',
     market_key        TEXT NOT NULL,
     detected_at       TEXT NOT NULL,
     last_seen         TEXT NOT NULL,
@@ -114,8 +116,60 @@ class ArbStore:
         self.conn.row_factory = sqlite3.Row
         with self._lock:
             self.conn.executescript(SCHEMA)
+            self._migrate()
             self.conn.commit()
         logger.info(f"storage: using {self.path}")
+
+    def _migrate(self) -> None:
+        """Add columns a pre-existing database is missing.
+
+        `CREATE TABLE IF NOT EXISTS` does nothing to a table that already
+        exists, so a database written before execution zones would silently
+        keep the old shape and every insert would fail on the new columns.
+        Callers hold `self._lock`.
+        """
+        have = {r[1] for r in self.conn.execute("PRAGMA table_info(arbs)")}
+        added = False
+        for column, ddl in (
+            ("zone", "TEXT NOT NULL DEFAULT 'unknown'"),
+            ("currency", "TEXT NOT NULL DEFAULT 'USD'"),
+        ):
+            if column not in have:
+                self.conn.execute(f"ALTER TABLE arbs ADD COLUMN {column} {ddl}")
+                logger.info(f"storage: added arbs.{column}")
+                added = True
+        if added:
+            self._backfill_zones()
+
+    def _backfill_zones(self) -> None:
+        """Derive zone and currency for rows written before those columns.
+
+        The zone of an existing row is not unknown -- it is fully determined by
+        the venues already stored on it. Leaving history as 'unknown' would put
+        a meaningless bucket at the top of every zone breakdown for as long as
+        the retention window lasts.
+        """
+        from .venues import venue as venue_info, zone_for_venues
+
+        rows = self.conn.execute(
+            "SELECT id, venues FROM arbs WHERE zone = 'unknown'"
+        ).fetchall()
+        patched = 0
+        for row in rows:
+            try:
+                names = json.loads(row["venues"]) or []
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if not names:
+                continue
+            zone = zone_for_venues(names)
+            self.conn.execute(
+                "UPDATE arbs SET zone = ?, currency = ? WHERE id = ?",
+                (zone.value, venue_info(names[0]).currency or "USD", row["id"]),
+            )
+            patched += 1
+        if patched:
+            logger.info(f"storage: backfilled zone on {patched} historical rows")
 
     # ------------------------------------------------------------- internals
 
@@ -153,17 +207,20 @@ class ArbStore:
         legs = [l.model_dump(mode="json") for l in arb.legs]
         return self._exec(
             """INSERT INTO arbs
-               (arb_key, kind, title, category, venues, market_key, detected_at,
+               (arb_key, kind, title, category, venues, zone, currency,
+                market_key, detected_at,
                 last_seen, close_time, book, margin, net_margin, total_stake,
                 profit, worst_case_profit, max_stake, confidence, flags,
                 legs_json, payload_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 key,
                 arb.kind.value,
                 arb.title,
                 arb.category,
                 json.dumps(list(arb.venues)),
+                arb.zone,
+                arb.currency,
                 arb.market_key,
                 _iso(arb.detected_at),
                 _iso(arb.last_seen),
@@ -334,6 +391,16 @@ class ArbStore:
         ):
             for v in json.loads(row["venues"]):
                 by_venue[v] = by_venue.get(v, 0) + 1
+        # Zone-level performance is the question the pairing rule creates: is
+        # the edge coming from the USD contract venues or the sterling
+        # exchanges? Kept as its own aggregate rather than derived from venues,
+        # because a leg set belongs to exactly one zone by construction.
+        by_zone = self._rows(
+            """SELECT zone, COUNT(*) n, AVG(net_margin) avg_margin,
+                      SUM(total_stake) turnover, SUM(worst_case_profit) profit
+               FROM arbs WHERE detected_at >= ? GROUP BY zone ORDER BY n DESC""",
+            (since,),
+        )
         by_day = self._rows(
             """SELECT substr(detected_at, 1, 10) day, COUNT(*) n,
                       AVG(net_margin) avg_margin, SUM(worst_case_profit) profit
@@ -359,6 +426,7 @@ class ArbStore:
             "realised_pnl": (settled[0].get("pnl") if settled else 0.0) or 0.0,
             "by_kind": by_kind,
             "by_venue": by_venue,
+            "by_zone": by_zone,
             "by_day": by_day,
         }
 

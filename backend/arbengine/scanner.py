@@ -21,16 +21,24 @@ import asyncio
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Sequence
+from typing import Iterable, Optional, Sequence
 
 from loguru import logger
 
 from .alerts import AlertManager
 from .config import settings
-from .detector import candidate_events, scan_events
-from .models import Arb, ArbKind, EngineStatus, Event, ScanStats, utcnow
-from .sources import KalshiSource, OddsAPISource, PolymarketSource, Source
+from .detector import candidate_events, scan
+from .models import Arb, ArbKind, EngineStatus, Event, NearMiss, ScanStats, utcnow
+from .sources import (
+    BetfairSource,
+    KalshiSource,
+    OddsAPISource,
+    PolymarketSource,
+    SmarketsSource,
+    Source,
+)
 from .storage import ArbStore
+from .venues import Zone, zone_of
 
 
 class CircuitBreaker:
@@ -90,6 +98,8 @@ class Scanner:
         self._seen: dict[str, datetime] = {}
         self._live: dict[str, Arb] = {}
         self._events: list[Event] = []
+        self._near_misses: list[NearMiss] = []
+        self._cross_zone_rejected: list[str] = []
         self._task: Optional[asyncio.Task] = None
         self._running = False
         self._started_at = time.monotonic()
@@ -100,6 +110,13 @@ class Scanner:
 
     @staticmethod
     def _build_sources() -> list[Source]:
+        """Only sources that can actually be read.
+
+        A venue that needs credentials it does not have is left out entirely
+        rather than added and allowed to fail every cycle: an empty feed and a
+        broken feed look identical downstream, and only one of them is worth
+        alerting about.
+        """
         out: list[Source] = []
         if settings.enable_polymarket:
             out.append(PolymarketSource())
@@ -107,7 +124,35 @@ class Scanner:
             out.append(KalshiSource())
         if settings.odds_api_enabled:
             out.append(OddsAPISource())
+        if settings.enable_smarkets:
+            out.append(SmarketsSource())
+        if settings.betfair_enabled:
+            out.append(BetfairSource())
+        elif settings.enable_betfair:
+            logger.warning(
+                "betfair is enabled but has no app key and no credentials to "
+                "obtain a session -- the source will stay dark"
+            )
         return out
+
+    def zones(self) -> list[str]:
+        """Execution zones with at least one live feed behind them.
+
+        Demo mode reads its zones off the fixture tape rather than the source
+        list, because the fixtures cover venues no live source is configured
+        for -- that is the point of them.
+        """
+        names: Iterable[str]
+        if settings.demo_mode and self._events:
+            names = {ev.venue for ev in self._events}
+        else:
+            names = [s.name for s in self.sources]
+        seen: list[str] = []
+        for name in names:
+            z = zone_of(name)
+            if z is not Zone.UNKNOWN and z.value not in seen:
+                seen.append(z.value)
+        return sorted(seen)
 
     # ------------------------------------------------------------- accessors
 
@@ -126,6 +171,14 @@ class Scanner:
     def live_events(self) -> list[Event]:
         return self._events
 
+    def near_misses(self) -> list[NearMiss]:
+        """Tightest books from the last cycle, closest to crossing first."""
+        return self._near_misses
+
+    def cross_zone_rejected(self) -> list[str]:
+        """Venue pairs the zone rule declined to compare, with reasons."""
+        return self._cross_zone_rejected
+
     def get_arb(self, arb_id: str) -> Optional[Arb]:
         return self._live.get(arb_id)
 
@@ -142,6 +195,10 @@ class Scanner:
             sources={s.name: s.healthy for s in self.sources},
             breaker_tripped=self.breaker.tripped,
             breaker_reason=self.breaker.reason,
+            zones=self.zones(),
+            operator_jurisdiction=settings.operator_jurisdiction,
+            enforce_zone_pairing=settings.enforce_zone_pairing,
+            near_misses=len(self._near_misses),
         )
 
     # -------------------------------------------------------------- dedupe
@@ -165,7 +222,8 @@ class Scanner:
             from .demo_data import demo_events
 
             events = demo_events()
-            stats.by_venue = {"demo": len(events)}
+            for ev in events:
+                stats.by_venue[ev.venue] = stats.by_venue.get(ev.venue, 0) + 1
             return events
 
         results = await asyncio.gather(
@@ -223,9 +281,12 @@ class Scanner:
         events = await self._enrich(events)
         self._events = events
 
-        found = await asyncio.to_thread(
-            scan_events, events, settings.default_stake, self.venue_limits
+        result = await asyncio.to_thread(
+            scan, events, settings.default_stake, self.venue_limits
         )
+        found = result.arbs
+        self._near_misses = result.near_misses
+        self._cross_zone_rejected = result.cross_zone_rejected
 
         fresh: list[Arb] = []
         for arb in found:
@@ -258,6 +319,14 @@ class Scanner:
 
         stats.arbs_found = len(found)
         stats.new_arbs = len(fresh)
+        stats.near_misses = len(result.near_misses)
+        stats.tightest_gap_bps = result.tightest_gap_bps
+        stats.cross_zone_rejected = len(result.cross_zone_rejected)
+        by_zone: dict[str, int] = {}
+        for ev in events:
+            z = zone_of(ev.venue)
+            by_zone[z.value] = by_zone.get(z.value, 0) + 1
+        stats.by_zone = by_zone
         stats.finished_at = utcnow()
         stats.duration_seconds = round(time.monotonic() - t0, 3)
         self.last_scan = stats
@@ -268,19 +337,32 @@ class Scanner:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"scanner: scan telemetry not saved -- {exc}")
 
+        # The dashboard is driven entirely by this frame. It carries near misses
+        # as well as opportunities so a cycle that finds nothing still moves
+        # something on screen -- otherwise a working scanner and a hung one look
+        # exactly alike from the browser.
         await self.alerts.publish(
             {
                 "type": "scan",
                 "data": {
                     "stats": stats.model_dump(mode="json"),
                     "status": self.status().model_dump(mode="json"),
-                    "live": [a.model_dump(mode="json") for a in self.live_arbs()[:100]],
+                    "live": [a.model_dump(mode="json") for a in self.live_arbs()],
+                    "near_misses": [
+                        n.model_dump(mode="json") for n in self._near_misses[:20]
+                    ],
                 },
             }
         )
+        tightest = (
+            f", tightest book {stats.tightest_gap_bps:+.0f} bps from crossing"
+            if stats.tightest_gap_bps is not None
+            else ""
+        )
         logger.info(
             f"scan complete: {stats.events_scanned} events, {stats.arbs_found} arbs "
-            f"({stats.new_arbs} new) in {stats.duration_seconds}s"
+            f"({stats.new_arbs} new), {stats.near_misses} near misses"
+            f"{tightest} in {stats.duration_seconds}s"
         )
         return fresh
 

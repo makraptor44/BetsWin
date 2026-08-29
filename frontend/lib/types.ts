@@ -17,7 +17,8 @@ export type RiskFlag =
   | "long_dated"
   | "near_resolution"
   | "fee_sensitive"
-  | "rounding_exposure";
+  | "rounding_exposure"
+  | "single_jurisdiction";
 
 export interface ArbLeg {
   venue: string;
@@ -39,12 +40,23 @@ export interface ArbLeg {
   net_payout: number;
 }
 
+/** Execution zone: a set of venues one operator can reach from one location. */
+export type ZoneKey =
+  | "us_prediction"
+  | "uk_exchange"
+  | "us_sportsbook"
+  | "unknown";
+
 export interface Arb {
   id: string;
   kind: ArbKind;
   title: string;
   category: string;
   venues: string[];
+  zone: ZoneKey;
+  zone_label: string;
+  currency: string;
+  placeable_from: string[];
   market_key: string;
   legs: ArbLeg[];
   total_stake: number;
@@ -66,6 +78,26 @@ export interface Arb {
   hours_to_close: number | null;
 }
 
+export interface NearMiss {
+  id: string;
+  title: string;
+  venue: string;
+  zone: ZoneKey;
+  category: string;
+  kind: ArbKind;
+  book: number;
+  /** Basis points from crossing, after fees. Positive means it did not cross. */
+  gap_bps: number;
+  /** The same gap on quoted prices. The difference is what fees cost. */
+  gap_bps_gross: number;
+  best_outcome: string;
+  outcomes: number;
+  liquidity_usd: number;
+  close_time: string | null;
+  url: string | null;
+  seen_at: string;
+}
+
 export interface ScanStats {
   started_at: string;
   finished_at: string | null;
@@ -75,7 +107,11 @@ export interface ScanStats {
   quotes_scanned: number;
   arbs_found: number;
   new_arbs: number;
+  near_misses: number;
+  tightest_gap_bps: number | null;
   by_venue: Record<string, number>;
+  by_zone: Record<string, number>;
+  cross_zone_rejected: number;
   errors: string[];
   breaker_tripped: boolean;
 }
@@ -92,6 +128,56 @@ export interface EngineStatus {
   sources: Record<string, boolean>;
   breaker_tripped: boolean;
   breaker_reason: string | null;
+  zones: ZoneKey[];
+  operator_jurisdiction: string;
+  enforce_zone_pairing: boolean;
+  near_misses: number;
+}
+
+export interface ZoneSummary {
+  key: ZoneKey;
+  label: string;
+  currency: string;
+  rationale: string;
+  settlement: string;
+  venues: string[];
+  venue_labels: string[];
+}
+
+export interface VenueSummary {
+  name: string;
+  label: string;
+  zone: ZoneKey;
+  structure: "contract" | "exchange" | "book";
+  currency: string;
+  regulator: string;
+  commission: number;
+  jurisdictions: string[];
+  excluded: string[];
+  public_data: boolean;
+  url: string;
+  notes: string;
+  live: boolean;
+}
+
+export interface VenuePair {
+  a: string;
+  b: string;
+  allowed: boolean;
+  reason: string;
+  zone: ZoneKey;
+  jurisdictions: string[];
+  both_live: boolean;
+}
+
+export interface VenueRegistry {
+  enforce_zone_pairing: boolean;
+  operator_jurisdiction: string;
+  zones: ZoneSummary[];
+  zones_available: ZoneKey[];
+  venues: VenueSummary[];
+  pairs: VenuePair[];
+  rejected_this_scan: string[];
 }
 
 export interface EngineConfig {
@@ -112,6 +198,11 @@ export interface EngineConfig {
   sources: Record<string, boolean>;
   telegram_enabled: boolean;
   kinds: ArbKind[];
+  enforce_zone_pairing: boolean;
+  operator_jurisdiction: string;
+  near_miss_slack: number;
+  smarkets_commission: number;
+  betfair_commission: number;
 }
 
 export interface MarketOutcome {
@@ -129,6 +220,8 @@ export interface MarketOutcome {
 export interface MarketRow {
   id: string;
   venue: string;
+  zone: ZoneKey;
+  currency: string;
   title: string;
   category: string;
   mutually_exclusive: boolean;
@@ -201,6 +294,13 @@ export interface Analytics {
       profit: number;
     }>;
     by_venue: Record<string, number>;
+    by_zone: Array<{
+      zone: string;
+      n: number;
+      avg_margin: number;
+      turnover: number;
+      profit: number;
+    }>;
     by_day: Array<{
       day: string;
       n: number;
@@ -216,10 +316,18 @@ export interface Analytics {
     arbs_found: number;
     new_arbs: number;
   }>;
+  zones: {
+    active: ZoneKey[];
+    enforced: boolean;
+    operator_jurisdiction: string;
+    cross_zone_rejected: number;
+  };
+  near_misses: NearMiss[];
   live: {
     count: number;
     by_kind: Record<string, number>;
     by_venue: Record<string, number>;
+    by_zone: Record<string, number>;
     total_profit_available: number;
     total_stake_required: number;
     avg_margin: number;

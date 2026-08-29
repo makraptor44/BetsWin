@@ -1,17 +1,19 @@
 {
- "count": 12,
- "total": 12,
+ "count": 17,
+ "total": 17,
  "markets": [
   {
    "id": "polymarket:demo-nominee",
    "venue": "polymarket",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "2028 Presidential nominee",
    "category": "politics",
    "mutually_exclusive": true,
    "market_count": 4,
    "volume_usd": 14200000.0,
    "liquidity_usd": 920000.0,
-   "close_time": "2026-12-25T11:46:11.639092+00:00",
+   "close_time": "2026-12-27T13:14:32.874740+00:00",
    "url": "https://example.invalid/polymarket/nominee-2028",
    "best_book": 1.012,
    "overround_pct": 1.2,
@@ -109,13 +111,15 @@
   {
    "id": "kalshi:demo-superbowl",
    "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Super Bowl LXI winner",
    "category": "sports",
    "mutually_exclusive": true,
    "market_count": 5,
    "volume_usd": 6800000.0,
    "liquidity_usd": 410000.0,
-   "close_time": "2026-11-25T11:46:11.639092+00:00",
+   "close_time": "2026-11-27T13:14:32.874740+00:00",
    "url": "https://example.invalid/kalshi/superbowl-61",
    "best_book": 1.01282,
    "overround_pct": 1.282,
@@ -233,15 +237,57 @@
    ]
   },
   {
+   "id": "kalshi:demo-noise-5",
+   "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
+   "title": "Will Arsenal win the 2026-27 Premier League?",
+   "category": "sports",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 2967417.0,
+   "liquidity_usd": 78038.0,
+   "close_time": "2027-01-16T13:14:32.874740+00:00",
+   "url": "https://example.invalid/kalshi/noise-5",
+   "best_book": 1.04153,
+   "overround_pct": 4.153,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.2,
+     "effective_price": 0.2112,
+     "decimal_odds": 5.0,
+     "implied_pct": 21.12,
+     "size_available": 25084.9,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/demo-noise-5:Y"
+    },
+    {
+     "name": "No",
+     "side": "NO",
+     "price": 0.82,
+     "effective_price": 0.8303,
+     "decimal_odds": 1.22,
+     "implied_pct": 83.03,
+     "size_available": 25084.9,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/demo-noise-5:N"
+    }
+   ]
+  },
+  {
    "id": "kalshi:demo-noise-1",
    "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Will GPT-6 be released in 2026?",
    "category": "technology",
    "mutually_exclusive": false,
    "market_count": 1,
-   "volume_usd": 2755838.0,
-   "liquidity_usd": 152019.0,
-   "close_time": "2027-06-17T11:46:11.639092+00:00",
+   "volume_usd": 2469511.0,
+   "liquidity_usd": 43491.0,
+   "close_time": "2027-07-13T13:14:32.874740+00:00",
    "url": "https://example.invalid/kalshi/noise-1",
    "best_book": 1.05409,
    "overround_pct": 5.409,
@@ -253,7 +299,7 @@
      "effective_price": 0.6069,
      "decimal_odds": 1.695,
      "implied_pct": 60.69,
-     "size_available": 19264.1,
+     "size_available": 16724.7,
      "venue": "kalshi",
      "url": "https://example.invalid/kalshi/demo-noise-1:Y"
     },
@@ -264,22 +310,64 @@
      "effective_price": 0.4472,
      "decimal_odds": 2.326,
      "implied_pct": 44.72,
-     "size_available": 19264.1,
+     "size_available": 16724.7,
      "venue": "kalshi",
      "url": "https://example.invalid/kalshi/demo-noise-1:N"
     }
    ]
   },
   {
+   "id": "polymarket:demo-noise-6",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "currency": "USD",
+   "title": "Will the S&P 500 close above 8000 in 2026?",
+   "category": "economics",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 2416724.0,
+   "liquidity_usd": 59909.0,
+   "close_time": "2027-02-23T13:14:32.874740+00:00",
+   "url": "https://example.invalid/polymarket/noise-6",
+   "best_book": 1.012,
+   "overround_pct": 1.2,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.466,
+     "effective_price": 0.466,
+     "decimal_odds": 2.146,
+     "implied_pct": 46.6,
+     "size_available": 21037.6,
+     "venue": "polymarket",
+     "url": "https://example.invalid/polymarket/demo-noise-6:Y"
+    },
+    {
+     "name": "No",
+     "side": "NO",
+     "price": 0.546,
+     "effective_price": 0.546,
+     "decimal_odds": 1.832,
+     "implied_pct": 54.6,
+     "size_available": 21037.6,
+     "venue": "polymarket",
+     "url": "https://example.invalid/polymarket/demo-noise-6:N"
+    }
+   ]
+  },
+  {
    "id": "polymarket:demo-crossed",
    "venue": "polymarket",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
    "category": "economics",
    "mutually_exclusive": false,
    "market_count": 1,
    "volume_usd": 2400000.0,
    "liquidity_usd": 180000.0,
-   "close_time": "2026-10-11T11:46:11.639092+00:00",
+   "close_time": "2026-10-13T13:14:32.874740+00:00",
    "url": "https://example.invalid/polymarket/fed-dec-2026",
    "best_book": 0.984,
    "overround_pct": -1.6,
@@ -309,53 +397,17 @@
    ]
   },
   {
-   "id": "kalshi:demo-noise-5",
-   "venue": "kalshi",
-   "title": "Will Arsenal win the 2026-27 Premier League?",
-   "category": "sports",
-   "mutually_exclusive": false,
-   "market_count": 1,
-   "volume_usd": 2150689.0,
-   "liquidity_usd": 24150.0,
-   "close_time": "2027-09-10T11:46:11.639092+00:00",
-   "url": "https://example.invalid/kalshi/noise-5",
-   "best_book": 1.04153,
-   "overround_pct": 4.153,
-   "outcomes": [
-    {
-     "name": "Yes",
-     "side": "YES",
-     "price": 0.2,
-     "effective_price": 0.2112,
-     "decimal_odds": 5.0,
-     "implied_pct": 21.12,
-     "size_available": 21670.8,
-     "venue": "kalshi",
-     "url": "https://example.invalid/kalshi/demo-noise-5:Y"
-    },
-    {
-     "name": "No",
-     "side": "NO",
-     "price": 0.82,
-     "effective_price": 0.8303,
-     "decimal_odds": 1.22,
-     "implied_pct": 83.03,
-     "size_available": 21670.8,
-     "venue": "kalshi",
-     "url": "https://example.invalid/kalshi/demo-noise-5:N"
-    }
-   ]
-  },
-  {
    "id": "kalshi:demo-noise-3",
    "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Will there be a US government shutdown in 2026?",
    "category": "politics",
    "mutually_exclusive": false,
    "market_count": 1,
-   "volume_usd": 1879312.0,
-   "liquidity_usd": 162778.0,
-   "close_time": "2026-12-18T11:46:11.639092+00:00",
+   "volume_usd": 2087691.0,
+   "liquidity_usd": 121963.0,
+   "close_time": "2026-10-15T13:14:32.874740+00:00",
    "url": "https://example.invalid/kalshi/noise-3",
    "best_book": 1.05385,
    "overround_pct": 5.385,
@@ -367,7 +419,7 @@
      "effective_price": 0.4371,
      "decimal_odds": 2.381,
      "implied_pct": 43.71,
-     "size_available": 24917.4,
+     "size_available": 11276.0,
      "venue": "kalshi",
      "url": "https://example.invalid/kalshi/demo-noise-3:Y"
     },
@@ -378,7 +430,7 @@
      "effective_price": 0.6168,
      "decimal_odds": 1.667,
      "implied_pct": 61.68,
-     "size_available": 24917.4,
+     "size_available": 11276.0,
      "venue": "kalshi",
      "url": "https://example.invalid/kalshi/demo-noise-3:N"
     }
@@ -387,13 +439,15 @@
   {
    "id": "polymarket:demo-noise-2",
    "venue": "polymarket",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Will Bitcoin close above $150,000 on Dec 31, 2026?",
    "category": "crypto",
    "mutually_exclusive": false,
    "market_count": 1,
-   "volume_usd": 1869963.0,
-   "liquidity_usd": 83639.0,
-   "close_time": "2027-08-06T11:46:11.639092+00:00",
+   "volume_usd": 1987380.0,
+   "liquidity_usd": 111266.0,
+   "close_time": "2027-08-25T13:14:32.874740+00:00",
    "url": "https://example.invalid/polymarket/noise-2",
    "best_book": 1.012,
    "overround_pct": 1.2,
@@ -405,7 +459,7 @@
      "effective_price": 0.276,
      "decimal_odds": 3.623,
      "implied_pct": 27.6,
-     "size_available": 10249.0,
+     "size_available": 12616.5,
      "venue": "polymarket",
      "url": "https://example.invalid/polymarket/demo-noise-2:Y"
     },
@@ -416,98 +470,64 @@
      "effective_price": 0.736,
      "decimal_odds": 1.359,
      "implied_pct": 73.6,
-     "size_available": 10249.0,
+     "size_available": 12616.5,
      "venue": "polymarket",
      "url": "https://example.invalid/polymarket/demo-noise-2:N"
     }
    ]
   },
   {
-   "id": "polymarket:demo-noise-6",
+   "id": "polymarket:demo-noise-4",
    "venue": "polymarket",
-   "title": "Will the S&P 500 close above 8000 in 2026?",
-   "category": "economics",
+   "zone": "us_prediction",
+   "currency": "USD",
+   "title": "Will global average temperature set a record in 2026?",
+   "category": "climate",
    "mutually_exclusive": false,
    "market_count": 1,
-   "volume_usd": 1690756.0,
-   "liquidity_usd": 128647.0,
-   "close_time": "2027-05-20T11:46:11.639092+00:00",
-   "url": "https://example.invalid/polymarket/noise-6",
+   "volume_usd": 1787030.0,
+   "liquidity_usd": 48042.0,
+   "close_time": "2027-05-07T13:14:32.874740+00:00",
+   "url": "https://example.invalid/polymarket/noise-4",
    "best_book": 1.012,
    "overround_pct": 1.2,
    "outcomes": [
     {
      "name": "Yes",
      "side": "YES",
-     "price": 0.466,
-     "effective_price": 0.466,
-     "decimal_odds": 2.146,
-     "implied_pct": 46.6,
-     "size_available": 19116.2,
+     "price": 0.626,
+     "effective_price": 0.626,
+     "decimal_odds": 1.597,
+     "implied_pct": 62.6,
+     "size_available": 12784.0,
      "venue": "polymarket",
-     "url": "https://example.invalid/polymarket/demo-noise-6:Y"
+     "url": "https://example.invalid/polymarket/demo-noise-4:Y"
     },
     {
      "name": "No",
      "side": "NO",
-     "price": 0.546,
-     "effective_price": 0.546,
-     "decimal_odds": 1.832,
-     "implied_pct": 54.6,
-     "size_available": 19116.2,
+     "price": 0.386,
+     "effective_price": 0.386,
+     "decimal_odds": 2.591,
+     "implied_pct": 38.6,
+     "size_available": 12784.0,
      "venue": "polymarket",
-     "url": "https://example.invalid/polymarket/demo-noise-6:N"
-    }
-   ]
-  },
-  {
-   "id": "kalshi:demo-noise-7",
-   "venue": "kalshi",
-   "title": "Will a new Pope be elected in 2026?",
-   "category": "world",
-   "mutually_exclusive": false,
-   "market_count": 1,
-   "volume_usd": 1502362.0,
-   "liquidity_usd": 71639.0,
-   "close_time": "2026-09-17T11:46:11.639092+00:00",
-   "url": "https://example.invalid/kalshi/noise-7",
-   "best_book": 1.0291,
-   "overround_pct": 2.91,
-   "outcomes": [
-    {
-     "name": "Yes",
-     "side": "YES",
-     "price": 0.08,
-     "effective_price": 0.0852,
-     "decimal_odds": 12.5,
-     "implied_pct": 8.52,
-     "size_available": 13604.4,
-     "venue": "kalshi",
-     "url": "https://example.invalid/kalshi/demo-noise-7:Y"
-    },
-    {
-     "name": "No",
-     "side": "NO",
-     "price": 0.94,
-     "effective_price": 0.9439,
-     "decimal_odds": 1.064,
-     "implied_pct": 94.39,
-     "size_available": 13604.4,
-     "venue": "kalshi",
-     "url": "https://example.invalid/kalshi/demo-noise-7:N"
+     "url": "https://example.invalid/polymarket/demo-noise-4:N"
     }
    ]
   },
   {
    "id": "kalshi:demo-fed",
    "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Fed cuts rates at the December 2026 meeting?",
    "category": "economics",
    "mutually_exclusive": false,
    "market_count": 1,
    "volume_usd": 890000.0,
    "liquidity_usd": 64000.0,
-   "close_time": "2026-10-11T11:46:11.639092+00:00",
+   "close_time": "2026-10-13T13:14:32.874740+00:00",
    "url": "https://example.invalid/kalshi/fed-dec-2026",
    "best_book": 1.04457,
    "overround_pct": 4.457,
@@ -537,53 +557,17 @@
    ]
   },
   {
-   "id": "polymarket:demo-noise-4",
-   "venue": "polymarket",
-   "title": "Will global average temperature set a record in 2026?",
-   "category": "climate",
-   "mutually_exclusive": false,
-   "market_count": 1,
-   "volume_usd": 455219.0,
-   "liquidity_usd": 166251.0,
-   "close_time": "2027-10-01T11:46:11.639092+00:00",
-   "url": "https://example.invalid/polymarket/noise-4",
-   "best_book": 1.012,
-   "overround_pct": 1.2,
-   "outcomes": [
-    {
-     "name": "Yes",
-     "side": "YES",
-     "price": 0.626,
-     "effective_price": 0.626,
-     "decimal_odds": 1.597,
-     "implied_pct": 62.6,
-     "size_available": 20817.8,
-     "venue": "polymarket",
-     "url": "https://example.invalid/polymarket/demo-noise-4:Y"
-    },
-    {
-     "name": "No",
-     "side": "NO",
-     "price": 0.386,
-     "effective_price": 0.386,
-     "decimal_odds": 2.591,
-     "implied_pct": 38.6,
-     "size_available": 20817.8,
-     "venue": "polymarket",
-     "url": "https://example.invalid/polymarket/demo-noise-4:N"
-    }
-   ]
-  },
-  {
    "id": "polymarket:demo-noise-0",
    "venue": "polymarket",
+   "zone": "us_prediction",
+   "currency": "USD",
    "title": "Will SpaceX land Starship on the Moon before 2029?",
    "category": "science",
    "mutually_exclusive": false,
    "market_count": 1,
-   "volume_usd": 242191.0,
-   "liquidity_usd": 130920.0,
-   "close_time": "2027-07-06T11:46:11.639092+00:00",
+   "volume_usd": 743926.0,
+   "liquidity_usd": 12527.0,
+   "close_time": "2027-02-08T13:14:32.874740+00:00",
    "url": "https://example.invalid/polymarket/noise-0",
    "best_book": 1.012,
    "overround_pct": 1.2,
@@ -595,7 +579,7 @@
      "effective_price": 0.346,
      "decimal_odds": 2.89,
      "implied_pct": 34.6,
-     "size_available": 11091.1,
+     "size_available": 16178.6,
      "venue": "polymarket",
      "url": "https://example.invalid/polymarket/demo-noise-0:Y"
     },
@@ -606,9 +590,293 @@
      "effective_price": 0.666,
      "decimal_odds": 1.502,
      "implied_pct": 66.6,
-     "size_available": 11091.1,
+     "size_available": 16178.6,
      "venue": "polymarket",
      "url": "https://example.invalid/polymarket/demo-noise-0:N"
+    }
+   ]
+  },
+  {
+   "id": "kalshi:demo-noise-7",
+   "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
+   "title": "Will a new Pope be elected in 2026?",
+   "category": "world",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 450988.0,
+   "liquidity_usd": 125926.0,
+   "close_time": "2027-05-27T13:14:32.874740+00:00",
+   "url": "https://example.invalid/kalshi/noise-7",
+   "best_book": 1.0291,
+   "overround_pct": 2.91,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.08,
+     "effective_price": 0.0852,
+     "decimal_odds": 12.5,
+     "implied_pct": 8.52,
+     "size_available": 23039.5,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/demo-noise-7:Y"
+    },
+    {
+     "name": "No",
+     "side": "NO",
+     "price": 0.94,
+     "effective_price": 0.9439,
+     "decimal_odds": 1.064,
+     "implied_pct": 94.39,
+     "size_available": 23039.5,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/demo-noise-7:N"
+    }
+   ]
+  },
+  {
+   "id": "kalshi:demo-mancity",
+   "venue": "kalshi",
+   "zone": "us_prediction",
+   "currency": "USD",
+   "title": "Will Manchester City win the 2026-27 Premier League?",
+   "category": "sports",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 310000.0,
+   "liquidity_usd": 42000.0,
+   "close_time": "2027-06-05T13:14:32.874740+00:00",
+   "url": "https://example.invalid/kalshi/mancity-epl",
+   "best_book": 1.05329,
+   "overround_pct": 5.329,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.4,
+     "effective_price": 0.4168,
+     "decimal_odds": 2.5,
+     "implied_pct": 41.68,
+     "size_available": 6528.0,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/KXEPL-MCI:Y"
+    },
+    {
+     "name": "No",
+     "side": "NO",
+     "price": 0.62,
+     "effective_price": 0.6365,
+     "decimal_odds": 1.613,
+     "implied_pct": 63.65,
+     "size_available": 6528.0,
+     "venue": "kalshi",
+     "url": "https://example.invalid/kalshi/KXEPL-MCI:N"
+    }
+   ]
+  },
+  {
+   "id": "smarkets:demo-ge-labour",
+   "venue": "smarkets",
+   "zone": "uk_exchange",
+   "currency": "GBP",
+   "title": "Will Labour win the next UK general election?",
+   "category": "politics",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 0.0,
+   "liquidity_usd": 48000.0,
+   "close_time": "2027-06-25T13:14:32.874740+00:00",
+   "url": "https://example.invalid/smarkets/ge-labour",
+   "best_book": 1.02509,
+   "overround_pct": 2.509,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.52,
+     "effective_price": 0.525,
+     "decimal_odds": 1.923,
+     "implied_pct": 52.5,
+     "size_available": 15232.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-labour:Y"
+    },
+    {
+     "name": "Not Yes",
+     "side": "NO",
+     "price": 0.495,
+     "effective_price": 0.5001,
+     "decimal_odds": 2.02,
+     "implied_pct": 50.01,
+     "size_available": 15232.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-labour:N"
+    }
+   ]
+  },
+  {
+   "id": "betfair:demo-ge-labour",
+   "venue": "betfair",
+   "zone": "uk_exchange",
+   "currency": "GBP",
+   "title": "Labour to win the next UK general election",
+   "category": "politics",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 0.0,
+   "liquidity_usd": 115000.0,
+   "close_time": "2027-06-25T13:14:32.874740+00:00",
+   "url": "https://example.invalid/betfair/ge-labour",
+   "best_book": 1.00745,
+   "overround_pct": 0.745,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.535,
+     "effective_price": 0.5477,
+     "decimal_odds": 1.869,
+     "implied_pct": 54.77,
+     "size_available": 19584.0,
+     "venue": "betfair",
+     "url": "https://example.invalid/betfair/demo-bf-labour:Y"
+    },
+    {
+     "name": "Not Yes",
+     "side": "NO",
+     "price": 0.447,
+     "effective_price": 0.4597,
+     "decimal_odds": 2.237,
+     "implied_pct": 45.97,
+     "size_available": 19584.0,
+     "venue": "betfair",
+     "url": "https://example.invalid/betfair/demo-bf-labour:N"
+    }
+   ]
+  },
+  {
+   "id": "smarkets:demo-football",
+   "venue": "smarkets",
+   "zone": "uk_exchange",
+   "currency": "GBP",
+   "title": "Arsenal vs Brighton - Full-time result",
+   "category": "sports",
+   "mutually_exclusive": true,
+   "market_count": 3,
+   "volume_usd": 0.0,
+   "liquidity_usd": 86000.0,
+   "close_time": "2026-09-01T13:14:32.874740+00:00",
+   "url": "https://example.invalid/smarkets/arsenal-brighton",
+   "best_book": 1.01456,
+   "overround_pct": 1.456,
+   "outcomes": [
+    {
+     "name": "Arsenal",
+     "side": "YES",
+     "price": 0.515,
+     "effective_price": 0.52,
+     "decimal_odds": 1.942,
+     "implied_pct": 52.0,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-0:Y"
+    },
+    {
+     "name": "Not Arsenal",
+     "side": "NO",
+     "price": 0.493,
+     "effective_price": 0.4981,
+     "decimal_odds": 2.028,
+     "implied_pct": 49.81,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-0:N"
+    },
+    {
+     "name": "Draw",
+     "side": "YES",
+     "price": 0.255,
+     "effective_price": 0.2589,
+     "decimal_odds": 3.922,
+     "implied_pct": 25.89,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-1:Y"
+    },
+    {
+     "name": "Not Draw",
+     "side": "NO",
+     "price": 0.753,
+     "effective_price": 0.7567,
+     "decimal_odds": 1.328,
+     "implied_pct": 75.67,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-1:N"
+    },
+    {
+     "name": "Brighton",
+     "side": "YES",
+     "price": 0.208,
+     "effective_price": 0.2113,
+     "decimal_odds": 4.808,
+     "implied_pct": 21.13,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-2:Y"
+    },
+    {
+     "name": "Not Brighton",
+     "side": "NO",
+     "price": 0.8,
+     "effective_price": 0.8032,
+     "decimal_odds": 1.25,
+     "implied_pct": 80.32,
+     "size_available": 13056.0,
+     "venue": "smarkets",
+     "url": "https://example.invalid/smarkets/demo-sm-3way-2:N"
+    }
+   ]
+  },
+  {
+   "id": "betfair:demo-mancity",
+   "venue": "betfair",
+   "zone": "uk_exchange",
+   "currency": "GBP",
+   "title": "Manchester City to win the 2026-27 Premier League",
+   "category": "sports",
+   "mutually_exclusive": false,
+   "market_count": 1,
+   "volume_usd": 0.0,
+   "liquidity_usd": 210000.0,
+   "close_time": "2027-06-05T13:14:32.874740+00:00",
+   "url": "https://example.invalid/betfair/mancity-epl",
+   "best_book": 1.04545,
+   "overround_pct": 4.545,
+   "outcomes": [
+    {
+     "name": "Yes",
+     "side": "YES",
+     "price": 0.47,
+     "effective_price": 0.4828,
+     "decimal_odds": 2.128,
+     "implied_pct": 48.28,
+     "size_available": 17408.0,
+     "venue": "betfair",
+     "url": "https://example.invalid/betfair/demo-bf-mci:Y"
+    },
+    {
+     "name": "Not Yes",
+     "side": "NO",
+     "price": 0.55,
+     "effective_price": 0.5627,
+     "decimal_odds": 1.818,
+     "implied_pct": 56.27,
+     "size_available": 17408.0,
+     "venue": "betfair",
+     "url": "https://example.invalid/betfair/demo-bf-mci:N"
     }
    ]
   }
@@ -624,7 +892,13 @@
   "world"
  ],
  "venues": [
+  "betfair",
   "kalshi",
-  "polymarket"
+  "polymarket",
+  "smarkets"
+ ],
+ "zones": [
+  "uk_exchange",
+  "us_prediction"
  ]
 }

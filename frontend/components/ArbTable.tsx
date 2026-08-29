@@ -1,9 +1,16 @@
 "use client";
 
-import { KIND_LABEL, num, pct, untilLabel, usd } from "@/lib/format";
+import {
+  KIND_LABEL,
+  money,
+  num,
+  pct,
+  placeableLabel,
+  untilLabel,
+} from "@/lib/format";
 import type { Arb } from "@/lib/types";
 
-import { ConfidenceBar, FlagChip, VenueChip } from "./ui";
+import { ConfidenceBar, FlagChip, VenueChip, ZoneChip } from "./ui";
 
 export function ArbTable({
   arbs,
@@ -22,6 +29,7 @@ export function ArbTable({
             <th>Opportunity</th>
             <th>Type</th>
             <th>Venues</th>
+            <th>Placeable from</th>
             <th style={{ textAlign: "right" }}>Net margin</th>
             <th style={{ textAlign: "right" }}>Stake</th>
             <th style={{ textAlign: "right" }}>Profit</th>
@@ -66,6 +74,20 @@ export function ArbTable({
                   ))}
                 </div>
               </td>
+              {/*
+                Where one operator could hold every account in this trade. Both
+                legs already share an execution zone -- the detector will not
+                build a set that does not -- so this narrows that to the
+                countries in which the trade is actually takeable.
+              */}
+              <td>
+                <div className="flex flex-col gap-0.5">
+                  <ZoneChip zone={a.zone} short />
+                  <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+                    {placeableLabel(a.placeable_from)}
+                  </span>
+                </div>
+              </td>
               <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
                 {pct(a.net_margin)}
                 {a.margin > a.net_margin + 0.0005 && (
@@ -79,20 +101,20 @@ export function ArbTable({
                 )}
               </td>
               <td className="mono" style={{ textAlign: "right" }}>
-                {usd(a.total_stake, 0)}
+                {money(a.total_stake, a.currency, 0)}
               </td>
               <td
                 className="mono num-positive"
                 style={{ textAlign: "right", fontWeight: 600 }}
               >
-                {usd(a.worst_case_profit)}
+                {money(a.worst_case_profit, a.currency)}
               </td>
               <td
                 className="mono"
                 style={{ textAlign: "right", color: "var(--text-muted)" }}
                 title="Total stake the visible order-book depth can absorb"
               >
-                {usd(a.max_stake_available, 0)}
+                {money(a.max_stake_available, a.currency, 0)}
               </td>
               <td>
                 <ConfidenceBar value={a.confidence} />
@@ -155,6 +177,7 @@ export function ArbCards({
             {a.venues.map((v) => (
               <VenueChip key={v} venue={v} />
             ))}
+            <ZoneChip zone={a.zone} short />
           </div>
           <div className="flex flex-col gap-1 mb-2.5">
             {a.legs.map((l, i) => (
@@ -163,7 +186,7 @@ export function ArbCards({
                   {l.outcome}
                 </span>
                 <span className="mono shrink-0">
-                  {l.price.toFixed(3)} · {usd(l.stake)}
+                  {l.price.toFixed(3)} · {money(l.stake, a.currency)}
                 </span>
               </div>
             ))}
@@ -173,9 +196,9 @@ export function ArbCards({
             style={{ borderTop: "1px solid var(--border)" }}
           >
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {usd(a.total_stake, 0)} →{" "}
+              {money(a.total_stake, a.currency, 0)} →{" "}
               <span className="num-positive mono font-semibold">
-                {usd(a.worst_case_profit)}
+                {money(a.worst_case_profit, a.currency)}
               </span>
             </span>
             <ConfidenceBar value={a.confidence} />

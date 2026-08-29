@@ -86,6 +86,12 @@
     "net_payout": 518.0981595092024
    }
   ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
   "total_stake": 499.98,
   "book": 0.9650000000000001,
   "margin": 0.03626943005181338,
@@ -102,12 +108,12 @@
   "confidence": 100,
   "flags": [],
   "notes": [],
-  "detected_at": "2026-08-27T11:46:08.929017Z",
-  "close_time": "2026-12-25T11:46:11.639092Z",
-  "last_seen": "2026-08-27T11:46:12.974929Z",
+  "detected_at": "2026-08-29T13:14:26.261439Z",
+  "close_time": "2026-12-27T13:14:32.874740Z",
+  "last_seen": "2026-08-29T13:14:36.153621Z",
   "is_suspect": false,
   "roi_pct": 3.624144965798632,
-  "hours_to_close": 2879.999626268611
+  "hours_to_close": 2879.999086253611
  },
  "payout_matrix": [
   {

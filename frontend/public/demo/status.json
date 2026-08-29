@@ -2,29 +2,47 @@
  "running": false,
  "demo_mode": true,
  "last_scan": {
-  "started_at": "2026-08-27T11:46:11.639070Z",
-  "finished_at": "2026-08-27T11:46:12.976203Z",
-  "duration_seconds": 1.337,
-  "events_scanned": 12,
-  "markets_scanned": 19,
-  "quotes_scanned": 38,
-  "arbs_found": 4,
+  "started_at": "2026-08-29T13:14:32.874718Z",
+  "finished_at": "2026-08-29T13:14:36.155136Z",
+  "duration_seconds": 3.28,
+  "events_scanned": 17,
+  "markets_scanned": 26,
+  "quotes_scanned": 52,
+  "arbs_found": 6,
   "new_arbs": 0,
+  "near_misses": 8,
+  "tightest_gap_bps": 74.5,
   "by_venue": {
-   "demo": 12
+   "polymarket": 6,
+   "kalshi": 7,
+   "smarkets": 2,
+   "betfair": 2
   },
+  "by_zone": {
+   "us_prediction": 13,
+   "uk_exchange": 4
+  },
+  "cross_zone_rejected": 4,
   "errors": [],
   "breaker_tripped": false
  },
  "next_scan_in": 0.0,
  "poll_interval": 45,
- "live_arbs": 4,
- "total_detected": 4,
- "uptime_seconds": 5.465889600000082,
+ "live_arbs": 6,
+ "total_detected": 6,
+ "uptime_seconds": 13.33024320000004,
  "sources": {
   "polymarket": true,
-  "kalshi": true
+  "kalshi": true,
+  "smarkets": true
  },
  "breaker_tripped": false,
- "breaker_reason": null
+ "breaker_reason": null,
+ "zones": [
+  "uk_exchange",
+  "us_prediction"
+ ],
+ "operator_jurisdiction": "",
+ "enforce_zone_pairing": true,
+ "near_misses": 8
 }

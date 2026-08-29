@@ -31,6 +31,15 @@ from .fees import configure_from_settings, fee_model_for
 from .models import Arb, ArbKind, EngineStatus, Event
 from .scanner import Scanner
 from .sizing import resize, size_arb
+from .venues import (
+    Zone,
+    all_venues,
+    can_pair,
+    describe,
+    venue as venue_info,
+    zone_of,
+    zones_available_from,
+)
 
 configure_from_settings(settings)
 
@@ -64,9 +73,13 @@ app = FastAPI(
     title="BetsWin Arbitrage Engine",
     version="1.0.0",
     description=(
-        "Scans US prediction markets (Polymarket, Kalshi) and sportsbooks for "
-        "arbitrage, sizes each opportunity against real order-book depth, and "
-        "scores it for the failure modes that erode theoretical edge."
+        "Scans prediction markets (Polymarket, Kalshi), betting exchanges "
+        "(Smarkets, Betfair) and sportsbooks for arbitrage, sizes each "
+        "opportunity against real order-book depth, and scores it for the "
+        "failure modes that erode theoretical edge. Cross-venue legs are only "
+        "combined within an execution zone -- a set of venues one operator can "
+        "reach from a single location in a single currency -- so nothing "
+        "surfaced requires accounts in two jurisdictions."
     ),
     lifespan=lifespan,
 )
@@ -126,9 +139,16 @@ async def get_config() -> dict[str, Any]:
             "polymarket": settings.enable_polymarket,
             "kalshi": settings.enable_kalshi,
             "sportsbook": settings.odds_api_enabled,
+            "smarkets": settings.enable_smarkets,
+            "betfair": settings.betfair_enabled,
         },
         "telegram_enabled": settings.telegram_enabled,
         "kinds": [k.value for k in ArbKind],
+        "enforce_zone_pairing": settings.enforce_zone_pairing,
+        "operator_jurisdiction": settings.operator_jurisdiction,
+        "near_miss_slack": settings.near_miss_slack,
+        "smarkets_commission": settings.smarkets_commission,
+        "betfair_commission": settings.betfair_commission,
     }
 
 
@@ -145,6 +165,9 @@ class ConfigPatch(BaseModel):
     alert_min_confidence: Optional[int] = Field(None, ge=0, le=100)
     assumed_void_rate: Optional[float] = Field(None, ge=0, le=1)
     assumed_void_loss: Optional[float] = Field(None, ge=0, le=1)
+    enforce_zone_pairing: Optional[bool] = None
+    operator_jurisdiction: Optional[str] = Field(None, max_length=2)
+    near_miss_slack: Optional[float] = Field(None, ge=0, le=0.25)
 
 
 @app.patch("/api/config", tags=["system"])
@@ -152,6 +175,8 @@ async def patch_config(patch: ConfigPatch) -> dict[str, Any]:
     """Live-tune thresholds. Applies to the next scan cycle."""
     changed: dict[str, Any] = {}
     for key, value in patch.model_dump(exclude_none=True).items():
+        if key == "operator_jurisdiction":
+            value = str(value).strip().upper()
         setattr(settings, key, value)
         changed[key] = value
     if changed:
@@ -166,6 +191,7 @@ async def patch_config(patch: ConfigPatch) -> dict[str, Any]:
 async def list_arbs(
     kind: Optional[str] = None,
     venue: Optional[str] = None,
+    zone: Optional[str] = None,
     category: Optional[str] = None,
     min_margin: float = 0.0,
     min_confidence: int = 0,
@@ -179,6 +205,9 @@ async def list_arbs(
     if kind:
         wanted = {k.strip() for k in kind.split(",") if k.strip()}
         arbs = [a for a in arbs if a.kind.value in wanted]
+    if zone:
+        wanted = {z.strip() for z in zone.split(",") if z.strip()}
+        arbs = [a for a in arbs if a.zone in wanted]
     if venue:
         wanted = {v.strip() for v in venue.split(",") if v.strip()}
         arbs = [a for a in arbs if wanted & set(a.venues)]
@@ -205,6 +234,95 @@ async def list_arbs(
         "total": total,
         "arbs": [a.model_dump(mode="json") for a in arbs],
         "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# --------------------------------------------------------- execution zones
+
+
+@app.get("/api/venues", tags=["system"])
+async def venues() -> dict[str, Any]:
+    """The venue registry and the pairing rule derived from it.
+
+    Cross-venue arbitrage is only real if one person can place both legs, so
+    venues are partitioned into execution zones -- a shared currency, a shared
+    settlement convention, and an account footprint one operator can plausibly
+    hold. This endpoint exposes that partition and the resulting pairing matrix
+    so the UI can explain a rejection instead of silently showing nothing.
+    """
+    eng = scanner
+    live = {s.name for s in eng.sources} if eng is not None else set()
+
+    zones = [describe(z) for z in (Zone.US_PREDICTION, Zone.UK_EXCHANGE, Zone.US_SPORTSBOOK)]
+
+    matrix: list[dict[str, Any]] = []
+    names = [v.name for v in all_venues() if v.name != "demo"]
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            verdict = can_pair(a, b, settings.operator_jurisdiction)
+            matrix.append(
+                {
+                    "a": a,
+                    "b": b,
+                    "allowed": verdict.ok,
+                    "reason": verdict.reason,
+                    "zone": verdict.zone.value,
+                    "jurisdictions": list(verdict.jurisdictions),
+                    "both_live": a in live and b in live,
+                }
+            )
+
+    return {
+        "enforce_zone_pairing": settings.enforce_zone_pairing,
+        "operator_jurisdiction": settings.operator_jurisdiction,
+        "zones": zones,
+        "zones_available": [
+            z.value for z in zones_available_from(settings.operator_jurisdiction)
+        ],
+        "venues": [
+            {
+                "name": v.name,
+                "label": v.label,
+                "zone": v.zone.value,
+                "structure": v.structure.value,
+                "currency": v.currency,
+                "regulator": v.regulator,
+                "commission": v.commission,
+                "jurisdictions": sorted(v.jurisdictions),
+                "excluded": sorted(v.excluded),
+                "public_data": v.public_data,
+                "url": v.url,
+                "notes": v.notes,
+                "live": v.name in live,
+            }
+            for v in all_venues()
+            if v.name != "demo"
+        ],
+        "pairs": matrix,
+        "rejected_this_scan": (eng.cross_zone_rejected() if eng is not None else []),
+    }
+
+
+@app.get("/api/near-misses", tags=["arbs"])
+async def near_misses(
+    zone: Optional[str] = None,
+    limit: int = Query(40, ge=1, le=200),
+) -> dict[str, Any]:
+    """Books that did not cross, closest first.
+
+    On a normal cycle this is the whole output of the engine: the tape is
+    efficient and nothing arbs. Surfacing the near misses is what distinguishes
+    "scanning, found nothing" from "not scanning".
+    """
+    rows = _engine().near_misses()
+    if zone:
+        wanted = {z.strip() for z in zone.split(",") if z.strip()}
+        rows = [n for n in rows if n.zone in wanted]
+    return {
+        "count": min(len(rows), limit),
+        "total": len(rows),
+        "slack_bps": round(settings.near_miss_slack * 10_000, 0),
+        "near_misses": [n.model_dump(mode="json") for n in rows[:limit]],
     }
 
 
@@ -401,6 +519,7 @@ async def positions() -> dict[str, Any]:
 @app.get("/api/markets", tags=["markets"])
 async def list_markets(
     venue: Optional[str] = None,
+    zone: Optional[str] = None,
     category: Optional[str] = None,
     search: Optional[str] = None,
     only_mutually_exclusive: bool = False,
@@ -413,6 +532,9 @@ async def list_markets(
     if venue:
         wanted = {v.strip() for v in venue.split(",") if v.strip()}
         events = [e for e in events if e.venue in wanted]
+    if zone:
+        wanted = {z.strip() for z in zone.split(",") if z.strip()}
+        events = [e for e in events if zone_of(e.venue).value in wanted]
     if category:
         events = [e for e in events if e.category == category]
     if only_mutually_exclusive:
@@ -436,6 +558,7 @@ async def list_markets(
         "markets": rows[:limit],
         "categories": sorted({e.category for e in events}),
         "venues": sorted({e.venue for e in events}),
+        "zones": sorted({zone_of(e.venue).value for e in events}),
     }
 
 
@@ -466,6 +589,8 @@ def _event_row(e: Event) -> dict[str, Any]:
     return {
         "id": e.id,
         "venue": e.venue,
+        "zone": zone_of(e.venue).value,
+        "currency": e.currency,
         "title": e.title,
         "category": e.category,
         "mutually_exclusive": e.mutually_exclusive,
@@ -493,8 +618,10 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
     live = eng.live_arbs()
     by_kind: dict[str, int] = {}
     by_venue: dict[str, int] = {}
+    by_zone: dict[str, int] = {}
     for a in live:
         by_kind[a.kind.value] = by_kind.get(a.kind.value, 0) + 1
+        by_zone[a.zone] = by_zone.get(a.zone, 0) + 1
         for v in a.venues:
             by_venue[v] = by_venue.get(v, 0) + 1
 
@@ -502,10 +629,18 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
         "stored": stats,
         "margin_histogram": hist,
         "recent_scans": list(reversed(scans)),
+        "zones": {
+            "active": eng.zones(),
+            "enforced": settings.enforce_zone_pairing,
+            "operator_jurisdiction": settings.operator_jurisdiction,
+            "cross_zone_rejected": len(eng.cross_zone_rejected()),
+        },
+        "near_misses": [n.model_dump(mode="json") for n in eng.near_misses()[:15]],
         "live": {
             "count": len(live),
             "by_kind": by_kind,
             "by_venue": by_venue,
+            "by_zone": by_zone,
             "total_profit_available": round(sum(a.worst_case_profit for a in live), 2),
             "total_stake_required": round(sum(a.total_stake for a in live), 2),
             "avg_margin": round(
@@ -732,7 +867,10 @@ async def websocket_endpoint(ws: WebSocket) -> None:
                 "type": "snapshot",
                 "data": {
                     "status": eng.status().model_dump(mode="json"),
-                    "live": [a.model_dump(mode="json") for a in eng.live_arbs()[:100]],
+                    "live": [a.model_dump(mode="json") for a in eng.live_arbs()],
+                    "near_misses": [
+                        n.model_dump(mode="json") for n in eng.near_misses()[:20]
+                    ],
                 },
             }
         )

@@ -1,6 +1,6 @@
 {
- "count": 4,
- "total": 4,
+ "count": 6,
+ "total": 6,
  "arbs": [
   {
    "id": "f1515ab72b13049f",
@@ -52,6 +52,12 @@
      "net_payout": 549.4033333333333
     }
    ],
+   "zone": "us_prediction",
+   "zone_label": "USD prediction markets",
+   "currency": "USD",
+   "placeable_from": [
+    "*"
+   ],
    "total_stake": 499.99,
    "book": 0.9293426205644606,
    "margin": 0.09649122807017552,
@@ -74,12 +80,12 @@
     "Legs sit on different venues; confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
     "Markets were paired by title similarity (99/100), not by a shared identifier."
    ],
-   "detected_at": "2026-08-27T11:46:08.930272Z",
-   "close_time": "2026-10-11T11:46:11.639092Z",
-   "last_seen": "2026-08-27T11:46:12.974899Z",
+   "detected_at": "2026-08-29T13:14:26.263599Z",
+   "close_time": "2026-10-13T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153583Z",
    "is_suspect": true,
    "roi_pct": 7.602152043040861,
-   "hours_to_close": 1079.9996271497223
+   "hours_to_close": 1079.9990871772222
   },
   {
    "id": "e84c6ec99ff1aa99",
@@ -168,6 +174,12 @@
      "net_payout": 518.0981595092024
     }
    ],
+   "zone": "us_prediction",
+   "zone_label": "USD prediction markets",
+   "currency": "USD",
+   "placeable_from": [
+    "*"
+   ],
    "total_stake": 499.98,
    "book": 0.9650000000000001,
    "margin": 0.03626943005181338,
@@ -184,12 +196,12 @@
    "confidence": 100,
    "flags": [],
    "notes": [],
-   "detected_at": "2026-08-27T11:46:08.929017Z",
-   "close_time": "2026-12-25T11:46:11.639092Z",
-   "last_seen": "2026-08-27T11:46:12.974929Z",
+   "detected_at": "2026-08-29T13:14:26.261439Z",
+   "close_time": "2026-12-27T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153621Z",
    "is_suspect": false,
    "roi_pct": 3.624144965798632,
-   "hours_to_close": 2879.999627141944
+   "hours_to_close": 2879.9990871691666
   },
   {
    "id": "ada41f580085957f",
@@ -240,6 +252,12 @@
      "net_payout": 508.1226053639847
     }
    ],
+   "zone": "us_prediction",
+   "zone_label": "USD prediction markets",
+   "currency": "USD",
+   "placeable_from": [
+    "*"
+   ],
    "total_stake": 499.99,
    "book": 0.984,
    "margin": 0.016260162601626105,
@@ -254,12 +272,12 @@
    "confidence": 100,
    "flags": [],
    "notes": [],
-   "detected_at": "2026-08-27T11:46:08.928791Z",
-   "close_time": "2026-10-11T11:46:11.639092Z",
-   "last_seen": "2026-08-27T11:46:12.974945Z",
+   "detected_at": "2026-08-29T13:14:26.261224Z",
+   "close_time": "2026-10-13T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153641Z",
    "is_suspect": false,
    "roi_pct": 1.6260325206504131,
-   "hours_to_close": 1079.9996271377777
+   "hours_to_close": 1079.9990871641667
   },
   {
    "id": "8d554c928ae84f63",
@@ -367,6 +385,12 @@
      "net_payout": 127.16012870012871
     }
    ],
+   "zone": "us_prediction",
+   "zone_label": "USD prediction markets",
+   "currency": "USD",
+   "placeable_from": [
+    "*"
+   ],
    "total_stake": 500.0,
    "book": 0.9864986250000001,
    "margin": 0.029601029601029616,
@@ -389,13 +413,211 @@
     "Fees and slippage consume 54% of the gross edge (2.96% -> 1.37%).",
     "5 legs must be filled before prices move."
    ],
-   "detected_at": "2026-08-27T11:46:08.929250Z",
-   "close_time": "2026-11-25T11:46:11.639092Z",
-   "last_seen": "2026-08-27T11:46:12.974956Z",
+   "detected_at": "2026-08-29T13:14:26.261679Z",
+   "close_time": "2026-11-27T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153653Z",
    "is_suspect": false,
    "roi_pct": 1.374,
-   "hours_to_close": 2159.999627131111
+   "hours_to_close": 2159.9990871566665
+  },
+  {
+   "id": "7a617ce7545ae134",
+   "kind": "cross_venue",
+   "title": "Labour to win the next UK general election  ==  Will Labour win the next UK general election?",
+   "category": "politics",
+   "venues": [
+    "smarkets",
+    "betfair"
+   ],
+   "market_key": "cross_venue",
+   "legs": [
+    {
+     "venue": "smarkets",
+     "market_id": "demo-sm-labour:Y",
+     "ticker": "demo-sm-labour:Y",
+     "outcome": "Yes",
+     "side": "YES",
+     "price": 0.52,
+     "effective_price": 0.52504,
+     "decimal_odds": 1.923076923076923,
+     "effective_decimal_odds": 1.9046153846153846,
+     "stake": 266.58,
+     "contracts": 507.7324,
+     "fee": 2.5592,
+     "size_available": 15232.0,
+     "url": "https://example.invalid/smarkets/demo-sm-labour:Y",
+     "event_title": "Labour to win the next UK general election",
+     "payout": 512.6538461538461,
+     "net_payout": 510.0946461538461
+    },
+    {
+     "venue": "betfair",
+     "market_id": "demo-bf-labour:N",
+     "ticker": "demo-bf-labour:N",
+     "outcome": "Not Yes",
+     "side": "NO",
+     "price": 0.447,
+     "effective_price": 0.459711,
+     "decimal_odds": 2.237136465324385,
+     "effective_decimal_odds": 2.1752796420581655,
+     "stake": 233.41,
+     "contracts": 507.732,
+     "fee": 6.4538,
+     "size_available": 19584.0,
+     "url": "https://example.invalid/betfair/demo-bf-labour:N",
+     "event_title": "Labour to win the next UK general election",
+     "payout": 522.1700223713647,
+     "net_payout": 515.7162223713647
+    }
+   ],
+   "zone": "uk_exchange",
+   "zone_label": "UK/EU betting exchanges",
+   "currency": "GBP",
+   "placeable_from": [
+    "ES",
+    "GB",
+    "IE",
+    "MT",
+    "SE"
+   ],
+   "total_stake": 499.99,
+   "book": 0.9847513971323243,
+   "margin": 0.03412616339193364,
+   "net_margin": 0.015484723263232691,
+   "profit": 7.74,
+   "worst_case_profit": 7.74,
+   "payout_if": {
+    "Yes (smarkets)": 507.73,
+    "Not Yes (betfair)": 507.73
+   },
+   "max_stake_available": 14907.41,
+   "confidence": 72,
+   "flags": [
+    "fee_sensitive",
+    "cross_venue_rules",
+    "fuzzy_match",
+    "long_dated"
+   ],
+   "notes": [
+    "Fees and slippage consume 55% of the gross edge (3.41% -> 1.55%).",
+    "Legs sit on different venues; confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
+    "Markets were paired by title similarity (100/100), not by a shared identifier.",
+    "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
+   ],
+   "detected_at": "2026-08-29T13:14:26.263016Z",
+   "close_time": "2027-06-25T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153671Z",
+   "is_suspect": false,
+   "roi_pct": 1.5480309606192124,
+   "hours_to_close": 7199.999087151389
+  },
+  {
+   "id": "d37b7d4db9682a72",
+   "kind": "dutch_yes",
+   "title": "Arsenal vs Brighton - Full-time result - buy every outcome",
+   "category": "sports",
+   "venues": [
+    "smarkets"
+   ],
+   "market_key": "dutch_yes",
+   "legs": [
+    {
+     "venue": "smarkets",
+     "market_id": "demo-sm-3way-0:Y",
+     "ticker": "demo-sm-3way-0:Y",
+     "outcome": "Arsenal",
+     "side": "YES",
+     "price": 0.515,
+     "effective_price": 0.520044,
+     "decimal_odds": 1.941747572815534,
+     "effective_decimal_odds": 1.9229126213592231,
+     "stake": 262.58,
+     "contracts": 504.9184,
+     "fee": 2.547,
+     "size_available": 13056.0,
+     "url": "https://example.invalid/smarkets/demo-sm-3way-0:Y",
+     "event_title": "Arsenal vs Brighton - Full-time result",
+     "payout": 509.8640776699029,
+     "net_payout": 507.31707766990286
+    },
+    {
+     "venue": "smarkets",
+     "market_id": "demo-sm-3way-1:Y",
+     "ticker": "demo-sm-3way-1:Y",
+     "outcome": "Draw",
+     "side": "YES",
+     "price": 0.255,
+     "effective_price": 0.258857,
+     "decimal_odds": 3.9215686274509802,
+     "effective_decimal_odds": 3.8631372549019605,
+     "stake": 130.7,
+     "contracts": 504.912,
+     "fee": 1.9474,
+     "size_available": 13056.0,
+     "url": "https://example.invalid/smarkets/demo-sm-3way-1:Y",
+     "event_title": "Arsenal vs Brighton - Full-time result",
+     "payout": 512.5490196078431,
+     "net_payout": 510.6016196078431
+    },
+    {
+     "venue": "smarkets",
+     "market_id": "demo-sm-3way-2:Y",
+     "ticker": "demo-sm-3way-2:Y",
+     "outcome": "Brighton",
+     "side": "YES",
+     "price": 0.208,
+     "effective_price": 0.211348,
+     "decimal_odds": 4.8076923076923075,
+     "effective_decimal_odds": 4.731538461538462,
+     "stake": 106.71,
+     "contracts": 504.9025,
+     "fee": 1.6903,
+     "size_available": 13056.0,
+     "url": "https://example.invalid/smarkets/demo-sm-3way-2:Y",
+     "event_title": "Arsenal vs Brighton - Full-time result",
+     "payout": 513.0288461538461,
+     "net_payout": 511.3385461538461
+    }
+   ],
+   "zone": "uk_exchange",
+   "zone_label": "UK/EU betting exchanges",
+   "currency": "GBP",
+   "placeable_from": [
+    "AT",
+    "DE",
+    "ES",
+    "FI",
+    "GB",
+    "IE",
+    "MT",
+    "SE"
+   ],
+   "total_stake": 499.99,
+   "book": 0.9902491481497665,
+   "margin": 0.02249488752556239,
+   "net_margin": 0.009846867193425535,
+   "profit": 4.92,
+   "worst_case_profit": 4.91,
+   "payout_if": {
+    "Arsenal (smarkets)": 504.92,
+    "Draw (smarkets)": 504.91,
+    "Brighton (smarkets)": 504.9
+   },
+   "max_stake_available": 11532.41,
+   "confidence": 88,
+   "flags": [
+    "fee_sensitive"
+   ],
+   "notes": [
+    "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
+   ],
+   "detected_at": "2026-08-29T13:14:26.261844Z",
+   "close_time": "2026-09-01T13:14:32.874740Z",
+   "last_seen": "2026-08-29T13:14:36.153684Z",
+   "is_suspect": false,
+   "roi_pct": 0.9820196403928079,
+   "hours_to_close": 71.99908714555555
   }
  ],
- "generated_at": "2026-08-27T11:46:12.981422+00:00"
+ "generated_at": "2026-08-29T13:14:36.161017+00:00"
 }

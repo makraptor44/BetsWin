@@ -2,8 +2,16 @@
 
 import type { ReactNode } from "react";
 
-import { FLAG_LABEL, FLAG_SEVERITY, VENUE_LABEL, venueColor } from "@/lib/format";
-import type { RiskFlag } from "@/lib/types";
+import {
+  FLAG_LABEL,
+  FLAG_SEVERITY,
+  VENUE_LABEL,
+  ZONE_CURRENCY,
+  ZONE_LABEL,
+  ZONE_SHORT,
+  venueColor,
+} from "@/lib/format";
+import type { RiskFlag, ZoneKey } from "@/lib/types";
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -88,6 +96,27 @@ export function VenueChip({ venue }: { venue: string }) {
       }}
     >
       {VENUE_LABEL[venue] ?? venue}
+    </span>
+  );
+}
+
+/**
+ * Execution zone.
+ *
+ * Deliberately neutral-coloured. The zone is not a quality signal -- it says
+ * where a trade can be placed from, not how good it is, and the semantic colour
+ * ramp is reserved for risk.
+ */
+export function ZoneChip({ zone, short = false }: { zone: ZoneKey; short?: boolean }) {
+  if (!zone || zone === "unknown") return null;
+  const currency = ZONE_CURRENCY[zone];
+  return (
+    <span
+      className="chip"
+      style={{ background: "var(--neutral-soft)", color: "var(--text-muted)" }}
+      title={`${ZONE_LABEL[zone]} — settles in ${currency}. Legs are only ever combined inside one zone.`}
+    >
+      {short ? ZONE_SHORT[zone] : ZONE_LABEL[zone]}
     </span>
   );
 }

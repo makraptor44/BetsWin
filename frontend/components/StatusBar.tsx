@@ -1,22 +1,16 @@
 "use client";
 
-import { agoLabel, duration, VENUE_LABEL } from "@/lib/format";
+import { useEffect, useState } from "react";
+
+import { ZoneChip } from "@/components/ui";
+import { VENUE_LABEL, agoLabel, bps, duration } from "@/lib/format";
+import type { EngineStatus, ZoneKey } from "@/lib/types";
 
 interface EngineLike {
-  status: {
-    running: boolean;
-    demo_mode: boolean;
-    poll_interval: number;
-    next_scan_in: number;
-    uptime_seconds: number;
-    total_detected: number;
-    sources: Record<string, boolean>;
-    breaker_tripped: boolean;
-    breaker_reason: string | null;
-    last_scan: { started_at: string; duration_seconds: number } | null;
-  } | null;
+  status: EngineStatus | null;
   connection: "connecting" | "live" | "polling" | "offline" | "snapshot";
   lastUpdate: number;
+  lastFrame: number;
   scanNow: () => Promise<void>;
   scanning: boolean;
   isStaticDemo: boolean;
@@ -30,9 +24,29 @@ const CONNECTION = {
   snapshot: { label: "Snapshot", color: "var(--accent)", pulse: false },
 } as const;
 
+/**
+ * Countdown to the next cycle.
+ *
+ * `next_scan_in` arrives once per scan and then goes stale, so it is ticked
+ * down locally. This is the one element on the page guaranteed to move every
+ * second, which is what makes a quiet market distinguishable from a dead
+ * connection at a glance.
+ */
+function useCountdown(seconds: number | undefined, anchor: number): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (seconds === undefined || !anchor) return null;
+  return Math.max(0, seconds - (now - anchor) / 1000);
+}
+
 export function StatusBar({ engine }: { engine: EngineLike }) {
   const s = engine.status;
   const conn = CONNECTION[engine.connection];
+  const nextIn = useCountdown(s?.next_scan_in, engine.lastUpdate);
+  const scan = s?.last_scan;
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -106,7 +120,12 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
           <strong style={{ color: s?.running ? "var(--positive)" : "var(--text-faint)" }}>
             {s?.running ? "running" : "stopped"}
           </strong>
-          {s?.running && ` · every ${s.poll_interval}s`}
+          {s?.running && nextIn !== null && (
+            <>
+              {" · next in "}
+              <span className="mono">{Math.ceil(nextIn)}s</span>
+            </>
+          )}
         </span>
 
         {s && Object.keys(s.sources).length > 0 && (
@@ -133,14 +152,40 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
           </span>
         )}
 
-        {s?.last_scan && (
+        {s && s.zones?.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            {s.zones.map((z: ZoneKey) => (
+              <ZoneChip key={z} zone={z} short />
+            ))}
+          </span>
+        )}
+
+        {/*
+          The evidence that a cycle happened, whatever it found. A market with
+          no arbitrage in it still produces these numbers, and they are what
+          separate "scanning, nothing crossed" from "not scanning".
+        */}
+        {scan && (
+          <span
+            className="text-xs mono hidden md:inline"
+            style={{ color: "var(--text-faint)" }}
+            title="Events read on the last cycle, and how far the tightest book was from crossing"
+          >
+            {scan.events_scanned.toLocaleString()} events
+            {scan.tightest_gap_bps != null &&
+              ` · closest ${bps(scan.tightest_gap_bps)}`}
+            {` · ${scan.duration_seconds.toFixed(1)}s`}
+          </span>
+        )}
+
+        {scan && (
           <span className="text-xs" style={{ color: "var(--text-faint)" }}>
-            Last scan {agoLabel(s.last_scan.started_at)}
+            {agoLabel(scan.started_at)}
           </span>
         )}
 
         {s && s.uptime_seconds > 0 && (
-          <span className="text-xs hidden sm:inline" style={{ color: "var(--text-faint)" }}>
+          <span className="text-xs hidden lg:inline" style={{ color: "var(--text-faint)" }}>
             Up {duration(s.uptime_seconds)} · {s.total_detected} found
           </span>
         )}

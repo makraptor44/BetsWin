@@ -5,8 +5,15 @@ import { useState } from "react";
 import { BarChart, Histogram, LineChart, ProportionBar } from "@/components/charts";
 import { Card, EmptyState, ErrorState, Field, SectionTitle, Skeleton, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
-import { KIND_LABEL, pct, usd, usdCompact, venueColor } from "@/lib/format";
-import type { ArbKind, BacktestResult } from "@/lib/types";
+import {
+  KIND_LABEL,
+  ZONE_LABEL,
+  pct,
+  usd,
+  usdCompact,
+  venueColor,
+} from "@/lib/format";
+import type { ArbKind, BacktestResult, ZoneKey } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
 
 export default function AnalyticsPage() {
@@ -96,6 +103,66 @@ export default function AnalyticsPage() {
               />
             </Card>
           </div>
+
+          {/*
+            Which zone is producing the edge. The pairing rule creates the
+            question -- if the sterling exchanges yield nothing over a month,
+            that zone is not worth the accounts, and this is where you would
+            see it.
+          */}
+          {(data.stored.by_zone?.length ?? 0) > 0 && (
+            <Card padded={false}>
+              <div className="p-4 pb-1">
+                <SectionTitle
+                  title="Performance by execution zone"
+                  hint={
+                    data.zones?.enforced
+                      ? `Legs are only combined within a zone. ${data.zones.cross_zone_rejected} cross-zone pair${data.zones.cross_zone_rejected === 1 ? " was" : "s were"} declined on the last scan.`
+                      : "Zone pairing is disabled — these groupings are descriptive only."
+                  }
+                />
+              </div>
+              <div className="scroll-x">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>Zone</th>
+                      <th style={{ textAlign: "right" }}>Detected</th>
+                      <th style={{ textAlign: "right" }}>Avg margin</th>
+                      <th style={{ textAlign: "right" }}>Turnover</th>
+                      <th style={{ textAlign: "right" }}>Theoretical profit</th>
+                      <th style={{ textAlign: "right" }}>Live now</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.stored.by_zone.map((z) => (
+                      <tr key={z.zone}>
+                        <td>{ZONE_LABEL[z.zone as ZoneKey] ?? z.zone}</td>
+                        <td className="mono" style={{ textAlign: "right" }}>
+                          {z.n}
+                        </td>
+                        <td className="mono" style={{ textAlign: "right" }}>
+                          {pct(z.avg_margin ?? 0)}
+                        </td>
+                        <td className="mono" style={{ textAlign: "right" }}>
+                          {usdCompact(z.turnover ?? 0)}
+                        </td>
+                        <td
+                          className="mono num-positive"
+                          style={{ textAlign: "right" }}
+                        >
+                          {usd(z.profit ?? 0)}
+                        </td>
+                        <td className="mono" style={{ textAlign: "right" }}>
+                          {data.live.by_zone?.[z.zone] ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card>

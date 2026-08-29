@@ -1,4 +1,4 @@
-import type { ArbKind, RiskFlag } from "./types";
+import type { ArbKind, RiskFlag, ZoneKey } from "./types";
 
 export const usd = (n: number, dp = 2) =>
   n.toLocaleString("en-US", {
@@ -99,6 +99,7 @@ export const FLAG_LABEL: Record<RiskFlag, string> = {
   near_resolution: "Near resolution",
   fee_sensitive: "Fee sensitive",
   rounding_exposure: "Rounding exposure",
+  single_jurisdiction: "One jurisdiction",
 };
 
 /** Which flags are outright warnings versus things merely worth knowing. */
@@ -113,14 +114,69 @@ export const FLAG_SEVERITY: Record<RiskFlag, "danger" | "caution"> = {
   near_resolution: "danger",
   fee_sensitive: "caution",
   rounding_exposure: "caution",
+  single_jurisdiction: "caution",
 };
 
 export const VENUE_LABEL: Record<string, string> = {
   polymarket: "Polymarket",
   kalshi: "Kalshi",
   sportsbook: "Sportsbooks",
+  smarkets: "Smarkets",
+  betfair: "Betfair",
   demo: "Demo",
 };
+
+export const ZONE_LABEL: Record<ZoneKey, string> = {
+  us_prediction: "USD prediction markets",
+  uk_exchange: "UK/EU exchanges",
+  us_sportsbook: "US sportsbooks",
+  unknown: "Unclassified",
+};
+
+/** Short form for a dense table cell. */
+export const ZONE_SHORT: Record<ZoneKey, string> = {
+  us_prediction: "USD contracts",
+  uk_exchange: "UK exchanges",
+  us_sportsbook: "US books",
+  unknown: "—",
+};
+
+export const ZONE_CURRENCY: Record<ZoneKey, string> = {
+  us_prediction: "USD",
+  uk_exchange: "GBP",
+  us_sportsbook: "USD",
+  unknown: "",
+};
+
+/**
+ * Where a trade can be placed from, in words.
+ *
+ * `["*"]` means both venues are broadly available; a short list means the
+ * trade is location-specific and most operators cannot take it.
+ */
+export function placeableLabel(codes: string[]): string {
+  if (codes.length === 0) return "Unknown";
+  if (codes.includes("*")) return "Broadly available";
+  if (codes.length <= 4) return codes.join(", ");
+  return `${codes.slice(0, 3).join(", ")} +${codes.length - 3} more`;
+}
+
+/**
+ * Basis points from crossing.
+ *
+ * Deliberately signed and never coloured green: a book 20 bps away is closer
+ * than one 200 bps away, but neither is money, and the whole design principle
+ * here is that only realised, placeable edge gets a positive colour.
+ */
+export const bps = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(0)} bps`;
+
+export const money = (n: number, currency: string, dp = 2) =>
+  n.toLocaleString("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  });
 
 export function venueColor(venue: string): string {
   return `var(--venue-${venue}, var(--text-muted))`;

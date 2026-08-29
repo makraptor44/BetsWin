@@ -68,6 +68,11 @@ def main() -> int:
             write(f"arb-{arb['id']}.json", detail)
 
         write("markets.json", client.get("/api/markets?limit=300").json())
+        write("near-misses.json", client.get("/api/near-misses?limit=40").json())
+        # Captured after the scans above so `rejected_this_scan` carries the
+        # cross-zone pairs the guard actually declined, rather than an empty
+        # list that would make the rule look untested.
+        write("venues.json", client.get("/api/venues").json())
         write("analytics.json", client.get("/api/analytics?days=30").json())
         write("history.json", client.get("/api/history?days=30&limit=300").json())
         write("positions.json", client.get("/api/positions").json())

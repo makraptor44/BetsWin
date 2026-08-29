@@ -2,16 +2,25 @@
 
 import { useMemo, useState } from "react";
 
-import { Card, EmptyState, ErrorState, Skeleton, Stat, VenueChip } from "@/components/ui";
+import {
+  Card,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  Stat,
+  VenueChip,
+  ZoneChip,
+} from "@/components/ui";
 import { api } from "@/lib/api";
-import { compactNum, num, untilLabel, usdCompact } from "@/lib/format";
-import type { MarketRow } from "@/lib/types";
+import { ZONE_LABEL, compactNum, num, untilLabel, usdCompact } from "@/lib/format";
+import type { MarketRow, ZoneKey } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
 
 type Sort = "volume" | "liquidity" | "book" | "close";
 
 export default function MarketsPage() {
   const [venue, setVenue] = useState("all");
+  const [zone, setZone] = useState<ZoneKey | "all">("all");
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("volume");
@@ -22,13 +31,14 @@ export default function MarketsPage() {
     () =>
       api.markets({
         venue: venue === "all" ? undefined : venue,
+        zone: zone === "all" ? undefined : zone,
         category: category === "all" ? undefined : category,
         search: search || undefined,
         only_mutually_exclusive: onlyME || undefined,
         sort,
         limit: 300,
       }),
-    [venue, category, search, sort, onlyME],
+    [venue, zone, category, search, sort, onlyME],
   );
 
   const rows = data?.markets ?? [];
@@ -97,6 +107,26 @@ export default function MarketsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {(data?.zones?.length ?? 0) > 1 && (
+            <div style={{ width: 176 }}>
+              <label className="label" htmlFor="mzone">
+                Execution zone
+              </label>
+              <select
+                id="mzone"
+                className="input"
+                value={zone}
+                onChange={(e) => setZone(e.target.value as ZoneKey | "all")}
+              >
+                <option value="all">All zones</option>
+                {(data?.zones ?? []).map((z) => (
+                  <option key={z} value={z}>
+                    {ZONE_LABEL[z] ?? z}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div style={{ width: 150 }}>
             <label className="label" htmlFor="mvenue">
               Venue
@@ -246,7 +276,10 @@ function MarketRowView({
           </div>
         </td>
         <td>
-          <VenueChip venue={m.venue} />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <VenueChip venue={m.venue} />
+            <ZoneChip zone={m.zone} short />
+          </div>
         </td>
         <td style={{ color: "var(--text-muted)" }}>{m.category}</td>
         <td className="mono" style={{ textAlign: "right" }}>

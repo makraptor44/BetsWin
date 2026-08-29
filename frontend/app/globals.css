@@ -35,6 +35,8 @@
   --venue-polymarket: #6b4df6;
   --venue-kalshi: #0d8a72;
   --venue-sportsbook: #b5561f;
+  --venue-smarkets: #1668c4;
+  --venue-betfair: #8a6a00;
 
   --shadow-sm: 0 1px 2px rgba(16, 19, 26, 0.06);
   --shadow-md: 0 4px 16px rgba(16, 19, 26, 0.08);
@@ -70,6 +72,8 @@
   --venue-polymarket: #9b7dff;
   --venue-kalshi: #35c9aa;
   --venue-sportsbook: #ff9558;
+  --venue-smarkets: #5aa9ff;
+  --venue-betfair: #ffd45e;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.45);
@@ -98,6 +102,8 @@
   --venue-polymarket: #6b4df6;
   --venue-kalshi: #0d8a72;
   --venue-sportsbook: #b5561f;
+  --venue-smarkets: #1668c4;
+  --venue-betfair: #8a6a00;
   --shadow-sm: 0 1px 2px rgba(16, 19, 26, 0.06);
   --shadow-md: 0 4px 16px rgba(16, 19, 26, 0.08);
 }
