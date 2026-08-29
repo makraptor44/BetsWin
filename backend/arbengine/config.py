@@ -145,6 +145,20 @@ class Settings(BaseSettings):
     breaker_window_seconds: int = 60
     breaker_min_margin: float = 0.10
 
+    # --------------------------------------------------------- correlation arb
+    # See correlation_arb.py. Pairs are configured via /api/correlation/pairs
+    # (there is no automatic discovery of which markets share a joint contract).
+    enable_correlation_arb: bool = True
+    # Fraction of full Kelly actually staked -- Part I §7.3's fraction applied
+    # to a bet with real variance, same conservative default as /api/calc/kelly.
+    correlation_kelly_fraction: float = 0.25
+    # Deadband below which a mispricing is not worth trading; a pair can
+    # override this with its own min_edge.
+    correlation_min_edge: float = 0.02
+    # Below this many historical outcome pairs, rho_prior is too noisy to trust
+    # and the opportunity is scored down rather than hidden outright.
+    correlation_min_rho_prior_samples: int = 5
+
     # ---------------------------------------------------------------- storage
     database_path: str = "data/betswin.db"
     retention_days: int = 30

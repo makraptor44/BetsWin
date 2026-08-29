@@ -324,6 +324,97 @@ def size_arb(
     )
 
 
+@dataclass(frozen=True)
+class SizedCorrelationTrade:
+    """A directional position sized by fractional Kelly against a modelled edge.
+
+    Unlike `SizedArb`, this is NOT risk-free: the position loses its stake in
+    full if the contract resolves the other way. `worst_case_profit` says so
+    honestly (it is simply `-stake`) rather than reusing the guaranteed-profit
+    convention that the true arbitrage kinds share.
+    """
+
+    side: str                   # "YES" or "NO" -- which side of the joint contract
+    stake: float                # all-in outlay: contract cost plus fees
+    contracts: float
+    fill_price: float           # volume-weighted average cost per contract
+    effective_price: float      # fee-adjusted cost per contract
+    fee: float
+    fair_probability: float     # model's fair P(this side pays out)
+    kelly_fraction_full: float  # what the un-haircut Kelly formula wants
+    kelly_fraction_used: float  # after the fractional-Kelly haircut and caps
+    expected_value: float       # p*payout - stake, in dollars
+    worst_case_profit: float    # -stake
+    depth_limited: bool
+
+
+def size_correlation_trade(
+    quote: Quote,
+    side: str,
+    fair_probability: float,
+    bankroll: Optional[float] = None,
+    kelly_fraction: Optional[float] = None,
+    venue_limits: Optional[dict[str, float]] = None,
+) -> Optional[SizedCorrelationTrade]:
+    """Size a directional bet on one side of a contract by fractional Kelly.
+
+    `fair_probability` is the model's belief that THIS quote's side resolves
+    in your favour (i.e. already flipped to 1-p if `side` is the NO leg).
+    Returns None when the effective price leaves no edge, when depth or
+    bankroll policy caps the trade below the minimum stake, or when the
+    resulting stake is too small to bother placing.
+    """
+    bankroll = bankroll if bankroll is not None else settings.bankroll
+    frac = kelly_fraction if kelly_fraction is not None else settings.correlation_kelly_fraction
+
+    d_eff = om.prob_to_decimal(quote.effective_price)
+    f_full = om.kelly_fraction(fair_probability, d_eff)
+    if f_full <= 0:
+        return None  # no edge at the effective price once fees are priced in
+
+    f_used = min(f_full * frac, settings.max_stake_fraction_per_event)
+    target = om.round_down_to_step(bankroll * f_used, settings.stake_step)
+
+    capacity = book_capacity(quote.depth, quote.price, quote.size_available)
+    venue_cap = (venue_limits or {}).get(quote.venue)
+    if venue_cap is not None:
+        capacity = min(capacity, venue_cap)
+    depth_limited = capacity > 0 and target > capacity
+    if capacity > 0:
+        target = min(target, capacity)
+    target = om.round_down_to_step(target, settings.stake_step)
+    if target < settings.min_stake_per_leg:
+        return None
+
+    fill = walk_book(quote.depth, quote.price, target)
+    fees = fee_model_for(quote.venue)
+    contracts = target / fill.avg_price if fill.avg_price > 0 else 0.0
+    for _ in range(3):
+        eff = fees.effective_price(fill.avg_price, max(contracts, 1.0))
+        contracts = target / eff if eff > 0 else 0.0
+    eff_price = fees.effective_price(fill.avg_price, max(contracts, 1.0))
+    fee = fees.total_fee(fill.avg_price, contracts)
+
+    stake = round(target, 2)
+    contracts = round(contracts, 4)
+    expected_value = fair_probability * contracts - stake
+
+    return SizedCorrelationTrade(
+        side=side,
+        stake=stake,
+        contracts=contracts,
+        fill_price=fill.avg_price,
+        effective_price=eff_price,
+        fee=round(fee, 4),
+        fair_probability=fair_probability,
+        kelly_fraction_full=round(f_full, 5),
+        kelly_fraction_used=round(f_used, 5),
+        expected_value=round(expected_value, 2),
+        worst_case_profit=round(-stake, 2),
+        depth_limited=depth_limited,
+    )
+
+
 def resize(sized: SizedArb, new_total: float) -> SizedArb:
     """Re-run equal-profit allocation at a different total stake.
 
