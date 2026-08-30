@@ -130,6 +130,19 @@ export default function OpportunitiesPage() {
     };
   }, [filtered]);
 
+  // The scan log is already in memory, oldest last. Reversed and trimmed it is
+  // exactly the short history a sparkline wants -- no extra request, and no
+  // separate history state to keep in sync with the tape.
+  const trends = useMemo(() => {
+    const recent = engine.activity.slice(0, 24).reverse();
+    return {
+      arbs: recent.map((a) => a.arbs),
+      gaps: recent
+        .map((a) => a.tightestGapBps)
+        .filter((g): g is number => g !== null),
+    };
+  }, [engine.activity]);
+
   const hasFilters =
     search.trim() !== "" ||
     kind !== "all" ||
@@ -198,7 +211,10 @@ export default function OpportunitiesPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Live opportunities"
+          animate={filtered.length}
+          format={(n) => String(Math.round(n))}
           value={filtered.length}
+          trend={trends.arbs}
           sub={
             hasFilters
               ? `${engine.arbs.length} before filters`
@@ -207,6 +223,8 @@ export default function OpportunitiesPage() {
         />
         <Stat
           label="Guaranteed profit"
+          animate={totals.profit}
+          format={(n) => usd(n)}
           value={usd(totals.profit)}
           sub={
             totals.directionalCount > 0
@@ -217,11 +235,16 @@ export default function OpportunitiesPage() {
         />
         <Stat
           label="Best net margin"
+          animate={totals.best}
+          format={(n) => pct(n)}
           value={pct(totals.best)}
+          trend={trends.gaps}
           sub={totals.best > 0 ? "after all fees" : undefined}
         />
         <Stat
           label="Total stake"
+          animate={totals.stake}
+          format={(n) => usdCompact(n)}
           value={usdCompact(totals.stake)}
           sub="sized for visible depth"
         />

@@ -30,6 +30,7 @@ import {
   venueColor,
 } from "@/lib/format";
 import type { RiskFlag, ZoneKey } from "@/lib/types";
+import { AnimatedNumber, Sparkline, useTick } from "@/components/motion";
 import { cn } from "@/lib/utils";
 
 /* --------------------------------------------------------------- surfaces */
@@ -111,16 +112,27 @@ export function Stat({
   sub,
   tone,
   title,
+  animate,
+  format,
+  trend,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   tone?: keyof typeof TONE_TEXT;
   title?: string;
+  /** Numeric value to tween to. When given, it replaces `value` on screen. */
+  animate?: number;
+  /** Required alongside `animate` -- how to render each intermediate frame. */
+  format?: (n: number) => string;
+  /** A short recent history, drawn as a trend line behind the figure. */
+  trend?: number[];
 }) {
+  const tick = useTick(animate);
+
   return (
     <ShadCard
-      className="relative gap-0 overflow-hidden py-0 shadow-none"
+      className="lift relative gap-0 overflow-hidden py-0 shadow-none"
       style={{ boxShadow: "var(--shadow-flat)" }}
       title={title}
     >
@@ -130,17 +142,42 @@ export function Stat({
           className={cn("absolute inset-y-0 left-0 w-[3px]", TONE_RULE[tone])}
         />
       )}
-      <CardContent className="p-3.5 sm:p-4">
+
+      {/* The trend line sits behind the figure at low opacity rather than beside
+          it. A sparkline given its own column makes the tile about the chart;
+          here it is background texture that answers "which way" without
+          competing with the number that answers "how much". */}
+      {trend && trend.length > 1 && (
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 h-10 opacity-[0.22]",
+            tone ? TONE_TEXT[tone] : "text-brand",
+          )}
+        >
+          <Sparkline points={trend} width={220} height={40} className="h-full w-full" />
+        </span>
+      )}
+
+      <CardContent className="relative p-3.5 sm:p-4">
         <div className="text-[10.5px] font-semibold uppercase tracking-[0.075em] text-faint">
           {label}
         </div>
+        {/* Keyed on the tick so the highlight restarts on every change; a class
+            toggled on a timer drifts out of sync with the data it describes. */}
         <div
+          key={tick}
           className={cn(
-            "num mt-1.5 text-[26px] font-medium leading-none",
+            "num mt-1.5 inline-block rounded px-0.5 text-[26px] font-medium leading-none",
+            tick > 0 && "tick",
             tone ? TONE_TEXT[tone] : "text-foreground",
           )}
         >
-          {value}
+          {animate !== undefined && format ? (
+            <AnimatedNumber value={animate} format={format} />
+          ) : (
+            value
+          )}
         </div>
         {sub && (
           <div className="mt-2 text-[11.5px] leading-snug text-faint">{sub}</div>
@@ -230,13 +267,22 @@ export function ConfidenceBar({
         aria-label="Confidence"
       >
         <div
-          className={cn("h-full rounded-full", METER_FILL[tone])}
-          // Width tracks the value, so it cannot be a static class.
+          className={cn(
+            "h-full rounded-full transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out-expo)]",
+            METER_FILL[tone],
+          )}
+          // Width tracks the value, so it cannot be a static class. Transitioned
+          // rather than set outright: a meter that jumps between polls is read
+          // as a rendering glitch, and the direction of travel is information.
           style={{ width: `${Math.max(2, value)}%` }}
         />
       </div>
       {showLabel && (
-        <span className="text-xs tabular text-muted-foreground">{value}</span>
+        <AnimatedNumber
+          value={value}
+          format={(n) => String(Math.round(n))}
+          className="num text-xs text-muted-foreground"
+        />
       )}
     </div>
   );
@@ -304,9 +350,11 @@ export function Skeleton({ rows = 5 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <ShadSkeleton
           key={`row-${i}`}
-          className="h-[34px]"
-          // Rows fade down the stack, so the value is per-index.
-          style={{ opacity: 1 - i * 0.12 }}
+          className="shimmer h-[34px]"
+          // Rows fade down the stack, and each starts its shimmer slightly
+          // later, so the placeholder reads as loading rather than as a stack
+          // of identical grey bars pulsing in lockstep.
+          style={{ opacity: 1 - i * 0.12, animationDelay: `${i * 90}ms` }}
         />
       ))}
     </div>

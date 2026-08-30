@@ -7,6 +7,8 @@ import {
   placeableLabel,
   untilLabel,
 } from "@/lib/format";
+import type { CSSProperties } from "react";
+
 import type { Arb } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -53,10 +55,16 @@ export function ArbTable({
             {onPlace && <TableHead className="text-center">Action</TableHead>}
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {arbs.map((a) => (
+        {/* `stagger` reads --i off each row, so the cascade is one CSS rule
+            rather than a delay computed per row in JS. Only the first screenful
+            is staggered -- rows below the fold have finished animating long
+            before anyone scrolls to them, and delaying them further just makes
+            a long table feel slow to settle. */}
+        <TableBody className="stagger">
+          {arbs.map((a, i) => (
             <TableRow
               key={a.id}
+              style={{ "--i": i } as CSSProperties}
               className={cn(
                 "row-action",
                 selectedId === a.id && "bg-brand-soft",

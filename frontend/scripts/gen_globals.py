@@ -524,6 +524,10 @@ THEME = """
   }
 }
 
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes rise-far {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
