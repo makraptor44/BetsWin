@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useId, useReducer, useRef, useState } from "react";
 
 /**
  * Motion primitives.
@@ -136,11 +136,12 @@ export function Sparkline({
   fill?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const idRef = useRef<string | null>(null);
-  if (idRef.current === null) {
-    idRef.current = `sk${Math.random().toString(36).slice(2, 9)}`;
-  }
-  const id = idRef.current;
+  // `useId` rather than a random string stashed in a ref: the gradient needs a
+  // document-unique id, and randomising it during render is impure (the React
+  // compiler rejects it outright) as well as producing a server/client mismatch
+  // under SSR. The non-word characters React puts in the id are stripped because
+  // this ends up inside a `url(#...)` reference.
+  const id = `sk${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   if (points.length < 2) return null;
 
