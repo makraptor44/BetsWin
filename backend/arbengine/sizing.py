@@ -95,6 +95,14 @@ def walk_book(
     return Fill(avg, contracts, spent, cleared, exhausted)
 
 
+#: Passes of the weight/fill fixed point in `size_arb`. Each pass is a
+#: contraction and the books involved are a handful of levels deep, so three is
+#: comfortably past convergence; the loop exits early on the tolerance below.
+_SIZING_REFINEMENTS = 4
+#: Convergence tolerance, as a fraction of the total stake. A tenth of a basis
+#: point of the trade is far below the rounding step the stakes land on anyway.
+_SIZING_TOLERANCE = 1e-5
+
 #: How far above the best price a fill may reach before the edge is gone.
 #: Arb margins live in the 0.5-3% band, so paying 2% more than top of book
 #: destroys the trade -- depth beyond that point is not real capacity.
@@ -269,15 +277,41 @@ def size_arb(
     if target < settings.min_total_stake:
         return None
 
-    # --- Walk each book at the sized allocation -----------------------------
-    fills = [walk_book(q.depth, q.price, target * w) for q, w in zip(quotes, weights)]
+    # --- Walk each book at the sized allocation, to a fixed point -----------
+    #
+    # The weights and the fills define each other: the book is walked at
+    # `target * w`, and the resulting prices then produce a different `w`. Doing
+    # that once left the two inconsistent -- the leg was walked for one notional
+    # and priced, below, at a stake derived from another. On a steep book any
+    # leg whose stake grew was quoted a VWAP it could not be filled at, so
+    # `net_margin` and `worst_case_profit` came out optimistic on exactly the
+    # thin books where the guarantee is worth something.
+    #
+    # Iterating converges in two or three passes because each step is a
+    # contraction: a bigger stake buys a worse average price, which lowers the
+    # weight, which shrinks the stake.
+    def _price(fills_: Sequence[Fill], notionals: Sequence[float]) -> list[float]:
+        """Fee-adjusted decimal odds at the average price each leg realised."""
+        out: list[float] = []
+        for q, f, notional in zip(quotes, fills_, notionals):
+            fees = fee_model_for(q.venue)
+            contracts = max(notional / f.avg_price, 1.0) if f.avg_price > 0 else 1.0
+            out.append(om.prob_to_decimal(fees.effective_price(f.avg_price, contracts)))
+        return out
 
-    # --- Re-price at realised average fill, including fees at that size -----
-    eff_odds: list[float] = []
-    for q, f, w in zip(quotes, fills, weights):
-        fees = fee_model_for(q.venue)
-        contracts = max((target * w) / f.avg_price, 1.0) if f.avg_price > 0 else 1.0
-        eff_odds.append(om.prob_to_decimal(fees.effective_price(f.avg_price, contracts)))
+    notionals = [target * w for w in weights]
+    fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals)]
+    eff_odds = _price(fills, notionals)
+
+    for _ in range(_SIZING_REFINEMENTS):
+        next_notionals = om.equal_profit_stakes(eff_odds, target)
+        if max(
+            abs(a - b) for a, b in zip(next_notionals, notionals)
+        ) <= _SIZING_TOLERANCE * max(target, 1.0):
+            break
+        notionals = next_notionals
+        fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals)]
+        eff_odds = _price(fills, notionals)
 
     # For a payout multiple of k, the arb condition is sum(p_i) < k, so the
     # comparable book is B/k (Part I s5.1 generalised).

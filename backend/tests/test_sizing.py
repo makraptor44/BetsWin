@@ -424,3 +424,85 @@ class TestWalkBookOrdering:
         shallow = walk_book(self.LEVELS, 0.46, 46.0)
         deep = walk_book(self.LEVELS, 0.46, 140.0)
         assert deep.avg_price > shallow.avg_price
+
+
+class TestFillsMatchTheStakesTheyPrice:
+    """A leg must be quoted the price its own stake actually clears.
+
+    The book was walked once at top-of-book weights, then the stakes were
+    reallocated at the post-slippage prices that walk produced -- a different
+    split -- and each leg was then priced at the VWAP of the notional it was
+    NOT given. The error is small in practice, because `book_capacity` only
+    counts depth within `MAX_PRICE_SLACK` of best and so keeps fills shallow,
+    but it is one-directional: a leg whose share grew is always quoted better
+    than it can be filled, so `worst_case_profit` overstates the guarantee.
+    """
+
+    @staticmethod
+    def _stepped(price: float, name: str) -> Quote:
+        """Thin top levels, so a few hundred dollars walks past the first.
+
+        All three levels sit inside `MAX_PRICE_SLACK` of the best price, or
+        `book_capacity` would cap the trade before any of them were reached and
+        there would be no slippage to converge on.
+        """
+        return q(
+            "polymarket",
+            name,
+            price,
+            levels=[
+                DepthLevel(price=price, size=120.0),
+                DepthLevel(price=round(price * 1.010, 4), size=120.0),
+                DepthLevel(price=round(price * 1.019, 4), size=40_000.0),
+            ],
+        )
+
+    def test_leg_price_is_the_vwap_of_that_leg_s_own_stake(self):
+        """The invariant the fixed point exists to hold.
+
+        Re-walking each book at the stake finally allocated to it must return
+        the price the leg was reported at.
+        """
+        quotes = [
+            self._stepped(0.45, "yes"),
+            q("polymarket", "no", 0.49, levels=[DepthLevel(price=0.49, size=40_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=2000.0)
+        assert sized is not None
+        for leg, quote in zip(sized.legs, quotes):
+            realised = walk_book(quote.depth, quote.price, leg.stake).avg_price
+            assert leg.price == pytest.approx(realised, abs=1e-6), (
+                f"{leg.outcome} priced at {leg.price} but fills at {realised}"
+            )
+
+    def test_worst_case_profit_is_not_above_what_the_book_delivers(self):
+        quotes = [
+            self._stepped(0.45, "yes"),
+            q("polymarket", "no", 0.49, levels=[DepthLevel(price=0.49, size=40_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=2000.0)
+        assert sized is not None
+
+        # One leg settles at $1 per contract, so the worst state pays out the
+        # smallest contract count across the legs.
+        contracts = []
+        for leg, quote in zip(sized.legs, quotes):
+            fill = walk_book(quote.depth, quote.price, leg.stake)
+            eff = fee_model_for(quote.venue).effective_price(
+                fill.avg_price, max(leg.contracts, 1.0)
+            )
+            contracts.append(leg.stake / eff if eff > 0 else 0.0)
+        assert sized.worst_case_profit <= min(contracts) - sized.total_stake + 0.005
+
+    def test_flat_book_is_unaffected(self):
+        """Control: with one deep level there is no slippage to converge on."""
+        quotes = [
+            q("polymarket", "yes", 0.47, levels=[DepthLevel(price=0.47, size=20_000.0)]),
+            q("polymarket", "no", 0.51, levels=[DepthLevel(price=0.51, size=20_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=1500.0)
+        assert sized is not None
+        assert all(
+            leg.price == pytest.approx(quote.price)
+            for leg, quote in zip(sized.legs, quotes)
+        )
