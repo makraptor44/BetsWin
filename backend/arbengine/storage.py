@@ -152,6 +152,10 @@ class ArbStore:
         self._lock = threading.Lock()
         self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # SQLite ignores every REFERENCES clause in the schema unless foreign
+        # keys are switched on, and the setting is per connection rather than
+        # per database -- so the constraints below were decorative.
+        self.conn.execute("PRAGMA foreign_keys = ON")
         with self._lock:
             self.conn.executescript(SCHEMA)
             self._migrate()
@@ -223,10 +227,24 @@ class ArbStore:
             return [dict(r) for r in cur.fetchall()]
 
     def _exec(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run an INSERT and return the new row's id."""
         with self._lock:
             cur = self.conn.execute(sql, params)
             self.conn.commit()
             return int(cur.lastrowid or 0)
+
+    def _write(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run an UPDATE or DELETE and return the number of rows it touched.
+
+        `lastrowid` is only meaningful after an INSERT -- after a DELETE it
+        still holds whatever the connection's last insert set it to. `prune()`
+        returned that as a deletion count, so seven freshly written price rows
+        and a cutoff that matched none of them reported seven deletions.
+        """
+        with self._lock:
+            cur = self.conn.execute(sql, params)
+            self.conn.commit()
+            return int(cur.rowcount or 0)
 
     # ------------------------------------------------------------------ arbs
 
@@ -242,7 +260,7 @@ class ArbStore:
         )
         if existing:
             arb_id = int(existing[0]["id"])
-            self._exec(
+            self._write(
                 "UPDATE arbs SET last_seen = ?, net_margin = ?, confidence = ? WHERE id = ?",
                 (_iso(arb.last_seen), arb.net_margin, arb.confidence, arb_id),
             )
@@ -307,7 +325,7 @@ class ArbStore:
         return rows[0] if rows else None
 
     def mark_placed(self, arb_id: int, placed: bool = True) -> None:
-        self._exec("UPDATE arbs SET placed = ? WHERE id = ?", (1 if placed else 0, arb_id))
+        self._write("UPDATE arbs SET placed = ? WHERE id = ?", (1 if placed else 0, arb_id))
 
     def settle(
         self,
@@ -317,7 +335,7 @@ class ArbStore:
         settled_at: Optional[datetime] = None,
     ) -> None:
         dt = (settled_at or datetime.now(timezone.utc)).isoformat()
-        self._exec(
+        self._write(
             "UPDATE arbs SET settled = 1, realised_pnl = ?, settlement_type = ?, settled_at = ? WHERE id = ?",
             (realised_pnl, settlement_type, dt, arb_id),
         )
@@ -514,7 +532,7 @@ class ArbStore:
         )
 
     def delete_correlation_outcome(self, outcome_id: int) -> None:
-        self._exec("DELETE FROM correlation_outcomes WHERE id = ?", (outcome_id,))
+        self._write("DELETE FROM correlation_outcomes WHERE id = ?", (outcome_id,))
 
     # ------------------------------------------------------------- analytics
 
@@ -601,10 +619,25 @@ class ArbStore:
         ]
 
     def prune(self, days: int) -> int:
+        """Drop history past the retention window; returns rows actually removed.
+
+        Placements are deleted alongside the arbs they belong to. SQLite does
+        not enforce the REFERENCES clause unless foreign keys are switched on
+        per connection, so deleting an arb used to leave its placement rows
+        pointing at nothing.
+        """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        removed = self._exec("DELETE FROM price_history WHERE recorded_at < ?", (cutoff,))
-        self._exec("DELETE FROM scans WHERE started_at < ?", (cutoff,))
-        self._exec(
+        removed = self._write(
+            "DELETE FROM price_history WHERE recorded_at < ?", (cutoff,)
+        )
+        removed += self._write("DELETE FROM scans WHERE started_at < ?", (cutoff,))
+        removed += self._write(
+            """DELETE FROM placements WHERE arb_id IN (
+                   SELECT id FROM arbs WHERE detected_at < ? AND placed = 0
+               )""",
+            (cutoff,),
+        )
+        removed += self._write(
             "DELETE FROM arbs WHERE detected_at < ? AND placed = 0", (cutoff,)
         )
         return removed
