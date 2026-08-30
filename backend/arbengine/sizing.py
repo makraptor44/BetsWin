@@ -57,14 +57,22 @@ def walk_book(
 ) -> Fill:
     """Volume-weighted cost of spending `target_notional` against an ask stack.
 
-    `levels` must be sorted cheapest-first. When no depth is published the top
-    price is assumed to hold for the whole order -- optimistic, so the caller
-    marks such a result as thin liquidity rather than trusting it.
+    Levels are sorted cheapest-first here rather than assumed to arrive that
+    way. The docstring used to require it of the caller while `book_capacity`
+    directly below made no such assumption (it takes a `min`), and a source that
+    ever published its book in a different order would have produced a wrong
+    VWAP silently -- walking the stack from the most expensive end.
+
+    When no depth is published the top price is assumed to hold for the whole
+    order -- optimistic, so the caller marks such a result as thin liquidity
+    rather than trusting it.
     """
     if target_notional <= 0 or top_price <= 0:
         return Fill(max(top_price, om.MIN_PRICE), 0.0, 0.0, 0, False)
 
-    usable = [l for l in levels if l.price > 0 and l.size > 0]
+    usable = sorted(
+        (l for l in levels if l.price > 0 and l.size > 0), key=lambda l: l.price
+    )
     if not usable:
         return Fill(top_price, target_notional / top_price, target_notional, 0, True)
 

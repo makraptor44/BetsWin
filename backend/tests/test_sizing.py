@@ -393,3 +393,34 @@ class TestCategoryClassification:
         from arbengine.normalise import classify_category
 
         assert classify_category("Super Bowl LXI winner", "Wibble") == "sports"
+
+
+class TestWalkBookOrdering:
+    """The stack is sorted here rather than assumed sorted.
+
+    The docstring required cheapest-first of its caller while `book_capacity`
+    right below made no such assumption. A feed that ever published its book the
+    other way round would have been walked from the expensive end, producing a
+    wrong volume-weighted price with nothing to show for it.
+    """
+
+    LEVELS = [
+        DepthLevel(price=0.50, size=100.0),
+        DepthLevel(price=0.46, size=100.0),
+        DepthLevel(price=0.48, size=100.0),
+    ]
+
+    def test_order_does_not_change_the_fill(self):
+        shuffled = walk_book(self.LEVELS, 0.46, 60.0)
+        ordered = walk_book(sorted(self.LEVELS, key=lambda l: l.price), 0.46, 60.0)
+        assert shuffled.avg_price == pytest.approx(ordered.avg_price)
+        assert shuffled.contracts == pytest.approx(ordered.contracts)
+
+    def test_the_cheapest_level_is_taken_first(self):
+        fill = walk_book(self.LEVELS, 0.46, 46.0)
+        assert fill.avg_price == pytest.approx(0.46)
+
+    def test_walking_deeper_raises_the_average(self):
+        shallow = walk_book(self.LEVELS, 0.46, 46.0)
+        deep = walk_book(self.LEVELS, 0.46, 140.0)
+        assert deep.avg_price > shallow.avg_price
