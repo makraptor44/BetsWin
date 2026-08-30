@@ -57,12 +57,12 @@
    "notes": [
     "Directional bet that the market's implied correlation (rho_impl=0.50) converges toward the prior (rho_prior=0.68, historical, n=8) -- not a risk-free arbitrage. The full stake is at risk if the joint contract resolves the other way."
    ],
-   "detected_at": "2026-08-30T19:58:42.433171Z",
-   "close_time": "2027-11-03T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869747Z",
+   "detected_at": "2026-08-30T20:03:43.065072Z",
+   "close_time": "2027-11-03T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508917Z",
    "is_suspect": false,
    "roi_pct": -100.0,
-   "hours_to_close": 10319.999677748612
+   "hours_to_close": 10319.999666928612
   },
   {
    "id": "f1515ab72b13049f",
@@ -144,12 +144,12 @@
     "Markets were paired by title similarity (99/100), not by a shared identifier.",
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:58:42.417168Z",
-   "close_time": "2026-10-14T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869656Z",
+   "detected_at": "2026-08-30T20:03:43.049717Z",
+   "close_time": "2026-10-14T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508836Z",
    "is_suspect": true,
    "roi_pct": 7.602152043040861,
-   "hours_to_close": 1079.9996777427777
+   "hours_to_close": 1079.9996669191667
   },
   {
    "id": "e84c6ec99ff1aa99",
@@ -263,12 +263,12 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:58:42.415006Z",
-   "close_time": "2026-12-28T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869690Z",
+   "detected_at": "2026-08-30T20:03:43.047210Z",
+   "close_time": "2026-12-28T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508867Z",
    "is_suspect": false,
    "roi_pct": 3.624144965798632,
-   "hours_to_close": 2879.9996777375
+   "hours_to_close": 2879.99966691
   },
   {
    "id": "ada41f580085957f",
@@ -342,12 +342,12 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:58:42.414728Z",
-   "close_time": "2026-10-14T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869711Z",
+   "detected_at": "2026-08-30T20:03:43.046849Z",
+   "close_time": "2026-10-14T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508885Z",
    "is_suspect": false,
    "roi_pct": 1.6260325206504131,
-   "hours_to_close": 1079.9996777338888
+   "hours_to_close": 1079.9996669036111
   },
   {
    "id": "7a617ce7545ae134",
@@ -434,12 +434,12 @@
     "Markets were paired by title similarity (100/100), not by a shared identifier.",
     "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
    ],
-   "detected_at": "2026-08-30T19:58:42.416640Z",
-   "close_time": "2027-06-26T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869724Z",
+   "detected_at": "2026-08-30T20:03:43.049092Z",
+   "close_time": "2027-06-26T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508896Z",
    "is_suspect": false,
    "roi_pct": 1.5480309606192124,
-   "hours_to_close": 7199.999677729723
+   "hours_to_close": 7199.999666896666
   },
   {
    "id": "d37b7d4db9682a72",
@@ -542,13 +542,13 @@
    "notes": [
     "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
    ],
-   "detected_at": "2026-08-30T19:58:42.415662Z",
-   "close_time": "2026-09-02T19:58:44.716366Z",
-   "last_seen": "2026-08-30T19:58:45.869735Z",
+   "detected_at": "2026-08-30T20:03:43.047885Z",
+   "close_time": "2026-09-02T20:03:45.318908Z",
+   "last_seen": "2026-08-30T20:03:46.508907Z",
    "is_suspect": false,
    "roi_pct": 0.9820196403928079,
-   "hours_to_close": 71.99967772527778
+   "hours_to_close": 71.99966688888888
   }
  ],
- "generated_at": "2026-08-30T19:58:45.876557+00:00"
+ "generated_at": "2026-08-30T20:03:46.518111+00:00"
 }
