@@ -4,7 +4,8 @@ import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 
 import { ArbDetailPanel } from "@/components/ArbDetail";
-import { ArbCards, ArbTable } from "@/components/ArbTable";
+import { ArbCards } from "@/components/ArbTable";
+import { OpportunityTable } from "@/components/OpportunityTable";
 import { PlaceBetModal } from "@/components/PlaceBetModal";
 import { StatusBar } from "@/components/StatusBar";
 import { ActivityFeed, Watchlist } from "@/components/Watchlist";
@@ -17,20 +18,10 @@ import { KIND_LABEL, ZONE_LABEL, pct, usd, usdCompact } from "@/lib/format";
 import type { Arb, ArbKind, ZoneKey } from "@/lib/types";
 import { useEngine } from "@/lib/useEngine";
 
-type SortKey = "margin" | "profit" | "confidence" | "closing" | "size";
-
 /** One label treatment for the whole filter bar. Repeating the class list per
  *  field is how six fields end up with four different labels. */
 const LABEL =
   "mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.075em] text-faint";
-
-const SORTS: Array<{ key: SortKey; label: string }> = [
-  { key: "margin", label: "Net margin" },
-  { key: "profit", label: "Profit" },
-  { key: "confidence", label: "Confidence" },
-  { key: "size", label: "Max size" },
-  { key: "closing", label: "Closing soonest" },
-];
 
 export default function OpportunitiesPage() {
   const engine = useEngine();
@@ -47,7 +38,6 @@ export default function OpportunitiesPage() {
   const [zone, setZone] = useState<ZoneKey | "all">("all");
   const [minMargin, setMinMargin] = useState(0);
   const [minConfidence, setMinConfidence] = useState(0);
-  const [sort, setSort] = useState<SortKey>("margin");
 
   const venues = useMemo(
     () => Array.from(new Set(engine.arbs.flatMap((a) => a.venues))).sort(),
@@ -91,23 +81,10 @@ export default function OpportunitiesPage() {
     if (minMargin > 0) out = out.filter((a) => a.net_margin * 100 >= minMargin);
     if (minConfidence > 0) out = out.filter((a) => a.confidence >= minConfidence);
 
-    const sorted = [...out];
-    sorted.sort((a, b) => {
-      switch (sort) {
-        case "profit":
-          return b.worst_case_profit - a.worst_case_profit;
-        case "confidence":
-          return b.confidence - a.confidence;
-        case "size":
-          return b.max_stake_available - a.max_stake_available;
-        case "closing":
-          return (a.hours_to_close ?? 1e9) - (b.hours_to_close ?? 1e9);
-        default:
-          return b.net_margin - a.net_margin;
-      }
-    });
-    return sorted;
-  }, [engine.arbs, search, kind, zone, venue, minMargin, minConfidence, sort]);
+    // Order is the table's business now: it sorts every column both ways and
+    // marks which one is active, which a single dropdown key never could.
+    return out;
+  }, [engine.arbs, search, kind, zone, venue, minMargin, minConfidence]);
 
   const totals = useMemo(() => {
     // An arbitrage's worst_case_profit is a guaranteed gain. A directional
@@ -322,19 +299,6 @@ export default function OpportunitiesPage() {
             <Input id="minconf" className="tabular" type="number" step="5" min="0" max="100" value={minConfidence || ""} placeholder="0" onChange={(e) => setMinConfidence(Number(e.target.value) || 0)} />
           </div>
 
-          <div className="w-[160px]">
-            <label className={LABEL} htmlFor="sort">
-              Sort by
-            </label>
-            <NativeSelect id="sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} >
-              {SORTS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-
           {hasFilters && (
             <Button size="sm" variant="outline" onClick={clearFilters}>
               Clear
@@ -371,7 +335,7 @@ export default function OpportunitiesPage() {
         ) : (
           <>
             <div className="hidden lg:block">
-              <ArbTable
+              <OpportunityTable
                 arbs={filtered}
                 onSelect={setSelected}
                 onPlace={(arb) => setPlacingArb(arb)}
