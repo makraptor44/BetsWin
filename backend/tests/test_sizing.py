@@ -181,6 +181,88 @@ class TestSizeArb:
         assert s.legs[0].price > 0.47  # filled above the quoted top of book
 
 
+class TestUnfillableLegs:
+    """A leg nobody can fill must sink the whole set.
+
+    The depth-capping loop used to `continue` past a zero-capacity leg, so it
+    neither capped the size nor stopped the trade. The set was then sized at the
+    full target and reported the depth of whichever leg DID have a book. This is
+    the shape every Odds API quote arrives in: `size_available=0.0`, no depth.
+    """
+
+    @staticmethod
+    def _dead(venue: str, name: str, price: float, side: Side = Side.YES) -> Quote:
+        """A quote with no published depth and no size -- nothing to fill."""
+        fees = fee_model_for(venue)
+        return Quote(
+            venue=venue,
+            market_id=f"{venue}:{name}",
+            ticker=name,
+            outcome=name,
+            side=side,
+            price=price,
+            effective_price=fees.effective_price(price, 1.0),
+            size_available=0.0,
+            depth=(),
+        )
+
+    def test_zero_capacity_leg_makes_the_set_unsizeable(self):
+        s = size_arb(
+            [q("polymarket", "Yes", 0.47), self._dead("polymarket", "No", 0.51, Side.NO)],
+            target_stake=500,
+        )
+        assert s is None
+
+    def test_every_leg_dead_is_also_unsizeable(self):
+        s = size_arb(
+            [self._dead("polymarket", "Yes", 0.47), self._dead("polymarket", "No", 0.51, Side.NO)],
+            target_stake=500,
+        )
+        assert s is None
+
+    def test_a_venue_limit_of_zero_stops_the_trade(self):
+        """An operator limit of zero is an instruction, not a suggestion."""
+        s = size_arb(
+            [q("polymarket", "Yes", 0.47), q("polymarket", "No", 0.51)],
+            target_stake=500,
+            venue_limits={"polymarket": 0.0},
+        )
+        assert s is None
+
+    def test_max_stake_available_is_set_by_the_thinnest_leg(self):
+        """The binding leg sets the ceiling, not the deepest one.
+
+        A shallow leg beside a very deep one must not have its capacity
+        overlooked in favour of the leg that happens to have a book.
+        """
+        deep = q("polymarket", "Yes", 0.47, size=900_000.0)
+        thin = q("polymarket", "No", 0.51, Side.NO, size=400.0)
+        s = size_arb([deep, thin], target_stake=1e9)
+        assert s is not None
+
+        thin_capacity = book_capacity(thin.depth, thin.price, thin.size_available)
+        deep_capacity = book_capacity(deep.depth, deep.price, deep.size_available)
+        assert thin_capacity < deep_capacity
+
+        # The ceiling is the thin leg's capacity divided by its share of the
+        # stake, so it can never imply more than the thin leg can absorb.
+        assert s.max_stake_available < deep_capacity
+        assert s.depth_limited
+
+    def test_correlation_trade_refuses_a_dead_quote(self):
+        quote = self._dead("kalshi", "Yes", 0.45)
+        assert size_correlation_trade(quote, "YES", fair_probability=0.65) is None
+
+    def test_correlation_trade_respects_a_zero_venue_limit(self):
+        quote = q("kalshi", "Yes", 0.45)
+        assert (
+            size_correlation_trade(
+                quote, "YES", fair_probability=0.65, venue_limits={"kalshi": 0.0}
+            )
+            is None
+        )
+
+
 class TestResize:
     def test_scaling_down_preserves_the_ratio(self):
         s = size_arb([q("polymarket", "Yes", 0.47), q("polymarket", "No", 0.51)], target_stake=400)

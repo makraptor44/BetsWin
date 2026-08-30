@@ -237,6 +237,14 @@ def size_arb(
     weights = [om.decimal_to_prob(d) / b_top for d in top_odds]
 
     # --- Ceiling from order-book depth and venue limits ---------------------
+    #
+    # A leg with no capacity is not a leg that caps the trade at a small size --
+    # it is a leg that cannot be filled at all, and an arbitrage with an
+    # unfillable leg is not an arbitrage, it is an unhedged bet on the others.
+    # Skipping such a leg (as this loop used to) sized the whole set at the full
+    # target and reported the depth of the legs that DID have a book, so a
+    # sportsbook pair could come back as $500 staked against $9,700 of
+    # "available" depth with `depth_limited` false and no THIN_LIQUIDITY flag.
     depth_limited = False
     capacities: list[float] = []
     for q, w in zip(quotes, weights):
@@ -245,7 +253,9 @@ def size_arb(
         if venue_cap is not None:
             capacity = min(capacity, venue_cap)
         capacities.append(capacity)
-        if w <= 0 or capacity <= 0:
+        if capacity <= 0:
+            return None  # nothing fillable on this leg; the set is not sizeable
+        if w <= 0:
             continue
         leg_ceiling = capacity / w
         if leg_ceiling < target:
@@ -296,8 +306,13 @@ def size_arb(
     theoretical = total * net_margin
     rounding_exposure = abs(worst - theoretical) > max(0.02, 0.05 * abs(theoretical))
 
+    # The binding leg sets the ceiling. `c > 0` used to filter here too, which
+    # dropped an unfillable leg out of the minimum and reported the capacity of
+    # whichever leg happened to have a book. Zero capacity is now rejected above,
+    # so every entry is real, but the filter stays off deliberately: if one is
+    # ever zero the ceiling should be zero, not the next leg up.
     max_available = min(
-        (c / w for c, w in zip(capacities, weights) if w > 0 and c > 0),
+        (c / w for c, w in zip(capacities, weights) if w > 0),
         default=total,
     )
 
@@ -379,9 +394,13 @@ def size_correlation_trade(
     venue_cap = (venue_limits or {}).get(quote.venue)
     if venue_cap is not None:
         capacity = min(capacity, venue_cap)
-    depth_limited = capacity > 0 and target > capacity
-    if capacity > 0:
-        target = min(target, capacity)
+    # Same rule as `size_arb`: no capacity means nothing to fill against, not
+    # "no ceiling". Guarding the `min` on `capacity > 0` left the target
+    # uncapped in exactly the case where it should have been zero.
+    if capacity <= 0:
+        return None
+    depth_limited = target > capacity
+    target = min(target, capacity)
     target = om.round_down_to_step(target, settings.stake_step)
     if target < settings.min_stake_per_leg:
         return None
