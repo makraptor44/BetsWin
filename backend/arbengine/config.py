@@ -139,6 +139,11 @@ class Settings(BaseSettings):
     dedup_window_seconds: int = 300
     autostart_scanner: bool = True
     demo_mode: bool = False            # serve deterministic fixtures, no network
+    # How long an opportunity is held after the last cycle that could actually
+    # re-price it. Only reached when a venue stays unreachable: a venue that
+    # answers retires its own opportunities immediately. Roughly six missed
+    # cycles at the default interval.
+    stale_arb_seconds: int = 300
 
     # Circuit breaker (Part II §16.4).
     breaker_threshold: int = 25

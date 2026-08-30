@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional, Sequence
 
@@ -43,7 +42,15 @@ from .venues import Zone, zone_of
 
 
 class CircuitBreaker:
-    """Trips when too many implausible margins arrive at once (Part II s16.4)."""
+    """Trips when too many implausible margins arrive at once (Part II s16.4).
+
+    Counts distinct opportunities rather than sightings of them. A wide book is
+    re-detected on every cycle for as long as it stands, so tallying each
+    sighting turns one persistent mispricing into a rising count and trips on a
+    market that is merely unusual instead of a feed that is wrong. Burstiness is
+    the signal the breaker exists to catch; persistence is not, and the two are
+    only distinguishable if an opportunity is counted once.
+    """
 
     def __init__(
         self,
@@ -54,7 +61,8 @@ class CircuitBreaker:
         self.threshold = threshold or settings.breaker_threshold
         self.window = window_seconds or settings.breaker_window_seconds
         self.min_margin = min_margin if min_margin is not None else settings.breaker_min_margin
-        self._events: deque[datetime] = deque()
+        #: Last sighting of each distinct opportunity above the margin floor.
+        self._seen: dict[str, datetime] = {}
         self.tripped = False
         self.reason: Optional[str] = None
 
@@ -63,13 +71,12 @@ class CircuitBreaker:
             return self.tripped
         now = utcnow()
         cutoff = now - timedelta(seconds=self.window)
-        while self._events and self._events[0] < cutoff:
-            self._events.popleft()
-        self._events.append(now)
-        if len(self._events) >= self.threshold:
+        self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
+        self._seen[arb.id] = now
+        if len(self._seen) >= self.threshold:
             self.tripped = True
             self.reason = (
-                f"{len(self._events)} opportunities above "
+                f"{len(self._seen)} distinct opportunities above "
                 f"{self.min_margin * 100:.0f}% in {self.window}s - the feed or the "
                 f"matcher is probably wrong, not the market."
             )
@@ -77,7 +84,7 @@ class CircuitBreaker:
         return self.tripped
 
     def reset(self) -> None:
-        self._events.clear()
+        self._seen.clear()
         self.tripped = False
         self.reason = None
 
@@ -101,6 +108,7 @@ class Scanner:
 
         self._seen: dict[str, datetime] = {}
         self._live: dict[str, Arb] = {}
+        self._polled: set[str] = set()
         self._events: list[Event] = []
         self._near_misses: list[NearMiss] = []
         self._cross_zone_rejected: list[str] = []
@@ -245,12 +253,14 @@ class Scanner:
             events = demo_events()
             for ev in events:
                 stats.by_venue[ev.venue] = stats.by_venue.get(ev.venue, 0) + 1
+            self._polled = {ev.venue for ev in events}
             return events
 
         results = await asyncio.gather(
             *(s.safe_fetch() for s in self.sources), return_exceptions=True
         )
         events: list[Event] = []
+        polled: set[str] = set()
         for source, res in zip(self.sources, results):
             if isinstance(res, BaseException):
                 stats.errors.append(f"{source.name}: {res}")
@@ -259,6 +269,12 @@ class Scanner:
             events.extend(res)
             if source.last_error:
                 stats.errors.append(f"{source.name}: {source.last_error}")
+            else:
+                # This venue answered. An empty list from a healthy venue is a
+                # real "nothing listed here", which is worth distinguishing
+                # from a venue that never replied -- see the retirement step.
+                polled.add(source.name)
+        self._polled = polled
         return events
 
     async def _enrich(self, events: list[Event]) -> list[Event]:
@@ -327,9 +343,25 @@ class Scanner:
                 fresh.append(arb)
 
         # Retire opportunities that no longer price as arbs.
+        #
+        # Only a venue that answered this cycle may retire anything resting on
+        # it. A failed fetch yields an empty event list, so an absent leg means
+        # either the edge closed or nobody was home, and those are not the same
+        # event: the first is the market correcting, the second is us going
+        # blind. Retiring on both reports an outage as a correction, and the
+        # dashboard cannot tell them apart. Anything that could not be
+        # re-priced is held, unconfirmed, until it goes stale.
         current_ids = {a.id for a in found}
-        for gone in [k for k in self._live if k not in current_ids]:
-            self._live.pop(gone, None)
+        stale_before = utcnow() - timedelta(seconds=settings.stale_arb_seconds)
+        unconfirmed = 0
+        for key, arb in list(self._live.items()):
+            if key in current_ids:
+                continue
+            repriced = all(leg.venue in self._polled for leg in arb.legs)
+            if repriced or arb.last_seen < stale_before:
+                self._live.pop(key, None)
+            else:
+                unconfirmed += 1
 
         for arb in fresh:
             try:
@@ -343,6 +375,7 @@ class Scanner:
 
         stats.arbs_found = len(found)
         stats.new_arbs = len(fresh)
+        stats.arbs_unconfirmed = unconfirmed
         stats.near_misses = len(result.near_misses)
         stats.tightest_gap_bps = result.tightest_gap_bps
         stats.cross_zone_rejected = len(result.cross_zone_rejected)
@@ -383,10 +416,15 @@ class Scanner:
             if stats.tightest_gap_bps is not None
             else ""
         )
+        held = (
+            f", {stats.arbs_unconfirmed} held unconfirmed (venue did not answer)"
+            if stats.arbs_unconfirmed
+            else ""
+        )
         logger.info(
             f"scan complete: {stats.events_scanned} events, {stats.arbs_found} arbs "
             f"({stats.new_arbs} new), {stats.near_misses} near misses"
-            f"{tightest} in {stats.duration_seconds}s"
+            f"{tightest}{held} in {stats.duration_seconds}s"
         )
         return fresh
 

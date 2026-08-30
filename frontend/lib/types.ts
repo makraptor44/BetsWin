@@ -118,6 +118,9 @@ export interface ScanStats {
   quotes_scanned: number;
   arbs_found: number;
   new_arbs: number;
+  /** Still open but not re-priced this cycle, because a venue they depend on
+   *  did not answer. Held rather than retired. */
+  arbs_unconfirmed: number;
   near_misses: number;
   tightest_gap_bps: number | null;
   by_venue: Record<string, number>;

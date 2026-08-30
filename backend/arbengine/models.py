@@ -363,6 +363,9 @@ class ScanStats(BaseModel):
     quotes_scanned: int = 0
     arbs_found: int = 0
     new_arbs: int = 0
+    #: Still open but not re-priced this cycle, because a venue they depend on
+    #: did not answer. Held rather than retired -- see Scanner.scan_once.
+    arbs_unconfirmed: int = 0
     near_misses: int = 0
     #: Tightest book seen this cycle, in basis points from crossing. The number
     #: that moves every scan even when `arbs_found` is stuck at zero.
