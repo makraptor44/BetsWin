@@ -12,7 +12,6 @@ import {
   num,
   pct,
   placeableLabel,
-  untilLabel,
   usd,
 } from "@/lib/format";
 import type { Arb, ArbDetail as ArbDetailData, ResizeResult } from "@/lib/types";
@@ -26,6 +25,7 @@ import {
   VenueChip,
   ZoneChip,
 } from "./ui";
+import { Countdown } from "@/components/Countdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -172,7 +172,11 @@ function Summary({ arb }: { arb: Arb }) {
       value: money(arb.max_stake_available, arb.currency, 0),
       hint: "what the book can absorb",
     },
-    { label: "Closes in", value: untilLabel(arb.close_time), hint: "capital lock-up" },
+    {
+      label: "Closes in",
+      value: <Countdown iso={arb.close_time} showIcon />,
+      hint: "capital lock-up",
+    },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">

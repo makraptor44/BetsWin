@@ -32,20 +32,6 @@ export const compactNum = (n: number) => {
 };
 
 /** "3h 12m", "4d", "12m" -- compact enough for a dense table. */
-export function untilLabel(iso: string | null): string {
-  if (!iso) return "—";
-  const ms = new Date(iso).getTime() - Date.now();
-  if (Number.isNaN(ms)) return "—";
-  if (ms <= 0) return "closed";
-  const mins = Math.floor(ms / 60000);
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ${mins % 60}m`;
-  const days = Math.floor(hrs / 24);
-  if (days < 365) return `${days}d`;
-  return `${(days / 365).toFixed(1)}y`;
-}
-
 export function agoLabel(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (Number.isNaN(ms)) return "—";

@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 
+import { Countdown } from "@/components/Countdown";
 import { Card, EmptyState, SectionTitle, VenueChip, ZoneChip } from "@/components/ui";
 import {
   KIND_LABEL,
   bps,
   compactNum,
-  untilLabel,
   usdCompact,
 } from "@/lib/format";
 import type { ActivityEntry } from "@/lib/useEngine";
@@ -145,7 +145,9 @@ function WatchRow({ row }: { row: NearMiss }) {
       <TableCell className="tabular text-right">
         {row.liquidity_usd > 0 ? usdCompact(row.liquidity_usd) : "—"}
       </TableCell>
-      <TableCell className="tabular text-right">{untilLabel(row.close_time)}</TableCell>
+      <TableCell className="text-right">
+        <Countdown iso={row.close_time} />
+      </TableCell>
     </TableRow>
   );
 }

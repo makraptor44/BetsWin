@@ -5,13 +5,13 @@ import {
   money,
   pct,
   placeableLabel,
-  untilLabel,
 } from "@/lib/format";
 import type { CSSProperties } from "react";
 
 import type { Arb } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+import { Countdown } from "./Countdown";
 import { ConfidenceBar, FlagChip, VenueChip, ZoneChip, activatable } from "./ui";
 import { Button } from "@/components/ui/button";
 import {
@@ -153,7 +153,7 @@ export function ArbTable({
               <TableCell
                 className="num text-right text-muted-foreground"
               >
-                {untilLabel(a.close_time)}
+                <Countdown iso={a.close_time} showIcon />
               </TableCell>
               {onPlace && (
                 <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>

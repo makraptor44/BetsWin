@@ -14,9 +14,10 @@ import {
   NativeSelect,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { ZONE_LABEL, compactNum, num, untilLabel, usdCompact } from "@/lib/format";
+import { ZONE_LABEL, compactNum, num, usdCompact } from "@/lib/format";
 import type { MarketRow, ZoneKey } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
+import { Countdown } from "@/components/Countdown";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -295,7 +296,7 @@ function MarketRowView({
           {usdCompact(m.liquidity_usd)}
         </TableCell>
         <TableCell className="tabular text-right text-muted-foreground">
-          {untilLabel(m.close_time)}
+          <Countdown iso={m.close_time} />
         </TableCell>
       </TableRow>
       {expanded && (
