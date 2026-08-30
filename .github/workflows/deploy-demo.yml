@@ -52,21 +52,26 @@ jobs:
         run: |
           set -euo pipefail
           branch="${GITHUB_REF_NAME}"
-          if [ "$branch" = "main" ]; then
-            subdir=""
-            base="/${{ github.event.repository.name }}"
-          else
-            # Lowercase and strip anything not URL-safe. A trailing "-branch" is
-            # dropped, so ANTHONYS-BRANCH lands on the short, memorable
-            # /anthony/ rather than /anthonys-branch/.
-            slug=$(printf '%s' "$branch" \
-              | tr '[:upper:]' '[:lower:]' \
-              | sed -e 's/-branch$//' -e 's/[^a-z0-9._-][^a-z0-9._-]*/-/g' \
-                    -e 's/^-*//' -e 's/-*$//')
-            if [ -z "$slug" ]; then slug="preview"; fi
-            subdir="$slug"
-            base="/${{ github.event.repository.name }}/$slug"
-          fi
+          case "$branch" in
+            main)
+              subdir=""
+              ;;
+            # Named explicitly. Deriving a short slug from the branch name by
+            # rule produced "anthonys", which is nobody's idea of a URL: the
+            # only honest way to get the documented /anthony/ is to say so.
+            ANTHONYS-BRANCH)
+              subdir="anthony"
+              ;;
+            *)
+              # Anything else gets a mechanical slug: lowercased, with runs of
+              # URL-unsafe characters collapsed to a single dash.
+              subdir=$(printf '%s' "$branch" \
+                | tr '[:upper:]' '[:lower:]' \
+                | sed -e 's/[^a-z0-9._-][^a-z0-9._-]*/-/g' -e 's/^-*//' -e 's/-*$//')
+              if [ -z "$subdir" ]; then subdir="preview"; fi
+              ;;
+          esac
+          base="/${{ github.event.repository.name }}${subdir:+/$subdir}"
           {
             echo "branch=$branch"
             echo "subdir=$subdir"
@@ -158,6 +163,7 @@ jobs:
           BRANCH: ${{ steps.target.outputs.branch }}
           COMMIT_SHA: ${{ github.sha }}
           REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
+          REPO_NAME: ${{ github.event.repository.name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -179,12 +185,32 @@ jobs:
             # main owns the root. Clear the root's own files, but keep every
             # branch preview, which lives one level down in its own directory.
             find "$work" -mindepth 1 -maxdepth 1 -name '.git' -prune -o \
-              -name 'previews' -prune -o -exec rm -rf {} +
+              -exec rm -rf {} +
             cp -a frontend/out/. "$work"/
           else
             rm -rf "${work:?}/${SUBDIR:?}"
             mkdir -p "$work/$SUBDIR"
             cp -a frontend/out/. "$work/$SUBDIR"/
+          fi
+
+          # Seed the root from main if nothing has published there yet.
+          #
+          # Serving Pages from this branch means the root is whatever is
+          # committed here, and main still deploys through the old
+          # actions/deploy-pages path -- which Pages now ignores. Until main
+          # merges this workflow, the root would 404 and main's demo would go
+          # dark the moment the Pages source is switched over. Building it here
+          # costs one `npm ci` and only happens while that gap exists.
+          if [ ! -f "$work/index.html" ]; then
+            echo "gh-pages root is empty; building main's demo to fill it"
+            main_src="$(mktemp -d)"
+            git clone --depth 1 --branch main "$origin" "$main_src"
+            ( cd "$main_src/frontend" \
+              && npm ci --no-audit --no-fund \
+              && NEXT_PUBLIC_STATIC_DEMO=true NEXT_PUBLIC_BASE_PATH="/${REPO_NAME}" \
+                 npx next build )
+            cp -a "$main_src/frontend/out/." "$work"/
+            rm -rf "$main_src"
           fi
 
           # Pages needs this at the root whichever branch published.
