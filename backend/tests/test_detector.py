@@ -275,6 +275,18 @@ class TestScanEvents:
         assert scan_events([ev], kinds={ArbKind.DUTCH_YES}) == []
         assert len(scan_events([ev], kinds={ArbKind.BINARY_COMPLEMENT})) == 1
 
+    def test_an_empty_kind_set_means_none_not_all(self):
+        """`kinds or set(ArbKind)` treated an empty set as "unspecified".
+
+        An empty set is falsy, so asking for no detectors ran every detector --
+        the exact opposite of the request.
+        """
+        ev = event("polymarket", "e", "T", (binary("polymarket", "m", "A", "B", 0.48, 0.50),))
+        assert scan_events([ev], kinds=set()) == []
+        # None still means "everything", which is what the default relies on.
+        assert len(scan_events([ev], kinds=None)) == 1
+        assert len(scan_events([ev])) == 1
+
     def test_a_broken_event_does_not_stop_the_scan(self):
         good = event("polymarket", "g", "Good", (binary("polymarket", "g1", "A", "B", 0.48, 0.50),))
         empty = event("polymarket", "b", "Broken", (Market(key="binary", outcomes=()),))

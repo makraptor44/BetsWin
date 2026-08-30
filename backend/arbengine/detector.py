@@ -688,7 +688,10 @@ def scan(
 ) -> ScanResult:
     """Detection pass: opportunities, near misses, and what was ruled out."""
     kw = {"target_stake": target_stake, "venue_limits": venue_limits}
-    wanted = kinds or set(ArbKind)
+    # `kinds or set(ArbKind)` treated an EMPTY set as "unspecified", because an
+    # empty set is falsy -- so a caller asking for no kinds at all got every
+    # detector instead of none. Only `None` means "unspecified".
+    wanted = set(ArbKind) if kinds is None else kinds
     result = ScanResult()
 
     for ev in events:
