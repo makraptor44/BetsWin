@@ -1,5 +1,5 @@
 {
- "n": 7,
+ "n": 6,
  "params": {
   "days": 30,
   "min_margin": 0.001,
@@ -16,23 +16,23 @@
    "sportsbook": 0.03
   }
  },
- "turnover": 3156.4,
- "naive_profit": 93.68,
- "naive_yield": 0.029679381573945,
- "expected_profit": 45.84,
- "expected_yield": 0.01452287416043594,
- "median_profit": 93.68,
- "p5_profit": -94.33,
- "p95_profit": 93.68,
- "stdev_profit": 87.35,
- "worst_simulation": -262.46,
- "best_simulation": 93.68,
- "prob_loss": 0.245,
- "avg_margin": 0.032970965569271045,
- "effective_margin": 0.01893861773456605,
- "voids_modelled": 0.04214285714285715,
- "turnovers_per_year": 3.84,
- "annualised_return": 0.05577200000000001,
+ "turnover": 2656.4,
+ "naive_profit": 86.83,
+ "naive_yield": 0.03268709531697033,
+ "expected_profit": 48.27,
+ "expected_yield": 0.018171209155247704,
+ "median_profit": 86.83,
+ "p5_profit": -101.18,
+ "p95_profit": 86.83,
+ "stdev_profit": 73.51,
+ "worst_simulation": -258.92,
+ "best_simulation": 86.83,
+ "prob_loss": 0.215,
+ "avg_margin": 0.036185100341296766,
+ "effective_margin": 0.020776616575653988,
+ "voids_modelled": 0.045833333333333344,
+ "turnovers_per_year": 3.23,
+ "annualised_return": 0.0587285,
  "by_kind": [
   {
    "kind": "dutch_yes",
@@ -65,16 +65,6 @@
    "expected_profit": 4.97
   },
   {
-   "kind": "dutch_no",
-   "n": 1,
-   "turnover": 500.0,
-   "naive_profit": 6.84,
-   "void_rate": 0.02,
-   "avg_margin": 0.013686156937116722,
-   "effective_margin": 0.007412433798374387,
-   "expected_profit": 3.71
-  },
-  {
    "kind": "correlation",
    "n": 1,
    "turnover": 156.46,
@@ -87,50 +77,44 @@
  ],
  "equity_curve": [
   {
-   "at": "2026-08-30T19:19:47.759818+00:00",
+   "at": "2026-08-30T19:58:42.414728+00:00",
    "equity": 8.13,
    "kind": "binary_complement",
    "voided": false
   },
   {
-   "at": "2026-08-30T19:19:47.760249+00:00",
+   "at": "2026-08-30T19:58:42.415006+00:00",
    "equity": 26.26,
    "kind": "dutch_yes",
    "voided": false
   },
   {
-   "at": "2026-08-30T19:19:47.760599+00:00",
-   "equity": 33.11,
-   "kind": "dutch_no",
-   "voided": false
-  },
-  {
-   "at": "2026-08-30T19:19:47.760824+00:00",
-   "equity": 38.03,
+   "at": "2026-08-30T19:58:42.415662+00:00",
+   "equity": 31.19,
    "kind": "dutch_yes",
    "voided": false
   },
   {
-   "at": "2026-08-30T19:19:47.762008+00:00",
-   "equity": 45.77,
+   "at": "2026-08-30T19:58:42.416640+00:00",
+   "equity": 38.93,
    "kind": "cross_venue",
    "voided": false
   },
   {
-   "at": "2026-08-30T19:19:47.762657+00:00",
-   "equity": 83.79,
+   "at": "2026-08-30T19:58:42.417168+00:00",
+   "equity": 76.94,
    "kind": "cross_venue",
    "voided": false
   },
   {
-   "at": "2026-08-30T19:19:47.778424+00:00",
-   "equity": 93.68,
+   "at": "2026-08-30T19:58:42.433171+00:00",
+   "equity": 86.83,
    "kind": "correlation",
    "voided": false
   }
  ],
  "notes": [
-  "Voids remove 51% of the naive edge. Part I s13.3: this is the number that matters.",
-  "24% of simulated runs finished negative. Arbitrage is only risk-free if every leg settles."
+  "Voids remove 44% of the naive edge. Part I s13.3: this is the number that matters.",
+  "22% of simulated runs finished negative. Arbitrage is only risk-free if every leg settles."
  ]
 }

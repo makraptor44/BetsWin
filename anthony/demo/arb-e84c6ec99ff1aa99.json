@@ -111,12 +111,12 @@
   "notes": [
    "Broadly available, but not from US -- at least one venue turns those away."
   ],
-  "detected_at": "2026-08-30T19:19:47.760249Z",
-  "close_time": "2026-12-28T19:19:50.449014Z",
-  "last_seen": "2026-08-30T19:19:51.591726Z",
+  "detected_at": "2026-08-30T19:58:42.415006Z",
+  "close_time": "2026-12-28T19:58:44.716366Z",
+  "last_seen": "2026-08-30T19:58:45.869690Z",
   "is_suspect": false,
   "roi_pct": 3.624144965798632,
-  "hours_to_close": 2879.9996793163887
+  "hours_to_close": 2879.999676429167
  },
  "payout_matrix": [
   {
