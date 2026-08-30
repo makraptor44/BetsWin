@@ -268,58 +268,102 @@ class ArbStore:
     # ------------------------------------------------------------------ arbs
 
     def upsert_arb(self, arb: Arb) -> int:
-        """Insert a new arb, or refresh `last_seen` if it is the same opportunity.
+        """Insert a new arb, or refresh the existing row for the same opportunity.
 
         Deduping on the leg signature means a price that persists across cycles
         is one row with a moving `last_seen`, not a thousand near-duplicates.
+
+        The whole thing runs inside one transaction, under one acquisition of
+        the lock. It used to SELECT through `_rows` and then INSERT through
+        `_exec`, each taking the lock separately -- and the store is driven from
+        `asyncio.to_thread`, so two workers could both see "no existing row" and
+        both insert.
+
+        The UPDATE branch refreshes the full payload, not just `last_seen`,
+        `net_margin` and `confidence`. Leaving `legs_json`, `total_stake`,
+        `profit` and `book` at their first-seen values meant a placement
+        recorded against a long-lived opportunity was attached to stale legs.
         """
         key = arb.dedupe_key()
-        existing = self._rows(
-            "SELECT id FROM arbs WHERE arb_key = ? ORDER BY id DESC LIMIT 1", (key,)
-        )
-        if existing:
-            arb_id = int(existing[0]["id"])
-            self._write(
-                "UPDATE arbs SET last_seen = ?, net_margin = ?, confidence = ? WHERE id = ?",
-                (_iso(arb.last_seen), arb.net_margin, arb.confidence, arb_id),
-            )
-            return arb_id
+        legs_json = json.dumps([l.model_dump(mode="json") for l in arb.legs])
+        flags_json = json.dumps([f.value for f in arb.flags])
+        venues_json = json.dumps(list(arb.venues))
 
-        legs = [l.model_dump(mode="json") for l in arb.legs]
-        return self._exec(
-            """INSERT INTO arbs
-               (arb_key, kind, strategy, title, category, venues, zone, currency,
-                market_key, detected_at,
-                last_seen, close_time, book, margin, net_margin, total_stake,
-                profit, worst_case_profit, max_stake, confidence, flags,
-                legs_json, payload_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                key,
-                arb.kind.value,
-                arb.strategy,
-                arb.title,
-                arb.category,
-                json.dumps(list(arb.venues)),
-                arb.zone,
-                arb.currency,
-                arb.market_key,
-                _iso(arb.detected_at),
-                _iso(arb.last_seen),
-                _iso(arb.close_time),
-                arb.book,
-                arb.margin,
-                arb.net_margin,
-                arb.total_stake,
-                arb.profit,
-                arb.worst_case_profit,
-                arb.max_stake_available,
-                arb.confidence,
-                json.dumps([f.value for f in arb.flags]),
-                json.dumps(legs),
-                arb.model_dump_json(),
-            ),
-        )
+        with self._lock:
+            try:
+                cur = self.conn.execute("BEGIN IMMEDIATE")
+                row = self.conn.execute(
+                    "SELECT id FROM arbs WHERE arb_key = ? ORDER BY id DESC LIMIT 1",
+                    (key,),
+                ).fetchone()
+
+                if row is not None:
+                    arb_id = int(row["id"])
+                    self.conn.execute(
+                        """UPDATE arbs SET
+                               last_seen = ?, net_margin = ?, confidence = ?,
+                               margin = ?, book = ?, total_stake = ?, profit = ?,
+                               worst_case_profit = ?, max_stake = ?,
+                               flags = ?, legs_json = ?, payload_json = ?
+                           WHERE id = ?""",
+                        (
+                            _iso(arb.last_seen),
+                            arb.net_margin,
+                            arb.confidence,
+                            arb.margin,
+                            arb.book,
+                            arb.total_stake,
+                            arb.profit,
+                            arb.worst_case_profit,
+                            arb.max_stake_available,
+                            flags_json,
+                            legs_json,
+                            arb.model_dump_json(),
+                            arb_id,
+                        ),
+                    )
+                    self.conn.commit()
+                    return arb_id
+
+                cur = self.conn.execute(
+                    """INSERT INTO arbs
+                       (arb_key, kind, strategy, title, category, venues, zone,
+                        currency, market_key, detected_at,
+                        last_seen, close_time, book, margin, net_margin,
+                        total_stake, profit, worst_case_profit, max_stake,
+                        confidence, flags, legs_json, payload_json)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        key,
+                        arb.kind.value,
+                        arb.strategy,
+                        arb.title,
+                        arb.category,
+                        venues_json,
+                        arb.zone,
+                        arb.currency,
+                        arb.market_key,
+                        _iso(arb.detected_at),
+                        _iso(arb.last_seen),
+                        _iso(arb.close_time),
+                        arb.book,
+                        arb.margin,
+                        arb.net_margin,
+                        arb.total_stake,
+                        arb.profit,
+                        arb.worst_case_profit,
+                        arb.max_stake_available,
+                        arb.confidence,
+                        flags_json,
+                        legs_json,
+                        arb.model_dump_json(),
+                    ),
+                )
+                self.conn.commit()
+                return int(cur.lastrowid or 0)
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def recent_arbs(
         self,

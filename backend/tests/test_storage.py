@@ -71,3 +71,49 @@ class TestForeignKeys:
         store.prune(-1)
         assert store.placements_for(row_id) == []
         assert store.arb_by_id(row_id) is None
+
+
+class TestUpsertIsAtomicAndFresh:
+    def test_concurrent_upserts_of_one_arb_make_one_row(self, store):
+        """The read and the write used to take the lock separately.
+
+        The store is driven from asyncio.to_thread, so two workers could both
+        see "no existing row" and both insert.
+        """
+        import concurrent.futures as cf
+
+        from tests.test_placements import _sample_arb
+
+        arb = _sample_arb()
+        with cf.ThreadPoolExecutor(max_workers=8) as pool:
+            ids = list(pool.map(lambda _: store.upsert_arb(arb), range(32)))
+
+        assert len(set(ids)) == 1, f"expected one row, got {sorted(set(ids))}"
+        rows = store._rows("SELECT COUNT(*) n FROM arbs")
+        assert rows[0]["n"] == 1
+
+    def test_an_update_refreshes_the_legs_not_just_last_seen(self, store):
+        """A placement must never attach to legs from the first sighting."""
+        from tests.test_placements import _sample_arb
+
+        arb = _sample_arb()
+        row_id = store.upsert_arb(arb)
+
+        # Same dedupe key (venue/market/outcome/effective_price unchanged),
+        # but the sizing has moved.
+        bigger = arb.model_copy(
+            update={
+                "legs": tuple(l.model_copy(update={"stake": 500.0}) for l in arb.legs),
+                "total_stake": 1000.0,
+                "worst_case_profit": 31.0,
+            }
+        )
+        assert bigger.dedupe_key() == arb.dedupe_key()
+        assert store.upsert_arb(bigger) == row_id
+
+        import json as _json
+
+        row = store.arb_by_id(row_id)
+        assert row["total_stake"] == 1000.0
+        assert row["worst_case_profit"] == 31.0
+        assert all(l["stake"] == 500.0 for l in _json.loads(row["legs_json"]))
