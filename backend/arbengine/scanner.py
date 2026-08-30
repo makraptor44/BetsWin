@@ -312,11 +312,26 @@ class Scanner:
         self._near_misses = result.near_misses
         self._cross_zone_rejected = result.cross_zone_rejected
 
+        # The breaker is a halt, not a filter. `record` returns the sticky
+        # `tripped` flag, so breaking out of this loop on it meant that once it
+        # had fired, EVERY later cycle bailed on its first opportunity and
+        # silently dropped the rest -- for as long as the process ran, with the
+        # scan loop still turning as though nothing were wrong. Feed the whole
+        # batch, then decide once.
+        enforce_breaker = not settings.demo_mode
+        for arb in found:
+            self.breaker.record(arb)
+
+        if enforce_breaker and self.breaker.tripped:
+            stats.breaker_tripped = True
+            stats.errors.append(f"circuit breaker: {self.breaker.reason}")
+            # Publish nothing and retire nothing: the tape is not trustworthy,
+            # and a half-applied update is worse than a stale one.
+            await self._halt_on_breaker(stats, t0)
+            return []
+
         fresh: list[Arb] = []
         for arb in found:
-            if self.breaker.record(arb) and settings.demo_mode is False:
-                stats.breaker_tripped = True
-                break
             existing = self._live.get(arb.id)
             if existing is not None:
                 arb = arb.model_copy(
@@ -390,6 +405,35 @@ class Scanner:
         )
         return fresh
 
+    async def _halt_on_breaker(self, stats: ScanStats, t0: float) -> None:
+        """Stop scanning and say so, loudly.
+
+        Part II s16.4 calls for halting and paging a human. The breaker used to
+        set a flag and let the loop keep running, which is the one response that
+        combines "we know the feed is wrong" with "carry on regardless".
+        """
+        stats.finished_at = utcnow()
+        stats.duration_seconds = round(time.monotonic() - t0, 3)
+        self.last_scan = stats
+        self._running = False
+
+        logger.critical(
+            "scanner halted by the circuit breaker -- "
+            f"{self.breaker.reason} "
+            "Investigate the feed, then POST /api/scanner/reset-breaker and "
+            "/api/scanner/start."
+        )
+        await self.alerts.publish(
+            {
+                "type": "breaker",
+                "data": {
+                    "reason": self.breaker.reason,
+                    "stats": stats.model_dump(mode="json"),
+                    "status": self.status().model_dump(mode="json"),
+                },
+            }
+        )
+
     async def _record_prices(self, events: Sequence[Event]) -> None:
         """Snapshot best prices so slow venues can be identified later."""
         rows: list[tuple[str, str, str, float]] = []
@@ -420,6 +464,11 @@ class Scanner:
                 raise
             except Exception as exc:  # noqa: BLE001 - the loop must survive anything
                 logger.exception(f"scan cycle failed: {exc}")
+
+            # `scan_once` clears this when the breaker halts the engine; leave
+            # immediately rather than sleeping out a full interval first.
+            if not self._running:
+                break
 
             cycles += 1
             if cycles % 40 == 0:
