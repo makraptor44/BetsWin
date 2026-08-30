@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 const LINKS = [
   { href: "/", label: "Opportunities" },
@@ -37,7 +38,7 @@ export function Nav() {
     <header
       className="sticky top-0 z-40 border-b backdrop-blur"
       style={{
-        background: "color-mix(in srgb, var(--bg) 88%, transparent)",
+        background: "color-mix(in srgb, var(--background) 88%, transparent)",
         borderColor: "var(--border)",
       }}
     >
@@ -45,17 +46,10 @@ export function Nav() {
         <div className="flex items-center gap-5 h-14">
           <Link
             href="/"
-            className="flex items-center gap-2.5 shrink-0"
-            style={{ textDecoration: "none", color: "var(--text)" }}
+            className="flex items-center gap-2.5 shrink-0 no-underline text-foreground"
           >
             <span
-              className="flex items-center justify-center rounded-md font-bold text-[13px]"
-              style={{
-                width: 26,
-                height: 26,
-                background: "var(--accent)",
-                color: "#fff",
-              }}
+              className="flex items-center justify-center rounded-md font-bold text-[13px] text-white bg-brand w-[26px] h-[26px]"
               aria-hidden
             >
               B
@@ -76,8 +70,8 @@ export function Nav() {
                   className="px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
                   style={{
                     textDecoration: "none",
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                    background: active ? "var(--bg-sunken)" : "transparent",
+                    color: active ? "var(--foreground)" : "var(--muted-foreground)",
+                    background: active ? "var(--muted)" : "transparent",
                   }}
                 >
                   {l.label}
@@ -87,28 +81,18 @@ export function Nav() {
           </nav>
 
           <div className="flex items-center gap-2 ml-auto">
-            <button
-              className="btn btn-sm"
-              onClick={toggleTheme}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            >
+            <Button size="sm" variant="outline" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} >
               {mounted ? (theme === "dark" ? "☀" : "☾") : "·"}
-            </button>
-            <button
-              className="btn btn-sm md:hidden"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="Toggle navigation"
-              aria-expanded={menuOpen}
-            >
+            </Button>
+            <Button size="sm" variant="outline" className="md:hidden" onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle navigation" aria-expanded={menuOpen} >
               ☰
-            </button>
+            </Button>
           </div>
         </div>
 
         {menuOpen && (
           <nav
-            className="md:hidden pb-3 flex flex-col gap-1 slide-in"
+            className="md:hidden pb-3 flex flex-col gap-1 animate-in fade-in slide-in-from-top-1 duration-200"
             aria-label="Mobile navigation"
           >
             {LINKS.map((l) => {
@@ -122,8 +106,8 @@ export function Nav() {
                   className="px-3 py-2 rounded-lg text-sm font-medium"
                   style={{
                     textDecoration: "none",
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                    background: active ? "var(--bg-sunken)" : "transparent",
+                    color: active ? "var(--foreground)" : "var(--muted-foreground)",
+                    background: active ? "var(--muted)" : "transparent",
                   }}
                 >
                   {l.label}

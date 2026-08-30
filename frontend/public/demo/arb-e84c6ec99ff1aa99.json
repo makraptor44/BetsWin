@@ -2,6 +2,7 @@
  "arb": {
   "id": "e84c6ec99ff1aa99",
   "kind": "dutch_yes",
+  "strategy": "arbitrage",
   "title": "2028 Presidential nominee - buy every outcome",
   "category": "politics",
   "venues": [
@@ -107,13 +108,15 @@
   "max_stake_available": 12636.4,
   "confidence": 100,
   "flags": [],
-  "notes": [],
-  "detected_at": "2026-08-29T13:14:26.261439Z",
-  "close_time": "2026-12-27T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153621Z",
+  "notes": [
+   "Broadly available, but not from US -- at least one venue turns those away."
+  ],
+  "detected_at": "2026-08-30T13:58:14.530037Z",
+  "close_time": "2026-12-28T13:58:17.642652Z",
+  "last_seen": "2026-08-30T13:58:19.103765Z",
   "is_suspect": false,
   "roi_pct": 3.624144965798632,
-  "hours_to_close": 2879.999086253611
+  "hours_to_close": 2879.999589328889
  },
  "payout_matrix": [
   {
@@ -165,6 +168,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.02954,
   "kelly_arb_fraction": 2.7152,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.31606,
    0.28601,

@@ -189,7 +189,7 @@ export const signedMoney = (n: number, currency: string, dp = 2) =>
 
 
 export function venueColor(venue: string): string {
-  return `var(--venue-${venue}, var(--text-muted))`;
+  return `var(--venue-${venue}, var(--muted-foreground))`;
 }
 
 /**

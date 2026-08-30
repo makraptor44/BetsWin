@@ -1,50 +1,14 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+"""Generate frontend/app/globals.css.
 
-/*
-  BetsWin design tokens.
+The dark palette has to appear under two selectors -- the prefers-colour-scheme
+media query and the explicit data-theme override -- and CSS has no way to share
+one block between them. Generating the file means the two copies cannot drift.
+"""
+import pathlib
 
-  Everything visual comes from here or from shadcn/ui. There are no bespoke
-  `.btn` / `.card` / `.chip` primitives any more, and no inline style props in
-  the components -- both were reimplementing a component library by hand.
+OUT = pathlib.Path(__file__).resolve().parents[1] / "app" / "globals.css"
 
-  The palette is deliberately narrow: one accent for interactive affordances,
-  and a semantic ramp (positive / caution / danger) reserved exclusively for
-  RISK, so a colour always means the same thing. Margins are never coloured by
-  size alone -- a fat margin is a warning, not a win (Part I s5.3).
-
-  Theming has three states, and all three have to work:
-
-    - no preference expressed  -> follow the operating system
-    - data-theme="light"       -> light, even on a dark OS
-    - data-theme="dark"        -> dark, even on a light OS
-
-  The previous file declared its palette three times and had no
-  prefers-color-scheme query at all, so a light-mode visitor got a dark
-  dashboard until they found the toggle. The dark block below is duplicated
-  across two selectors because CSS cannot share one declaration block between a
-  media query and an attribute selector; both copies are generated from a single
-  source in scripts/gen_globals.py, so they cannot drift.
-*/
-
-/* Tailwind's `dark:` variant has to agree with the palette above: on for an
-   explicit dark choice, and on for a dark OS unless light was chosen. */
-@custom-variant dark {
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme="light"]) *) {
-      @slot;
-    }
-  }
-  &:where(:root[data-theme="dark"] *) {
-    @slot;
-  }
-}
-
-/* Light is the base. */
-:root {
-  --radius: 0.625rem;
-
+LIGHT = """
   /* shadcn surface + text scale */
   --background: oklch(0.985 0.002 250);
   --foreground: oklch(0.205 0.012 260);
@@ -97,63 +61,9 @@
   --chart-3: oklch(0.58 0.12 75);
   --chart-4: oklch(0.55 0.20 288);
   --chart-5: oklch(0.52 0.12 175);
-}
+"""
 
-/* A dark OS, unless light was explicitly chosen. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-
-    --background: oklch(0.17 0.011 265);
-    --foreground: oklch(0.93 0.006 258);
-    --card: oklch(0.213 0.012 265);
-    --card-foreground: oklch(0.93 0.006 258);
-    --popover: oklch(0.213 0.012 265);
-    --popover-foreground: oklch(0.93 0.006 258);
-    --primary: oklch(0.70 0.15 268);
-    --primary-foreground: oklch(0.17 0.011 265);
-    --secondary: oklch(0.26 0.013 265);
-    --secondary-foreground: oklch(0.93 0.006 258);
-    --muted: oklch(0.253 0.013 265);
-    --muted-foreground: oklch(0.70 0.014 258);
-    --accent: oklch(0.28 0.014 265);
-    --accent-foreground: oklch(0.93 0.006 258);
-    --destructive: oklch(0.70 0.17 25);
-    --border: oklch(0.30 0.014 265);
-    --input: oklch(0.30 0.014 265);
-    --ring: oklch(0.70 0.15 268);
-
-    --brand: oklch(0.72 0.14 268);
-    --brand-foreground: oklch(0.17 0.011 265);
-    --brand-soft: oklch(0.72 0.14 268 / 0.16);
-
-    --positive: oklch(0.78 0.16 158);
-    --positive-soft: oklch(0.78 0.16 158 / 0.14);
-    --caution: oklch(0.80 0.14 78);
-    --caution-soft: oklch(0.80 0.14 78 / 0.15);
-    --danger: oklch(0.70 0.17 25);
-    --danger-soft: oklch(0.70 0.17 25 / 0.15);
-    --neutral-soft: oklch(0.70 0.014 258 / 0.12);
-
-    --faint: oklch(0.58 0.013 258);
-
-    --venue-polymarket: oklch(0.74 0.15 288);
-    --venue-kalshi: oklch(0.78 0.13 175);
-    --venue-sportsbook: oklch(0.76 0.14 50);
-    --venue-smarkets: oklch(0.74 0.13 250);
-    --venue-betfair: oklch(0.82 0.13 90);
-
-    --chart-1: oklch(0.72 0.14 268);
-    --chart-2: oklch(0.78 0.16 158);
-    --chart-3: oklch(0.80 0.14 78);
-    --chart-4: oklch(0.74 0.15 288);
-    --chart-5: oklch(0.78 0.13 175);
-  }
-}
-
-/* An explicit dark choice beats a light OS. Kept identical to the
-   block above -- see the note at the top of this file. */
-:root[data-theme="dark"] {
-
+DARK = """
   --background: oklch(0.17 0.011 265);
   --foreground: oklch(0.93 0.006 258);
   --card: oklch(0.213 0.012 265);
@@ -198,8 +108,53 @@
   --chart-3: oklch(0.80 0.14 78);
   --chart-4: oklch(0.74 0.15 288);
   --chart-5: oklch(0.78 0.13 175);
-}
+"""
 
+HEADER = '''@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+  BetsWin design tokens.
+
+  Everything visual comes from here or from shadcn/ui. There are no bespoke
+  `.btn` / `.card` / `.chip` primitives any more, and no inline style props in
+  the components -- both were reimplementing a component library by hand.
+
+  The palette is deliberately narrow: one accent for interactive affordances,
+  and a semantic ramp (positive / caution / danger) reserved exclusively for
+  RISK, so a colour always means the same thing. Margins are never coloured by
+  size alone -- a fat margin is a warning, not a win (Part I s5.3).
+
+  Theming has three states, and all three have to work:
+
+    - no preference expressed  -> follow the operating system
+    - data-theme="light"       -> light, even on a dark OS
+    - data-theme="dark"        -> dark, even on a light OS
+
+  The previous file declared its palette three times and had no
+  prefers-color-scheme query at all, so a light-mode visitor got a dark
+  dashboard until they found the toggle. The dark block below is duplicated
+  across two selectors because CSS cannot share one declaration block between a
+  media query and an attribute selector; both copies are generated from a single
+  source in scripts/gen_globals.py, so they cannot drift.
+*/
+
+/* Tailwind's `dark:` variant has to agree with the palette above: on for an
+   explicit dark choice, and on for a dark OS unless light was chosen. */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+  &:where(:root[data-theme="dark"] *) {
+    @slot;
+  }
+}
+'''
+
+THEME = """
 /* Expose the tokens as Tailwind utilities: `text-muted-foreground`,
    `bg-positive-soft`, `border-border`, `text-venue-kalshi`, and so on. */
 @theme inline {
@@ -326,3 +281,33 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
+"""
+
+
+def build() -> str:
+    light = LIGHT.rstrip()
+    dark = DARK.rstrip()
+    dark_indented = "\n".join(
+        ("  " + line) if line.strip() else line for line in dark.splitlines()
+    )
+    return (
+        HEADER
+        + "\n/* Light is the base. */\n:root {\n  --radius: 0.625rem;\n"
+        + light
+        + "\n}\n"
+        + "\n/* A dark OS, unless light was explicitly chosen. */\n"
+        + "@media (prefers-color-scheme: dark) {\n"
+        + '  :root:not([data-theme="light"]) {\n'
+        + dark_indented
+        + "\n  }\n}\n"
+        + "\n/* An explicit dark choice beats a light OS. Kept identical to the\n"
+        + "   block above -- see the note at the top of this file. */\n"
+        + ':root[data-theme="dark"] {\n'
+        + dark
+        + "\n}\n"
+        + THEME
+    )
+
+
+OUT.write_text(build(), encoding="utf-8")
+print(f"wrote {OUT.name}: {len(build().splitlines())} lines")

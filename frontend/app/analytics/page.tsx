@@ -3,7 +3,11 @@
 import { useState } from "react";
 
 import { BarChart, Histogram, LineChart, ProportionBar } from "@/components/charts";
-import { Card, EmptyState, ErrorState, Field, SectionTitle, Skeleton, Stat } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, EmptyState, ErrorState, Field, SectionTitle, Skeleton, Stat,
+  NativeSelect,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import {
   KIND_LABEL,
@@ -15,6 +19,14 @@ import {
 } from "@/lib/format";
 import type { ArbKind, BacktestResult, ZoneKey } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function AnalyticsPage() {
   const [days, setDays] = useState(30);
@@ -28,23 +40,17 @@ export default function AnalyticsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Analytics</h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm mt-0.5 text-muted-foreground">
             What the scanner has found over time, and what it would actually have
             paid once voided legs are priced in.
           </p>
         </div>
-        <select
-          className="input"
-          style={{ width: 150 }}
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-          aria-label="Time window"
-        >
+        <NativeSelect className="w-[150px]" value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Time window" >
           <option value={1}>Last 24 hours</option>
           <option value={7}>Last 7 days</option>
           <option value={30}>Last 30 days</option>
           <option value={90}>Last 90 days</option>
-        </select>
+        </NativeSelect>
       </header>
 
       {error && <ErrorState message={error} onRetry={reload} />}
@@ -123,43 +129,42 @@ export default function AnalyticsPage() {
                 />
               </div>
               <div className="scroll-x">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Zone</th>
-                      <th style={{ textAlign: "right" }}>Detected</th>
-                      <th style={{ textAlign: "right" }}>Avg margin</th>
-                      <th style={{ textAlign: "right" }}>Turnover</th>
-                      <th style={{ textAlign: "right" }}>Theoretical profit</th>
-                      <th style={{ textAlign: "right" }}>Live now</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="w-full border-collapse text-[13px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Zone</TableHead>
+                      <TableHead className="text-right">Detected</TableHead>
+                      <TableHead className="text-right">Avg margin</TableHead>
+                      <TableHead className="text-right">Turnover</TableHead>
+                      <TableHead className="text-right">Theoretical profit</TableHead>
+                      <TableHead className="text-right">Live now</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.stored.by_zone.map((z) => (
-                      <tr key={z.zone}>
-                        <td>{ZONE_LABEL[z.zone as ZoneKey] ?? z.zone}</td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                      <TableRow key={z.zone}>
+                        <TableCell>{ZONE_LABEL[z.zone as ZoneKey] ?? z.zone}</TableCell>
+                        <TableCell className="tabular text-right">
                           {z.n}
-                        </td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                        </TableCell>
+                        <TableCell className="tabular text-right">
                           {pct(z.avg_margin ?? 0)}
-                        </td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                        </TableCell>
+                        <TableCell className="tabular text-right">
                           {usdCompact(z.turnover ?? 0)}
-                        </td>
-                        <td
-                          className="mono num-positive"
-                          style={{ textAlign: "right" }}
+                        </TableCell>
+                        <TableCell
+                          className="tabular text-positive text-right"
                         >
                           {usd(z.profit ?? 0)}
-                        </td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                        </TableCell>
+                        <TableCell className="tabular text-right">
                           {data.live.by_zone?.[z.zone] ?? 0}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           )}
@@ -173,7 +178,7 @@ export default function AnalyticsPage() {
                     label: KIND_LABEL[k as ArbKind] ?? k,
                     value: v,
                     color: [
-                      "var(--accent)",
+                      "var(--brand)",
                       "var(--positive)",
                       "var(--caution)",
                       "var(--venue-polymarket)",
@@ -182,7 +187,7 @@ export default function AnalyticsPage() {
                   }))}
                 />
               ) : (
-                <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                <p className="text-xs text-faint">
                   Nothing live at the moment.
                 </p>
               )}
@@ -198,7 +203,7 @@ export default function AnalyticsPage() {
                     }))}
                   />
                 ) : (
-                  <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                  <p className="text-xs text-faint">
                     Nothing live at the moment.
                   </p>
                 )}
@@ -250,35 +255,34 @@ export default function AnalyticsPage() {
                 <SectionTitle title="By opportunity type" />
               </div>
               <div className="scroll-x">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Type</th>
-                      <th style={{ textAlign: "right" }}>Count</th>
-                      <th style={{ textAlign: "right" }}>Avg margin</th>
-                      <th style={{ textAlign: "right" }}>Theoretical profit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="w-full border-collapse text-[13px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Count</TableHead>
+                      <TableHead className="text-right">Avg margin</TableHead>
+                      <TableHead className="text-right">Theoretical profit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.stored.by_kind.map((k) => (
-                      <tr key={k.kind}>
-                        <td>{KIND_LABEL[k.kind as ArbKind] ?? k.kind}</td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                      <TableRow key={k.kind}>
+                        <TableCell>{KIND_LABEL[k.kind as ArbKind] ?? k.kind}</TableCell>
+                        <TableCell className="tabular text-right">
                           {k.n}
-                        </td>
-                        <td className="mono" style={{ textAlign: "right" }}>
+                        </TableCell>
+                        <TableCell className="tabular text-right">
                           {pct(k.avg_margin)}
-                        </td>
-                        <td
-                          className="mono num-positive"
-                          style={{ textAlign: "right" }}
+                        </TableCell>
+                        <TableCell
+                          className="tabular text-positive text-right"
                         >
                           {usd(k.profit)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           )}
@@ -293,13 +297,12 @@ export default function AnalyticsPage() {
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div
-      className="rounded-lg px-2.5 py-2"
-      style={{ background: "var(--bg-sunken)" }}
+      className="rounded-lg px-2.5 py-2 bg-muted"
     >
-      <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
+      <div className="text-[10px] uppercase tracking-wide text-faint">
         {label}
       </div>
-      <div className="mono text-sm font-semibold">{value}</div>
+      <div className="tabular text-sm font-semibold">{value}</div>
     </div>
   );
 }
@@ -339,54 +342,24 @@ function Backtester() {
         title="Backtest"
         hint="Replays stored opportunities under a void model. A leg that gets voided leaves the rest of the set unhedged, which is what turns a nominal edge into a real one."
         action={
-          <button className="btn btn-primary btn-sm" onClick={run} disabled={busy}>
+          <Button size="sm" onClick={run} disabled={busy}>
             {busy ? "Running…" : "Run backtest"}
-          </button>
+          </Button>
         }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <Field label="Window (days)">
-          <input
-            className="input mono"
-            type="number"
-            min={1}
-            max={365}
-            value={days}
-            onChange={(e) => setDays(Number(e.target.value) || 1)}
-          />
+          <Input className="tabular" type="number" min={1} max={365} value={days} onChange={(e) => setDays(Number(e.target.value) || 1)} />
         </Field>
         <Field label="Min margin %">
-          <input
-            className="input mono"
-            type="number"
-            step="0.1"
-            min={0}
-            value={minMargin}
-            onChange={(e) => setMinMargin(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="0.1" min={0} value={minMargin} onChange={(e) => setMinMargin(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Void rate %" hint="chance a leg is voided">
-          <input
-            className="input mono"
-            type="number"
-            step="0.5"
-            min={0}
-            max={100}
-            value={voidRate}
-            onChange={(e) => setVoidRate(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="0.5" min={0} max={100} value={voidRate} onChange={(e) => setVoidRate(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Void loss %" hint="of stake, when it happens">
-          <input
-            className="input mono"
-            type="number"
-            step="5"
-            min={0}
-            max={100}
-            value={voidLoss}
-            onChange={(e) => setVoidLoss(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="5" min={0} max={100} value={voidLoss} onChange={(e) => setVoidLoss(Number(e.target.value) || 0)} />
         </Field>
       </div>
 
@@ -459,16 +432,14 @@ function Backtester() {
 
           {result.notes.length > 0 && (
             <ul
-              className="flex flex-col gap-2 mt-4 pt-3 pl-0 m-0"
-              style={{ listStyle: "none", borderTop: "1px solid var(--border)" }}
+              className="flex flex-col gap-2 mt-4 pt-3 pl-0 m-0 border-t border-border list-none"
             >
-              {result.notes.map((n, i) => (
+              {result.notes.map((n) => (
                 <li
-                  key={i}
-                  className="text-xs flex gap-2 leading-relaxed"
-                  style={{ color: "var(--text-muted)" }}
+                  key={n}
+                  className="text-xs flex gap-2 leading-relaxed text-muted-foreground"
                 >
-                  <span style={{ color: "var(--caution)" }} aria-hidden>
+                  <span className="text-caution" aria-hidden>
                     •
                   </span>
                   {n}

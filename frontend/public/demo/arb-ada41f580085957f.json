@@ -2,6 +2,7 @@
  "arb": {
   "id": "ada41f580085957f",
   "kind": "binary_complement",
+  "strategy": "arbitrage",
   "title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
   "category": "economics",
   "venues": [
@@ -67,13 +68,15 @@
   "max_stake_available": 19304.04,
   "confidence": 100,
   "flags": [],
-  "notes": [],
-  "detected_at": "2026-08-29T13:14:26.261224Z",
-  "close_time": "2026-10-13T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153641Z",
+  "notes": [
+   "Broadly available, but not from US -- at least one venue turns those away."
+  ],
+  "detected_at": "2026-08-30T13:58:14.529844Z",
+  "close_time": "2026-10-14T13:58:17.642652Z",
+  "last_seen": "2026-08-30T13:58:19.103779Z",
   "is_suspect": false,
   "roi_pct": 1.6260325206504131,
-  "hours_to_close": 1079.9990858852777
+  "hours_to_close": 1079.999588975
  },
  "payout_matrix": [
   {
@@ -107,6 +110,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.00993,
   "kelly_arb_fraction": 2.0367,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.46951,
    0.53049

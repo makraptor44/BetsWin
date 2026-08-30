@@ -16,14 +16,13 @@ export interface Point {
 }
 
 const AXIS = "var(--border)";
-const MUTED = "var(--text-faint)";
 
 /* ------------------------------------------------------------- bar chart */
 
 export function BarChart({
   data,
   height = 160,
-  color = "var(--accent)",
+  color = "var(--brand)",
   valueFormat = (v: number) => v.toFixed(0),
   emptyMessage = "No data yet",
 }: {
@@ -39,7 +38,7 @@ export function BarChart({
   const barW = 100 / data.length;
 
   return (
-    <div style={{ width: "100%" }}>
+    <div className="w-full">
       <svg
         viewBox={`0 0 100 ${height}`}
         preserveAspectRatio="none"
@@ -65,7 +64,7 @@ export function BarChart({
         })}
         <line x1="0" y1={height} x2="100" y2={height} stroke={AXIS} strokeWidth="0.5" />
       </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
+      <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
         <span>{data[0].label}</span>
         {data.length > 2 && <span>{data[Math.floor(data.length / 2)].label}</span>}
         <span>{data[data.length - 1].label}</span>
@@ -79,7 +78,7 @@ export function BarChart({
 export function LineChart({
   data,
   height = 180,
-  color = "var(--accent)",
+  color = "var(--brand)",
   fill = true,
   valueFormat = (v: number) => v.toFixed(2),
   zeroLine = false,
@@ -123,7 +122,7 @@ export function LineChart({
   const zeroY = y(0);
 
   return (
-    <div style={{ width: "100%" }}>
+    <div className="w-full">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
@@ -159,9 +158,9 @@ export function LineChart({
           strokeLinecap="round"
         />
       </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
+      <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
         <span>{data[0].label}</span>
-        <span className="mono">
+        <span className="tabular">
           {valueFormat(dataMin)} … {valueFormat(dataMax)}
         </span>
         <span>{data[data.length - 1].label}</span>
@@ -176,7 +175,7 @@ export function Sparkline({
   values,
   width = 90,
   height = 22,
-  color = "var(--accent)",
+  color = "var(--brand)",
 }: {
   values: number[];
   width?: number;
@@ -191,7 +190,7 @@ export function Sparkline({
     .map((v, i) => `${(i / (values.length - 1)) * width},${height - ((v - min) / span) * height}`)
     .join(" ");
   return (
-    <svg width={width} height={height} style={{ display: "block" }} aria-hidden>
+    <svg className="block" width={width} height={height} aria-hidden>
       <polyline
         points={pts}
         fill="none"
@@ -222,7 +221,7 @@ export function Histogram({
   const barW = 100 / buckets.length;
 
   return (
-    <div style={{ width: "100%" }}>
+    <div className="w-full">
       <svg
         viewBox={`0 0 100 ${height}`}
         preserveAspectRatio="none"
@@ -234,10 +233,10 @@ export function Histogram({
           const h = (b.count / max) * (height - 16);
           // Colour by risk, not by size: the fat tail is the suspicious end.
           const color =
-            b.from >= 0.05 ? "var(--danger)" : b.from >= 0.02 ? "var(--caution)" : "var(--accent)";
+            b.from >= 0.05 ? "var(--danger)" : b.from >= 0.02 ? "var(--caution)" : "var(--brand)";
           return (
             <rect
-              key={i}
+              key={b.from}
               x={i * barW + barW * 0.14}
               y={height - h}
               width={barW * 0.72}
@@ -251,7 +250,7 @@ export function Histogram({
         })}
         <line x1="0" y1={height} x2="100" y2={height} stroke={AXIS} strokeWidth="0.5" />
       </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
+      <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
         <span>{(buckets[0].from * 100).toFixed(1)}%</span>
         <span>margin</span>
         <span>{(buckets[buckets.length - 1].to * 100).toFixed(1)}%+</span>
@@ -274,8 +273,8 @@ export function ProportionBar({
   return (
     <div>
       <div
-        className="flex rounded-full overflow-hidden"
-        style={{ height, background: "var(--bg-sunken)" }}
+        className="flex rounded-full overflow-hidden bg-muted"
+        style={{ height }}
       >
         {segments.map((s) => (
           <div
@@ -289,11 +288,10 @@ export function ProportionBar({
         {segments.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5 text-xs">
             <span
-              className="rounded-full shrink-0"
-              style={{ width: 7, height: 7, background: s.color }}
+              className="rounded-full shrink-0 w-[7px] h-[7px]" style={{ background: s.color }}
             />
-            <span style={{ color: "var(--text-muted)" }}>{s.label}</span>
-            <span className="mono" style={{ color: "var(--text)" }}>
+            <span className="text-muted-foreground">{s.label}</span>
+            <span className="tabular text-foreground">
               {s.value}
             </span>
           </span>
@@ -306,8 +304,8 @@ export function ProportionBar({
 function ChartEmpty({ message, height }: { message: string; height: number }) {
   return (
     <div
-      className="flex items-center justify-center text-xs rounded"
-      style={{ height, color: "var(--text-faint)", background: "var(--bg-sunken)" }}
+      className="flex items-center justify-center text-xs rounded text-faint bg-muted"
+      style={{ height }}
     >
       {message}
     </div>

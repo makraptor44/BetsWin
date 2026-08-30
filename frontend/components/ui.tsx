@@ -1,7 +1,25 @@
 "use client";
 
+/**
+ * Project-specific presentation, built on shadcn/ui.
+ *
+ * Everything generic -- surfaces, buttons, inputs, badges, tables -- comes from
+ * `components/ui/*`, which is shadcn on Radix primitives. What lives here is
+ * only the vocabulary this application adds on top: a venue's identity, an
+ * execution zone, a risk flag, a confidence meter.
+ *
+ * These used to be hand-rolled `.card` / `.chip` / `.btn` classes over a
+ * bespoke token set, which is a component library with none of the
+ * accessibility work done.
+ */
+
 import type { ReactNode } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card as ShadCard, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Skeleton as ShadSkeleton } from "@/components/ui/skeleton";
 import {
   FLAG_LABEL,
   FLAG_SEVERITY,
@@ -12,12 +30,13 @@ import {
   venueColor,
 } from "@/lib/format";
 import type { RiskFlag, ZoneKey } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 /* --------------------------------------------------------------- surfaces */
 
 export function Card({
   children,
-  className = "",
+  className,
   padded = true,
 }: {
   children: ReactNode;
@@ -25,7 +44,9 @@ export function Card({
   padded?: boolean;
 }) {
   return (
-    <div className={`card ${padded ? "p-4" : ""} ${className}`}>{children}</div>
+    <ShadCard className={cn("gap-0 py-0", className)}>
+      {padded ? <CardContent className="p-4">{children}</CardContent> : children}
+    </ShadCard>
   );
 }
 
@@ -39,19 +60,22 @@ export function SectionTitle({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-3">
+    <div className="mb-3 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
-        {hint && (
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {hint}
-          </p>
-        )}
+        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       </div>
       {action}
     </div>
   );
 }
+
+/** Tone is reserved for risk, never for size. See the note in globals.css. */
+const TONE_TEXT = {
+  positive: "text-positive",
+  caution: "text-caution",
+  danger: "text-danger",
+} as const;
 
 export function Stat({
   label,
@@ -63,24 +87,26 @@ export function Stat({
   label: string;
   value: ReactNode;
   sub?: ReactNode;
-  tone?: "positive" | "caution" | "danger";
+  tone?: keyof typeof TONE_TEXT;
   title?: string;
 }) {
-  const color = tone ? `var(--${tone})` : "var(--text)";
   return (
-    <div className="card p-3.5" title={title}>
-      <div className="label" style={{ marginBottom: 4 }}>
-        {label}
-      </div>
-      <div className="mono text-xl font-semibold leading-tight" style={{ color }}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs mt-1" style={{ color: "var(--text-faint)" }}>
-          {sub}
+    <ShadCard className="gap-0 py-0" title={title}>
+      <CardContent className="p-3.5">
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">
+          {label}
         </div>
-      )}
-    </div>
+        <div
+          className={cn(
+            "text-xl font-semibold leading-tight tabular",
+            tone ? TONE_TEXT[tone] : "text-foreground",
+          )}
+        >
+          {value}
+        </div>
+        {sub && <div className="mt-1 text-xs text-faint">{sub}</div>}
+      </CardContent>
+    </ShadCard>
   );
 }
 
@@ -88,15 +114,14 @@ export function Stat({
 
 export function VenueChip({ venue }: { venue: string }) {
   return (
-    <span
-      className="chip"
-      style={{
-        background: "color-mix(in srgb, currentColor 13%, transparent)",
-        color: venueColor(venue),
-      }}
+    <Badge
+      variant="outline"
+      className="border-current/25 bg-current/10 font-semibold"
+      // The venue's identity colour is data, not a fixed palette entry.
+      style={{ color: venueColor(venue) }}
     >
       {VENUE_LABEL[venue] ?? venue}
-    </span>
+    </Badge>
   );
 }
 
@@ -111,24 +136,40 @@ export function ZoneChip({ zone, short = false }: { zone: ZoneKey; short?: boole
   if (!zone || zone === "unknown") return null;
   const currency = ZONE_CURRENCY[zone];
   return (
-    <span
-      className="chip"
-      style={{ background: "var(--neutral-soft)", color: "var(--text-muted)" }}
+    <Badge
+      variant="secondary"
+      className="font-semibold text-muted-foreground"
       title={`${ZONE_LABEL[zone]} — settles in ${currency}. Legs are only ever combined inside one zone.`}
     >
       {short ? ZONE_SHORT[zone] : ZONE_LABEL[zone]}
-    </span>
+    </Badge>
   );
 }
 
+const FLAG_TONE = {
+  positive: "bg-positive-soft text-positive",
+  caution: "bg-caution-soft text-caution",
+  danger: "bg-danger-soft text-danger",
+} as const;
+
 export function FlagChip({ flag }: { flag: RiskFlag }) {
-  const severity = FLAG_SEVERITY[flag] ?? "caution";
+  const severity = (FLAG_SEVERITY[flag] ?? "caution") as keyof typeof FLAG_TONE;
   return (
-    <span className={`chip chip-${severity}`} title={FLAG_LABEL[flag]}>
+    <Badge
+      variant="secondary"
+      className={cn("border-transparent font-semibold", FLAG_TONE[severity])}
+      title={FLAG_LABEL[flag]}
+    >
       {FLAG_LABEL[flag] ?? flag}
-    </span>
+    </Badge>
   );
 }
+
+const METER_FILL = {
+  positive: "bg-positive",
+  caution: "bg-caution",
+  danger: "bg-danger",
+} as const;
 
 export function ConfidenceBar({
   value,
@@ -141,8 +182,7 @@ export function ConfidenceBar({
   return (
     <div className="flex items-center gap-2">
       <div
-        className="h-1.5 rounded-full overflow-hidden shrink-0"
-        style={{ width: 44, background: "var(--neutral-soft)" }}
+        className="h-1.5 w-[44px] shrink-0 overflow-hidden rounded-full bg-neutral-soft"
         role="meter"
         aria-valuenow={value}
         aria-valuemin={0}
@@ -150,17 +190,13 @@ export function ConfidenceBar({
         aria-label="Confidence"
       >
         <div
-          className="h-full rounded-full"
-          style={{
-            width: `${Math.max(2, value)}%`,
-            background: `var(--${tone})`,
-          }}
+          className={cn("h-full rounded-full", METER_FILL[tone])}
+          // Width tracks the value, so it cannot be a static class.
+          style={{ width: `${Math.max(2, value)}%` }}
         />
       </div>
       {showLabel && (
-        <span className="mono text-xs" style={{ color: "var(--text-muted)" }}>
-          {value}
-        </span>
+        <span className="text-xs tabular text-muted-foreground">{value}</span>
       )}
     </div>
   );
@@ -180,24 +216,15 @@ export function EmptyState({
   icon?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-14">
+    <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
       <div
-        className="text-2xl mb-3 flex items-center justify-center rounded-full"
-        style={{
-          width: 44,
-          height: 44,
-          background: "var(--bg-sunken)",
-          color: "var(--text-faint)",
-        }}
+        className="mb-3 flex size-[44px] items-center justify-center rounded-full bg-muted text-2xl text-faint"
         aria-hidden
       >
         {icon}
       </div>
-      <h3 className="text-sm font-semibold mb-1.5">{title}</h3>
-      <p
-        className="text-xs max-w-md leading-relaxed"
-        style={{ color: "var(--text-muted)" }}
-      >
+      <h3 className="mb-1.5 text-sm font-semibold">{title}</h3>
+      <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
         {body}
       </p>
       {action && <div className="mt-4">{action}</div>}
@@ -205,27 +232,29 @@ export function EmptyState({
   );
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
   return (
-    <div
-      className="card p-4 flex items-start gap-3"
-      style={{ borderColor: "var(--danger)", background: "var(--danger-soft)" }}
-      role="alert"
-    >
-      <span style={{ color: "var(--danger)" }} aria-hidden>
-        ⚠
-      </span>
-      <div className="flex-1">
-        <div className="text-sm font-medium" style={{ color: "var(--danger)" }}>
-          {message}
+    <ShadCard className="gap-0 border-danger bg-danger-soft py-0" role="alert">
+      <CardContent className="flex items-start gap-3 p-4">
+        <span className="text-danger" aria-hidden>
+          ⚠
+        </span>
+        <div className="flex-1">
+          <div className="text-sm font-medium text-danger">{message}</div>
+          {onRetry && (
+            <Button size="sm" variant="outline" className="mt-2.5" onClick={onRetry}>
+              Try again
+            </Button>
+          )}
         </div>
-        {onRetry && (
-          <button className="btn btn-sm mt-2.5" onClick={onRetry}>
-            Try again
-          </button>
-        )}
-      </div>
-    </div>
+      </CardContent>
+    </ShadCard>
   );
 }
 
@@ -233,7 +262,12 @@ export function Skeleton({ rows = 5 }: { rows?: number }) {
   return (
     <div className="flex flex-col gap-2 p-4">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton" style={{ height: 34, opacity: 1 - i * 0.12 }} />
+        <ShadSkeleton
+          key={`row-${i}`}
+          className="h-[34px]"
+          // Rows fade down the stack, so the value is per-index.
+          style={{ opacity: 1 - i * 0.12 }}
+        />
       ))}
     </div>
   );
@@ -241,9 +275,32 @@ export function Skeleton({ rows = 5 }: { rows?: number }) {
 
 /* ------------------------------------------------------------------ misc */
 
+/**
+ * Make a non-button element that responds to a click respond to the keyboard too.
+ *
+ * Spread onto the element alongside its `onClick`. A `<tr onClick>` is invisible
+ * to anyone not using a mouse, which on a table whose rows open a detail panel
+ * means the panel is simply unreachable.
+ *
+ *     <TableRow {...activatable(() => select(row))}>
+ */
+export function activatable(activate: () => void) {
+  return {
+    role: "button" as const,
+    tabIndex: 0,
+    onClick: activate,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        activate();
+      }
+    },
+  };
+}
+
 export function Tooltip({ text, children }: { text: string; children: ReactNode }) {
   return (
-    <span title={text} style={{ cursor: "help", borderBottom: "1px dotted var(--text-faint)" }}>
+    <span title={text} className="cursor-help border-b border-dotted border-faint">
       {children}
     </span>
   );
@@ -265,27 +322,50 @@ export function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="relative rounded-full shrink-0 transition-colors"
-      style={{
-        width: 34,
-        height: 19,
-        background: checked ? "var(--accent)" : "var(--border-strong)",
-        border: "none",
-        cursor: "pointer",
-      }}
+      className={cn(
+        "relative h-[19px] w-[34px] shrink-0 cursor-pointer rounded-full border-0 transition-colors",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        checked ? "bg-brand" : "bg-border",
+      )}
     >
       <span
-        className="absolute rounded-full transition-transform"
-        style={{
-          width: 15,
-          height: 15,
-          top: 2,
-          left: 2,
-          background: "#fff",
-          transform: checked ? "translateX(15px)" : "translateX(0)",
-        }}
+        className={cn(
+          "absolute left-[2px] top-[2px] size-[15px] rounded-full bg-white transition-transform",
+          checked && "translate-x-[15px]",
+        )}
       />
     </button>
+  );
+}
+
+/**
+ * A native `<select>`, styled to match shadcn's Input.
+ *
+ * Deliberately not Radix's Select. A native select is already accessible, it
+ * needs no JavaScript, and on a phone it opens the platform picker, which beats
+ * any listbox a web app can draw. The only thing it was missing was the styling.
+ */
+export function NativeSelect({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<"select">) {
+  return (
+    <select
+      className={cn(
+        "flex h-9 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input",
+        "bg-transparent py-1 pl-3 pr-8 text-sm shadow-xs outline-none transition-[color,box-shadow]",
+        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        // The chevron, drawn once as a data URI rather than as stacked gradients.
+        "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%221.5%22><path d=%22M4 6l4 4 4-4%22/></svg>')]",
+        "bg-[length:16px] bg-[right_0.5rem_center] bg-no-repeat",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </select>
   );
 }
 
@@ -300,13 +380,11 @@ export function Field({
 }) {
   return (
     <div>
-      <label className="label">{label}</label>
+      <Label className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">
+        {label}
+      </Label>
       {children}
-      {hint && (
-        <p className="text-xs mt-1.5" style={{ color: "var(--text-faint)" }}>
-          {hint}
-        </p>
-      )}
+      {hint && <p className="mt-1.5 text-xs text-faint">{hint}</p>}
     </div>
   );
 }

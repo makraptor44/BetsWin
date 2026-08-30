@@ -59,6 +59,16 @@ jobs:
         run: npx tsc --noEmit
         working-directory: frontend
 
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+
+      # Asserts the TypeScript odds port against the same vectors the Python
+      # suite uses, so the two implementations cannot drift apart unnoticed.
+      - name: Test the dashboard
+        run: npm test
+        working-directory: frontend
+
       - name: Build static demo
         run: npm run build:demo
         working-directory: frontend

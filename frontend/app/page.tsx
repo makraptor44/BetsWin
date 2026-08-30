@@ -7,7 +7,11 @@ import { ArbCards, ArbTable } from "@/components/ArbTable";
 import { PlaceBetModal } from "@/components/PlaceBetModal";
 import { StatusBar } from "@/components/StatusBar";
 import { ActivityFeed, Watchlist } from "@/components/Watchlist";
-import { Card, EmptyState, ErrorState, Stat } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, EmptyState, ErrorState, Stat,
+  NativeSelect,
+} from "@/components/ui";
 import { KIND_LABEL, ZONE_LABEL, pct, usd, usdCompact } from "@/lib/format";
 import type { Arb, ArbKind, ZoneKey } from "@/lib/types";
 import { useEngine } from "@/lib/useEngine";
@@ -156,8 +160,7 @@ export default function OpportunitiesPage() {
 
       {toast && (
         <div
-          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all"
-          style={{ background: "var(--positive)", color: "#fff" }}
+          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all text-white bg-positive"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm">✓</span>
@@ -210,136 +213,89 @@ export default function OpportunitiesPage() {
       </div>
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3 p-4 border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="flex flex-wrap items-end gap-3 p-4 border-b border-border">
           <div className="flex-1 min-w-[200px]">
-            <label className="label" htmlFor="search">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="search">
               Search
             </label>
-            <input
-              id="search"
-              className="input w-full"
-              type="search"
-              placeholder="Filter by event, outcome or player…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Input id="search" className="w-full" type="search" placeholder="Filter by event, outcome or player…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
-          <div style={{ width: 148 }}>
-            <label className="label" htmlFor="kind">
+          <div className="w-[148px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="kind">
               Arb type
             </label>
-            <select
-              id="kind"
-              className="input"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as ArbKind | "all")}
-            >
+            <NativeSelect id="kind" value={kind} onChange={(e) => setKind(e.target.value as ArbKind | "all")} >
               <option value="all">All types</option>
               {kinds.map((k) => (
                 <option key={k} value={k}>
                   {KIND_LABEL[k]}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
           {zones.length > 1 && (
-            <div style={{ width: 186 }}>
-              <label className="label" htmlFor="zone">
+            <div className="w-[186px]">
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="zone">
                 Execution zone
               </label>
-              <select
-                id="zone"
-                className="input"
-                value={zone}
-                onChange={(e) => setZone(e.target.value as ZoneKey | "all")}
-                title="Venues you can hold accounts on from one location, in one currency. Legs are never combined across zones."
-              >
+              <NativeSelect id="zone" value={zone} onChange={(e) => setZone(e.target.value as ZoneKey | "all")} title="Venues you can hold accounts on from one location, in one currency. Legs are never combined across zones." >
                 <option value="all">All zones</option>
                 {zones.map((z) => (
                   <option key={z} value={z}>
                     {ZONE_LABEL[z]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           )}
 
-          <div style={{ width: 138 }}>
-            <label className="label" htmlFor="venue">
+          <div className="w-[138px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="venue">
               Venue
             </label>
-            <select
-              id="venue"
-              className="input"
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-            >
+            <NativeSelect id="venue" value={venue} onChange={(e) => setVenue(e.target.value)} >
               <option value="all">All venues</option>
               {venues.map((v) => (
                 <option key={v} value={v}>
                   {v}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
-          <div style={{ width: 118 }}>
-            <label className="label" htmlFor="minmargin">
+          <div className="w-[118px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="minmargin">
               Min margin %
             </label>
-            <input
-              id="minmargin"
-              className="input mono"
-              type="number"
-              step="0.1"
-              min="0"
-              value={minMargin || ""}
-              placeholder="0.0"
-              onChange={(e) => setMinMargin(Number(e.target.value) || 0)}
-            />
+            <Input id="minmargin" className="tabular" type="number" step="0.1" min="0" value={minMargin || ""} placeholder="0.0" onChange={(e) => setMinMargin(Number(e.target.value) || 0)} />
           </div>
 
-          <div style={{ width: 118 }}>
-            <label className="label" htmlFor="minconf">
+          <div className="w-[118px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="minconf">
               Min confidence
             </label>
-            <input
-              id="minconf"
-              className="input mono"
-              type="number"
-              step="5"
-              min="0"
-              max="100"
-              value={minConfidence || ""}
-              placeholder="0"
-              onChange={(e) => setMinConfidence(Number(e.target.value) || 0)}
-            />
+            <Input id="minconf" className="tabular" type="number" step="5" min="0" max="100" value={minConfidence || ""} placeholder="0" onChange={(e) => setMinConfidence(Number(e.target.value) || 0)} />
           </div>
 
-          <div style={{ width: 160 }}>
-            <label className="label" htmlFor="sort">
+          <div className="w-[160px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="sort">
               Sort by
             </label>
-            <select
-              id="sort"
-              className="input"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-            >
+            <NativeSelect id="sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} >
               {SORTS.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
           {hasFilters && (
-            <button className="btn btn-sm" onClick={clearFilters}>
+            <Button size="sm" variant="outline" onClick={clearFilters}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
 
@@ -350,9 +306,9 @@ export default function OpportunitiesPage() {
               title="Nothing matches these filters"
               body="Loosen the margin or confidence floor, or clear the filters to see everything the scanner currently holds."
               action={
-                <button className="btn btn-sm" onClick={clearFilters}>
+                <Button size="sm" variant="outline" onClick={clearFilters}>
                   Clear filters
-                </button>
+                </Button>
               }
             />
           ) : (
@@ -362,13 +318,9 @@ export default function OpportunitiesPage() {
               body="This is the normal state of a reasonably efficient market, not a fault. The scan activity and watchlist below show what the engine is reading and how close the tightest books are; opportunities appear here the moment one crosses, and usually last seconds to minutes."
               action={
                 engine.isStaticDemo ? undefined : (
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={() => void engine.scanNow()}
-                    disabled={engine.scanning}
-                  >
+                  <Button size="sm" onClick={() => void engine.scanNow()} disabled={engine.scanning} >
                     {engine.scanning ? "Scanning…" : "Scan now"}
-                  </button>
+                  </Button>
                 )
               }
             />

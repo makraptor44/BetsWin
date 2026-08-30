@@ -14,6 +14,8 @@ import { api } from "@/lib/api";
 import { pct, usd, VENUE_LABEL } from "@/lib/format";
 import type { EngineConfig } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Row {
   key: keyof EngineConfig;
@@ -195,18 +197,9 @@ export default function SettingsPage() {
         {rows.map((r) => (
           <Field key={String(r.key)} label={r.label} hint={r.hint}>
             <div className="flex items-center gap-2">
-              <input
-                className="input mono"
-                type="number"
-                step={r.step}
-                min={r.min}
-                max={r.max}
-                value={value(r)}
-                onChange={(e) => setValue(r, Number(e.target.value))}
-              />
+              <Input className="tabular" type="number" step={r.step} min={r.min} max={r.max} value={value(r)} onChange={(e) => setValue(r, Number(e.target.value))} />
               <span
-                className="text-xs shrink-0"
-                style={{ color: "var(--text-faint)", width: 20 }}
+                className="text-xs shrink-0 text-faint w-[20px]"
               >
                 {r.kind === "pct" ? "%" : r.kind === "money" ? "$" : ""}
               </span>
@@ -227,35 +220,25 @@ export default function SettingsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm mt-0.5 text-muted-foreground">
             Changes apply from the next scan cycle. They live in memory — set
             them permanently in the backend&apos;s <code>.env</code>.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {saved && (
-            <span className="text-xs" style={{ color: "var(--positive)" }}>
+            <span className="text-xs text-positive">
               ✓ Saved
             </span>
           )}
           {dirty && (
-            <button
-              className="btn btn-sm"
-              onClick={() => {
-                setDraft({});
-                setSaved(false);
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={() => { setDraft({}); setSaved(false); }} >
               Discard
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={save}
-            disabled={!dirty || saving}
-          >
+          <Button size="sm" onClick={save} disabled={!dirty || saving} >
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -283,7 +266,7 @@ export default function SettingsPage() {
                 }}
                 label="Enforce execution-zone pairing"
               />
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              <span className="text-xs text-muted-foreground">
                 {(draft.enforce_zone_pairing ?? data.enforce_zone_pairing)
                   ? "Enforced"
                   : "Disabled — pairs may be unplaceable"}
@@ -295,22 +278,7 @@ export default function SettingsPage() {
             label="Trading from"
             hint="ISO country code, e.g. GB or US. Set it and the engine hides anything you could not legitimately place from there. Leave blank to see every zone."
           >
-            <input
-              className="input mono"
-              maxLength={2}
-              placeholder="—"
-              value={
-                ((draft.operator_jurisdiction ??
-                  data.operator_jurisdiction) as string) ?? ""
-              }
-              onChange={(e) => {
-                setSaved(false);
-                setDraft((d) => ({
-                  ...d,
-                  operator_jurisdiction: e.target.value.toUpperCase().slice(0, 2),
-                }));
-              }}
-            />
+            <Input className="tabular" maxLength={2} placeholder="—" value={ ((draft.operator_jurisdiction ?? data.operator_jurisdiction) as string) ?? "" } onChange={(e) => { setSaved(false); setDraft((d) => ({ ...d, operator_jurisdiction: e.target.value.toUpperCase().slice(0, 2), })); }} />
           </Field>
         </div>
       </Card>
@@ -323,7 +291,7 @@ export default function SettingsPage() {
               key={name}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
               style={{
-                background: "var(--bg-sunken)",
+                background: "var(--muted)",
                 opacity: enabled ? 1 : 0.5,
               }}
             >
@@ -332,18 +300,18 @@ export default function SettingsPage() {
                 style={{
                   width: 6,
                   height: 6,
-                  background: enabled ? "var(--positive)" : "var(--text-faint)",
+                  background: enabled ? "var(--positive)" : "var(--faint)",
                 }}
                 aria-hidden
               />
               {VENUE_LABEL[name] ?? name}
-              <span style={{ color: "var(--text-faint)" }}>
+              <span className="text-faint">
                 {enabled ? "on" : "off"}
               </span>
             </span>
           ))}
         </div>
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs text-muted-foreground">
           Polymarket, Kalshi and Smarkets need no credentials for market data.
           Sportsbook coverage requires <code>ODDS_API_KEY</code>; Betfair
           requires <code>BETFAIR_APP_KEY</code> and a session. Telegram alerts
@@ -352,7 +320,7 @@ export default function SettingsPage() {
           {data.demo_mode && (
             <>
               {" "}
-              <strong style={{ color: "var(--caution)" }}>
+              <strong className="text-caution">
                 Demo mode is on
               </strong>{" "}
               — the engine is serving fixtures, not live markets.
@@ -440,12 +408,12 @@ function Implication({
   note: string;
 }) {
   return (
-    <div className="rounded-lg p-3" style={{ background: "var(--bg-sunken)" }}>
-      <div className="label" style={{ marginBottom: 3 }}>
+    <div className="rounded-lg p-3 bg-muted">
+      <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint mb-[3px]">
         {label}
       </div>
-      <div className="mono text-base font-semibold">{value}</div>
-      <div className="text-[11px] mt-1" style={{ color: "var(--text-faint)" }}>
+      <div className="tabular text-base font-semibold">{value}</div>
+      <div className="text-[11px] mt-1 text-faint">
         {note}
       </div>
     </div>

@@ -1,10 +1,65 @@
 {
- "count": 6,
+ "count": 7,
  "arbs": [
+  {
+   "id": 7,
+   "arb_key": "correlation|kalshi:KXDEMO-BOTH28:Y:Yes:0.4975",
+   "kind": "correlation",
+   "strategy": "directional",
+   "title": "GOP presidency + Senate (2028, demo) - correlation edge on \"Yes\"",
+   "category": "correlation",
+   "venues": [
+    "kalshi"
+   ],
+   "zone": "us_prediction",
+   "currency": "USD",
+   "market_key": "correlation",
+   "detected_at": "2026-08-30T13:58:14.593595+00:00",
+   "last_seen": "2026-08-30T13:58:14.593597+00:00",
+   "close_time": "2027-11-03T13:58:12.856549+00:00",
+   "book": 1.0,
+   "margin": 0.06322,
+   "net_margin": 0.06322,
+   "total_stake": 156.46,
+   "profit": 9.89,
+   "worst_case_profit": -156.46,
+   "max_stake": 156.46,
+   "confidence": 100,
+   "flags": [
+    "statistical_edge"
+   ],
+   "placed": 0,
+   "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
+   "realised_pnl": null,
+   "legs": [
+    {
+     "venue": "kalshi",
+     "market_id": "KXDEMO-BOTH28:Y",
+     "ticker": "KXDEMO-BOTH28:Y",
+     "outcome": "Yes",
+     "side": "YES",
+     "price": 0.48,
+     "effective_price": 0.497488,
+     "decimal_odds": 2.0833333333333335,
+     "effective_decimal_odds": 2.010098427920033,
+     "stake": 156.46,
+     "contracts": 314.5,
+     "fee": 5.5,
+     "size_available": 8704.0,
+     "url": "https://example.invalid/kalshi/KXDEMO-BOTH28:Y",
+     "event_title": "GOP presidency + Senate (2028, demo)",
+     "payout": 314.50000003236835,
+     "net_payout": 314.50000003236835
+    }
+   ]
+  },
   {
    "id": 1,
    "arb_key": "cross_venue|kalshi:KXFED-26DEC:N:No:0.4673|polymarket:demo-fed:Y:Yes:0.4620",
    "kind": "cross_venue",
+   "strategy": "arbitrage",
    "title": "Fed cuts rates at the December 2026 meeting?  ==  Will the Federal Reserve cut rates at the December 2026 meeting?",
    "category": "economics",
    "venues": [
@@ -14,9 +69,9 @@
    "zone": "us_prediction",
    "currency": "USD",
    "market_key": "cross_venue",
-   "detected_at": "2026-08-29T13:14:26.263599+00:00",
-   "last_seen": "2026-08-29T13:14:26.263600+00:00",
-   "close_time": "2026-10-13T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.531605+00:00",
+   "last_seen": "2026-08-30T13:58:14.531606+00:00",
+   "close_time": "2026-10-14T13:58:12.856549+00:00",
    "book": 0.9293426205644606,
    "margin": 0.09649122807017552,
    "net_margin": 0.07602941893768289,
@@ -32,6 +87,8 @@
    ],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
@@ -69,8 +126,8 @@
      "size_available": 9139.2,
      "url": "https://example.invalid/kalshi/KXFED-26DEC:N",
      "event_title": "Fed cuts rates at the December 2026 meeting?",
-     "payout": 558.7333333333333,
-     "net_payout": 549.4033333333333
+     "payout": 537.9999999534273,
+     "net_payout": 537.9999999534273
     }
    ]
   },
@@ -78,6 +135,7 @@
    "id": 5,
    "arb_key": "cross_venue|betfair:demo-bf-labour:N:Not Yes:0.4597|smarkets:demo-sm-labour:Y:Yes:0.5250",
    "kind": "cross_venue",
+   "strategy": "arbitrage",
    "title": "Labour to win the next UK general election  ==  Will Labour win the next UK general election?",
    "category": "politics",
    "venues": [
@@ -87,9 +145,9 @@
    "zone": "uk_exchange",
    "currency": "GBP",
    "market_key": "cross_venue",
-   "detected_at": "2026-08-29T13:14:26.263016+00:00",
-   "last_seen": "2026-08-29T13:14:26.263017+00:00",
-   "close_time": "2027-06-25T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.531102+00:00",
+   "last_seen": "2026-08-30T13:58:14.531103+00:00",
+   "close_time": "2027-06-26T13:58:12.856549+00:00",
    "book": 0.9847513971323243,
    "margin": 0.03412616339193364,
    "net_margin": 0.015484723263232691,
@@ -106,6 +164,8 @@
    ],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
@@ -124,8 +184,8 @@
      "size_available": 15232.0,
      "url": "https://example.invalid/smarkets/demo-sm-labour:Y",
      "event_title": "Labour to win the next UK general election",
-     "payout": 512.6538461538461,
-     "net_payout": 510.0946461538461
+     "payout": 507.7323692307692,
+     "net_payout": 507.7323692307692
     },
     {
      "venue": "betfair",
@@ -143,8 +203,8 @@
      "size_available": 19584.0,
      "url": "https://example.invalid/betfair/demo-bf-labour:N",
      "event_title": "Labour to win the next UK general election",
-     "payout": 522.1700223713647,
-     "net_payout": 515.7162223713647
+     "payout": 507.7320212527964,
+     "net_payout": 507.7320212527964
     }
    ]
   },
@@ -152,6 +212,7 @@
    "id": 6,
    "arb_key": "dutch_yes|smarkets:demo-sm-3way-0:Y:Arsenal:0.5200|smarkets:demo-sm-3way-1:Y:Draw:0.2589|smarkets:demo-sm-3way-2:Y:Brighton:0.2113",
    "kind": "dutch_yes",
+   "strategy": "arbitrage",
    "title": "Arsenal vs Brighton - Full-time result - buy every outcome",
    "category": "sports",
    "venues": [
@@ -160,9 +221,9 @@
    "zone": "uk_exchange",
    "currency": "GBP",
    "market_key": "dutch_yes",
-   "detected_at": "2026-08-29T13:14:26.261844+00:00",
-   "last_seen": "2026-08-29T13:14:26.261845+00:00",
-   "close_time": "2026-09-01T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.530411+00:00",
+   "last_seen": "2026-08-30T13:58:14.530412+00:00",
+   "close_time": "2026-09-02T13:58:12.856549+00:00",
    "book": 0.9902491481497665,
    "margin": 0.02249488752556239,
    "net_margin": 0.009846867193425535,
@@ -176,6 +237,8 @@
    ],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
@@ -194,8 +257,8 @@
      "size_available": 13056.0,
      "url": "https://example.invalid/smarkets/demo-sm-3way-0:Y",
      "event_title": "Arsenal vs Brighton - Full-time result",
-     "payout": 509.8640776699029,
-     "net_payout": 507.31707766990286
+     "payout": 504.91839611650477,
+     "net_payout": 504.91839611650477
     },
     {
      "venue": "smarkets",
@@ -213,8 +276,8 @@
      "size_available": 13056.0,
      "url": "https://example.invalid/smarkets/demo-sm-3way-1:Y",
      "event_title": "Arsenal vs Brighton - Full-time result",
-     "payout": 512.5490196078431,
-     "net_payout": 510.6016196078431
+     "payout": 504.9120392156862,
+     "net_payout": 504.9120392156862
     },
     {
      "venue": "smarkets",
@@ -232,8 +295,8 @@
      "size_available": 13056.0,
      "url": "https://example.invalid/smarkets/demo-sm-3way-2:Y",
      "event_title": "Arsenal vs Brighton - Full-time result",
-     "payout": 513.0288461538461,
-     "net_payout": 511.3385461538461
+     "payout": 504.90246923076927,
+     "net_payout": 504.90246923076927
     }
    ]
   },
@@ -241,6 +304,7 @@
    "id": 4,
    "arb_key": "dutch_no|kalshi:KXSB-49ers:N:Not 49ers:0.7892|kalshi:KXSB-Bills:N:Not Bills:0.7892|kalshi:KXSB-Chiefs:N:Not Chiefs:0.7892|kalshi:KXSB-Lions:N:Not Lions:0.7892|kalshi:KXSB-Ravens:N:Not Ravens:0.7892",
    "kind": "dutch_no",
+   "strategy": "arbitrage",
    "title": "Super Bowl LXI winner - fade every outcome",
    "category": "sports",
    "venues": [
@@ -249,9 +313,9 @@
    "zone": "us_prediction",
    "currency": "USD",
    "market_key": "dutch_no",
-   "detected_at": "2026-08-29T13:14:26.261679+00:00",
-   "last_seen": "2026-08-29T13:14:26.261680+00:00",
-   "close_time": "2026-11-27T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.530252+00:00",
+   "last_seen": "2026-08-30T13:58:14.530253+00:00",
+   "close_time": "2026-11-28T13:58:12.856549+00:00",
    "book": 0.9864986250000001,
    "margin": 0.029601029601029616,
    "net_margin": 0.013686156937116722,
@@ -265,6 +329,8 @@
    ],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
@@ -283,8 +349,8 @@
      "size_available": 11315.2,
      "url": "https://example.invalid/kalshi/KXSB-Chiefs:N",
      "event_title": "Super Bowl LXI winner",
-     "payout": 128.70012870012872,
-     "net_payout": 127.16012870012871
+     "payout": 126.71814669120202,
+     "net_payout": 126.71814669120202
     },
     {
      "venue": "kalshi",
@@ -302,8 +368,8 @@
      "size_available": 11315.2,
      "url": "https://example.invalid/kalshi/KXSB-49ers:N",
      "event_title": "Super Bowl LXI winner",
-     "payout": 128.70012870012872,
-     "net_payout": 127.16012870012871
+     "payout": 126.71814669120202,
+     "net_payout": 126.71814669120202
     },
     {
      "venue": "kalshi",
@@ -321,8 +387,8 @@
      "size_available": 11315.2,
      "url": "https://example.invalid/kalshi/KXSB-Ravens:N",
      "event_title": "Super Bowl LXI winner",
-     "payout": 128.70012870012872,
-     "net_payout": 127.16012870012871
+     "payout": 126.71814669120202,
+     "net_payout": 126.71814669120202
     },
     {
      "venue": "kalshi",
@@ -340,8 +406,8 @@
      "size_available": 11315.2,
      "url": "https://example.invalid/kalshi/KXSB-Lions:N",
      "event_title": "Super Bowl LXI winner",
-     "payout": 128.70012870012872,
-     "net_payout": 127.16012870012871
+     "payout": 126.71814669120202,
+     "net_payout": 126.71814669120202
     },
     {
      "venue": "kalshi",
@@ -359,8 +425,8 @@
      "size_available": 11315.2,
      "url": "https://example.invalid/kalshi/KXSB-Bills:N",
      "event_title": "Super Bowl LXI winner",
-     "payout": 128.70012870012872,
-     "net_payout": 127.16012870012871
+     "payout": 126.71814669120202,
+     "net_payout": 126.71814669120202
     }
    ]
   },
@@ -368,6 +434,7 @@
    "id": 2,
    "arb_key": "dutch_yes|polymarket:demo-nom-0:Y:Vance:0.3050|polymarket:demo-nom-1:Y:Newsom:0.2760|polymarket:demo-nom-2:Y:Haley:0.2210|polymarket:demo-nom-3:Y:Field:0.1630",
    "kind": "dutch_yes",
+   "strategy": "arbitrage",
    "title": "2028 Presidential nominee - buy every outcome",
    "category": "politics",
    "venues": [
@@ -376,9 +443,9 @@
    "zone": "us_prediction",
    "currency": "USD",
    "market_key": "dutch_yes",
-   "detected_at": "2026-08-29T13:14:26.261439+00:00",
-   "last_seen": "2026-08-29T13:14:26.261440+00:00",
-   "close_time": "2026-12-27T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.530037+00:00",
+   "last_seen": "2026-08-30T13:58:14.530038+00:00",
+   "close_time": "2026-12-28T13:58:12.856549+00:00",
    "book": 0.9650000000000001,
    "margin": 0.03626943005181338,
    "net_margin": 0.03626943005181338,
@@ -390,6 +457,8 @@
    "flags": [],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
@@ -474,6 +543,7 @@
    "id": 3,
    "arb_key": "binary_complement|polymarket:demo-fed:N:No:0.5220|polymarket:demo-fed:Y:Yes:0.4620",
    "kind": "binary_complement",
+   "strategy": "arbitrage",
    "title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
    "category": "economics",
    "venues": [
@@ -482,9 +552,9 @@
    "zone": "us_prediction",
    "currency": "USD",
    "market_key": "binary",
-   "detected_at": "2026-08-29T13:14:26.261224+00:00",
-   "last_seen": "2026-08-29T13:14:26.261226+00:00",
-   "close_time": "2026-10-13T13:14:22.829233+00:00",
+   "detected_at": "2026-08-30T13:58:14.529844+00:00",
+   "last_seen": "2026-08-30T13:58:14.529846+00:00",
+   "close_time": "2026-10-14T13:58:12.856549+00:00",
    "book": 0.984,
    "margin": 0.016260162601626105,
    "net_margin": 0.016260162601626105,
@@ -496,6 +566,8 @@
    "flags": [],
    "placed": 0,
    "settled": 0,
+   "settlement_type": null,
+   "settled_at": null,
    "realised_pnl": null,
    "legs": [
     {
