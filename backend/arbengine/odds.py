@@ -234,9 +234,24 @@ def lay_stake_to_hedge(
 ) -> float:
     """Lay stake that fully hedges a back bet. Part I s6.2.
 
-        s_l = s_b * d_b / (d_l - c*(d_l - 1))
+        s_l = s_b * d_b / (d_l - c)
+
+    The denominator is `d_l - c`, not `d_l - c*(d_l - 1)`. Commission on an
+    exchange is charged on the NET WINNINGS of the bet that wins, and when a lay
+    wins the winnings are the backer's stake s_l -- not the liability, and not a
+    function of the lay price. Equating the two states:
+
+        back wins:  s_b*(d_b - 1) - s_l*(d_l - 1)
+        lay wins:   -s_b + s_l*(1 - c)
+
+        =>  s_b*d_b = s_l*(d_l - c)   =>   s_l = s_b*d_b / (d_l - c)
+
+    This is the same derivation `back_lay_is_arb` below already rests on, so the
+    two agree. The previous denominator left the position unhedged: backing 100
+    at 2.10 and laying at 2.05 on 2% commission returned a lay stake of 103.4993,
+    paying +1.3258 if the back won and +1.4293 if the lay won.
     """
-    denom = d_lay - commission * (d_lay - 1.0)
+    denom = d_lay - commission
     if denom <= 0:
         return 0.0
     return back_stake * d_back / denom

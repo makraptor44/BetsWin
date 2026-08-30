@@ -150,6 +150,58 @@ class TestExchange:
     def test_liability(self):
         assert om.lay_liability(100, 3.0) == pytest.approx(200.0)
 
+    @pytest.mark.parametrize(
+        "d_back,d_lay,commission",
+        [
+            (2.10, 2.05, 0.02),   # the reported case
+            (2.10, 2.05, 0.05),   # Betfair's standard rate
+            (3.40, 3.30, 0.02),
+            (1.55, 1.50, 0.05),
+            (6.00, 5.80, 0.02),   # long odds: commission bites hardest here
+        ],
+    )
+    def test_lay_stake_hedges_exactly_with_commission(self, d_back, d_lay, commission):
+        """A hedge must pay the SAME whichever side wins.
+
+        The denominator used to be `d_l - c*(d_l - 1)`, which left the two states
+        unequal: backing 100 at 2.10 against a 2.05 lay on 2% commission paid
+        +1.3258 if the back won and +1.4293 if the lay won. Commission is charged
+        on the winning bet's net winnings, and a winning lay wins the backer's
+        stake, so the denominator is `d_l - c`.
+        """
+        back_stake = 100.0
+        lay_stake = om.lay_stake_to_hedge(back_stake, d_back, d_lay, commission)
+
+        # Back wins: collect the back profit, pay out the lay liability.
+        profit_back_wins = back_stake * (d_back - 1.0) - om.lay_liability(lay_stake, d_lay)
+        # Lay wins: lose the back stake, keep the backer's stake less commission.
+        profit_lay_wins = -back_stake + lay_stake * (1.0 - commission)
+
+        assert profit_back_wins == pytest.approx(profit_lay_wins, abs=1e-9)
+
+    def test_lay_stake_agrees_with_the_arb_condition(self):
+        """`lay_stake_to_hedge` and `back_lay_is_arb` must not disagree.
+
+        They are two readings of one derivation: if the condition says an arb
+        exists, sizing it must produce a positive locked profit, and if it says
+        there is none, sizing it must not.
+        """
+        for d_back, d_lay, c in [
+            (2.10, 2.05, 0.02),
+            (2.00, 2.05, 0.02),   # no arb
+            (2.50, 2.40, 0.05),
+            (1.90, 2.00, 0.02),   # no arb
+        ]:
+            lay_stake = om.lay_stake_to_hedge(100.0, d_back, d_lay, c)
+            locked = -100.0 + lay_stake * (1.0 - c)
+            assert (locked > 1e-9) == om.back_lay_is_arb(d_back, d_lay, c)
+
+    def test_reported_case_matches_the_hand_calculation(self):
+        # back 100 @ 2.10, lay @ 2.05, 2% commission.
+        assert om.lay_stake_to_hedge(100.0, 2.10, 2.05, 0.02) == pytest.approx(
+            103.4483, abs=1e-4
+        )
+
 
 class TestVoidAdjustment:
     def test_worked_example_from_section_13_3(self):
