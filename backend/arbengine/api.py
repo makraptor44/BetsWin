@@ -23,7 +23,7 @@ from typing import Any, Optional
 from fastapi import Body, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import correlation_arb as ca
 from . import odds as om
@@ -556,19 +556,27 @@ async def place_bet(arb_id: str, body: PlaceBetRequest = Body(default_factory=Pl
     }
 
 
-class SettleRequest(BaseModel):
-    realised_pnl: Optional[float] = None
-    winning_outcome: Optional[str] = None
-    note: Optional[str] = None
-
-
 class ResolveRequest(BaseModel):
+    """How a position settled.
+
+    `extra="forbid"` is load-bearing. Pydantic drops unknown fields by default,
+    so the dashboard posting `realised_pnl` (a field that only ever existed on a
+    since-deleted SettleRequest) was silently ignored: `custom_pnl` stayed None,
+    the handler fell through to the theoretical worst case, and the endpoint
+    returned ok. A settlement figure is not something to lose quietly -- a
+    mismatched field is now a 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     winning_outcome: Optional[str] = Field(None, description="Winning outcome name or 'VOID'")
-    custom_pnl: Optional[float] = Field(None, description="Custom override for net realised P&L")
+    custom_pnl: Optional[float] = Field(None, description="Realised P&L to book, overriding the derived figure")
     note: Optional[str] = None
 
 
 class SellBackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     confirmed: bool = Field(True, description="Explicit confirmation to unwind")
     custom_prices: Optional[list[float]] = None
     note: Optional[str] = None

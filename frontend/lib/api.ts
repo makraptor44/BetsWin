@@ -348,13 +348,19 @@ export const api = {
       ? demoUnavailable("Resolving position")
       : post<ResolveResult>(`/api/positions/${rowId}/resolve`, payload),
 
+  /**
+   * Book a known realised P&L against a position.
+   *
+   * The field is `custom_pnl`: that is what /settle declares. This used to post
+   * `realised_pnl`, which the endpoint quietly discarded before booking the
+   * theoretical worst case instead and returning ok.
+   */
   settlePosition: (rowId: number, realisedPnl: number) =>
     STATIC_DEMO
       ? demoUnavailable("Settling a position")
-      : post<{ ok: boolean; row_id: number; realised_pnl: number }>(
-          `/api/positions/${rowId}/settle`,
-          { realised_pnl: realisedPnl },
-        ),
+      : post<ResolveResult>(`/api/positions/${rowId}/settle`, {
+          custom_pnl: realisedPnl,
+        }),
 
   scanNow: () =>
     STATIC_DEMO

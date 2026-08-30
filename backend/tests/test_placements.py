@@ -134,6 +134,71 @@ def test_storage_placement_and_settlement():
         store.close()
 
 
+def _unique_arb(tag: str) -> Arb:
+    """A sample arb with a distinct dedupe key.
+
+    `upsert_arb` dedupes on the leg signature, so two arbs built from identical
+    legs collapse onto one stored row however different their ids are.
+    """
+    arb = _sample_arb()
+    legs = tuple(
+        l.model_copy(update={"market_id": f"{l.market_id}-{tag}"}) for l in arb.legs
+    )
+    return arb.model_copy(update={"id": f"arb-{tag}", "legs": legs})
+
+
+def test_settlement_figure_is_never_silently_discarded():
+    """Posting a P&L must book that P&L, or fail loudly.
+
+    The dashboard posted `realised_pnl` to /settle, but the endpoint declares
+    `custom_pnl`. Pydantic drops unknown fields by default, so the figure was
+    thrown away, the theoretical worst case was booked instead, and the call
+    returned ok: true.
+    """
+    from fastapi.testclient import TestClient
+    from arbengine.api import app
+    import arbengine.api as api_mod
+
+    with TestClient(app) as client:
+        arb = _unique_arb("settle-contract")
+        api_mod.scanner._live[arb.id] = arb
+        row_id = client.post(
+            f"/api/arbs/{arb.id}/place", json={"confirmed": True}
+        ).json()["arb_row_id"]
+
+        # The field the endpoint actually declares books the figure given.
+        res = client.post(
+            f"/api/positions/{row_id}/settle", json={"custom_pnl": 12.34}
+        )
+        assert res.status_code == 200
+        assert res.json()["realised_pnl"] == pytest.approx(12.34)
+
+        row = api_mod.scanner.store.arb_by_id(row_id)
+        assert row["realised_pnl"] == pytest.approx(12.34)
+        assert row["realised_pnl"] != row["worst_case_profit"]
+
+
+def test_an_unknown_settlement_field_is_rejected_not_ignored():
+    from fastapi.testclient import TestClient
+    from arbengine.api import app
+    import arbengine.api as api_mod
+
+    with TestClient(app) as client:
+        arb = _unique_arb("settle-drift")
+        api_mod.scanner._live[arb.id] = arb
+        row_id = client.post(
+            f"/api/arbs/{arb.id}/place", json={"confirmed": True}
+        ).json()["arb_row_id"]
+
+        res = client.post(
+            f"/api/positions/{row_id}/settle", json={"realised_pnl": 99.99}
+        )
+        assert res.status_code == 422, "contract drift must not pass silently"
+
+        row = api_mod.scanner.store.arb_by_id(row_id)
+        assert row["settled"] == 0, "a rejected request must not settle anything"
+
+
 def test_api_unwind_and_resolve():
     from fastapi.testclient import TestClient
     from arbengine.api import app
