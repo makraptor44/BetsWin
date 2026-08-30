@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Iterable, Optional
 
 from rapidfuzz import fuzz
@@ -149,6 +150,19 @@ def _normalise_numbers(text: str) -> str:
     return _NUM_RE.sub(_expand, t)
 
 
+#: Every one of these is a pure function of a title, and `detect_cross_venue`
+#: compares every event on one venue against every event on another -- so each
+#: title is re-parsed once per candidate PAIR rather than once per event, which
+#: is the difference between O(n + m) and O(n * m) regex passes over the same
+#: strings. A snapshot is a few thousand distinct titles, so the cache holds a
+#: whole scan and is bounded well below that ceiling.
+#:
+#: They return frozensets because a cached mutable set is shared by every
+#: caller, and one caller mutating it would corrupt the others.
+_TITLE_CACHE = 8192
+
+
+@lru_cache(maxsize=_TITLE_CACHE)
 def canonical_text(text: str) -> str:
     """Lowercase, normalise numbers and dates, expand aliases, drop filler."""
     t = (text or "").lower().strip()
@@ -164,7 +178,8 @@ def canonical_text(text: str) -> str:
     return " ".join(words)
 
 
-def extract_numbers(text: str) -> set[float]:
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_numbers(text: str) -> frozenset[float]:
     """Pull thresholds out of a title, expanding k/m/b suffixes.
 
     Calendar fragments are stripped first so the "31" in "Dec 31" is never
@@ -183,25 +198,28 @@ def extract_numbers(text: str) -> set[float]:
         if 2000 <= value <= 2100 and float(value).is_integer():
             continue
         out.add(round(value, 4))
-    return out
+    return frozenset(out)
 
 
-def extract_years(text: str) -> set[int]:
-    return {int(y) for y in _YEAR_RE.findall(text or "")}
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_years(text: str) -> frozenset[int]:
+    return frozenset(int(y) for y in _YEAR_RE.findall(text or ""))
 
 
-def extract_months(text: str) -> set[int]:
-    return {_MONTHS[m.lower()] for m in _MONTH_RE.findall(text or "")}
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_months(text: str) -> frozenset[int]:
+    return frozenset(_MONTHS[m.lower()] for m in _MONTH_RE.findall(text or ""))
 
 
-def extract_direction(text: str) -> set[str]:
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_direction(text: str) -> frozenset[str]:
     """Which way the question points, if it says."""
     out: set[str] = set()
     if _ABOVE_WORDS.search(text or ""):
         out.add("above")
     if _BELOW_WORDS.search(text or ""):
         out.add("below")
-    return out
+    return frozenset(out)
 
 
 @dataclass(frozen=True)

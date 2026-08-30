@@ -8,7 +8,14 @@ from __future__ import annotations
 
 import pytest
 
-from arbengine.normalise import canonical_text, classify_category
+from arbengine.normalise import (
+    canonical_text,
+    classify_category,
+    extract_direction,
+    extract_months,
+    extract_numbers,
+    extract_years,
+)
 
 
 class TestCategoryWordBoundaries:
@@ -100,3 +107,36 @@ class TestAliasExpansionIsIdempotent:
     def test_normalising_twice_changes_nothing(self, title):
         once = canonical_text(title)
         assert canonical_text(once) == once
+
+
+class TestTitleParsersAreCacheSafe:
+    """The extractors are memoised, so their results are shared.
+
+    `detect_cross_venue` compares every event on one venue against every event
+    on another, which re-parsed each title once per candidate PAIR rather than
+    once per event. Caching removes that, but a cached mutable set would be one
+    object handed to every caller -- so the return type has to be immutable, or
+    a single caller mutating it corrupts every later match.
+    """
+
+    @pytest.mark.parametrize(
+        "fn",
+        [extract_numbers, extract_years, extract_months, extract_direction],
+    )
+    def test_results_are_immutable(self, fn):
+        title = "Will Bitcoin exceed $100k above the line by December 31 2026?"
+        result = fn(title)
+        assert isinstance(result, frozenset)
+        with pytest.raises(AttributeError):
+            result.add("mutated")  # type: ignore[attr-defined]
+
+    def test_repeated_calls_return_the_same_object(self):
+        title = "Will Bitcoin exceed $100k by December 31 2026?"
+        assert extract_numbers(title) is extract_numbers(title)
+        assert canonical_text(title) == canonical_text(title)
+
+    def test_caching_did_not_change_the_answers(self):
+        """Frozenset compares equal to the set the callers used to get."""
+        assert extract_numbers("Bitcoin above $100k") == {100_000.0}
+        assert extract_years("Election 2026 result") == {2026}
+        assert extract_direction("Will it trade above the line?") == {"above"}

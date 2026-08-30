@@ -173,3 +173,39 @@ class TestSolveBracketEndpoints:
         rho = ca.implied_correlation(p_a, p_b, p_joint)
         assert abs(rho) <= 1.0
         assert ca.joint_probability(p_a, p_b, rho) == pytest.approx(p_joint, abs=1e-6)
+
+
+class TestAdaptiveQuadrature:
+    """The step count varies with rho; the accuracy must not.
+
+    `_simpson_steps` trades a fixed 2,000-step rule for one that samples in
+    proportion to how steep the integrand actually is. That is only safe if the
+    result still resolves to well inside the tolerance `implied_correlation`
+    bisects to, across the whole range -- so pin it against a reference fine
+    enough that its own error is negligible.
+    """
+
+    #: An order of magnitude inside `implied_correlation`'s 1e-8 tolerance, so
+    #: quadrature error cannot move the correlation the solver lands on.
+    TOLERANCE = 1e-9
+
+    @pytest.mark.parametrize(
+        "rho", [-0.99, -0.9, -0.7, -0.3, 0.0, 0.3, 0.7, 0.9, 0.95, 0.99]
+    )
+    def test_matches_a_much_finer_reference(self, rho):
+        for x in (-2.5, -1.0, 0.0, 1.0, 2.5):
+            for y in (-2.5, -1.0, 0.0, 1.0, 2.5):
+                adaptive = ca.bivariate_normal_cdf(x, y, rho)
+                reference = ca.bivariate_normal_cdf(x, y, rho, 6000)
+                assert adaptive == pytest.approx(reference, abs=self.TOLERANCE), (
+                    f"rho={rho} x={x} y={y} used {ca._simpson_steps(rho)} steps"
+                )
+
+    def test_step_count_rises_towards_the_extremes(self):
+        """The whole point: cheap in the middle, fine at the edges."""
+        assert ca._simpson_steps(0.0) < ca._simpson_steps(0.9)
+        assert ca._simpson_steps(0.9) < ca._simpson_steps(0.99)
+        assert ca._simpson_steps(0.0) == ca._simpson_steps(-0.0)
+        # Never below the floor, never above the old fixed default.
+        assert ca._simpson_steps(0.0) >= ca._BASE_STEPS
+        assert ca._simpson_steps(0.999999) <= ca._MAX_STEPS

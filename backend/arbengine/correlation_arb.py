@@ -42,7 +42,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
-from typing import Sequence
+from typing import Optional, Sequence
 
 # Prices this close to 0 or 1 make Phi^-1 blow up; nothing tradeable prices there.
 _MIN_PROB = 1e-6
@@ -125,8 +125,32 @@ def norm_ppf(p: float) -> float:
     return x
 
 
+#: Simpson steps at rho = 0, scaled up as |rho| approaches 1 by `_simpson_steps`.
+#: Chosen empirically -- `test_correlation_arb.py` pins the resulting accuracy
+#: against a 4,000-step reference across the whole (x, y, rho) grid.
+_BASE_STEPS = 448
+_MAX_STEPS = 2000
+
+
+def _simpson_steps(rho: float) -> int:
+    """How finely to sample the integral for this correlation.
+
+    The integrand carries a `Phi((y - rho*z)/sqrt(1 - rho^2))` factor, which
+    steepens into a step function as |rho| -> 1; away from that limit it is
+    smooth and a fixed 2,000 steps is three orders of magnitude more work than
+    double precision needs. Simpson's error falls as n^-4, and the steepness
+    grows as 1/sqrt(1 - rho^2), so sampling in proportion to that holds the
+    error roughly flat instead of over-paying in the middle of the range --
+    where a bisection spends most of its iterations.
+    """
+    n = int(_BASE_STEPS / math.sqrt(max(1.0 - rho * rho, 1e-12)))
+    return max(_BASE_STEPS, min(n, _MAX_STEPS))
+
+
 @lru_cache(maxsize=4096)
-def bivariate_normal_cdf(x: float, y: float, rho: float, n_steps: int = 2000) -> float:
+def bivariate_normal_cdf(
+    x: float, y: float, rho: float, n_steps: Optional[int] = None
+) -> float:
     """P(Z1 <= x, Z2 <= y) for a standard bivariate normal with correlation rho.
 
     Uses the exact conditioning identity -- Z2 | Z1=z is Normal(rho*z, 1-rho^2) --
@@ -150,6 +174,8 @@ def bivariate_normal_cdf(x: float, y: float, rho: float, n_steps: int = 2000) ->
         return 0.0
 
     denom = math.sqrt(1.0 - rho * rho)
+    if n_steps is None:
+        n_steps = _simpson_steps(rho)
     if n_steps % 2:
         n_steps += 1
     h = (x - lower) / n_steps
