@@ -4,34 +4,92 @@
 # during the build and its real API responses are captured as JSON fixtures.
 # That keeps the deployed numbers honest: the detectors, sizing and risk scoring
 # genuinely ran to produce them, rather than being hand-written to look good.
+#
+# ---------------------------------------------------------------------------
+# Why this publishes to a branch rather than `actions/deploy-pages`
+# ---------------------------------------------------------------------------
+# `actions/deploy-pages` keeps exactly ONE live deployment per repository. With
+# it, whichever branch deployed last owned the URL -- and since only `main` had
+# a trigger, every other branch's "demo" was simply the `main` build. Publishing
+# a directory tree into `gh-pages` instead lets several branches be live at
+# once, each at its own path:
+#
+#     main             -> https://<owner>.github.io/<repo>/
+#     ANTHONYS-BRANCH  -> https://<owner>.github.io/<repo>/anthony/
+#
+# ONE-TIME SETUP: Settings -> Pages -> Build and deployment -> Source must be
+# "Deploy from a branch", branch `gh-pages`, folder `/ (root)`. The first run of
+# this workflow creates that branch.
 
 name: Deploy demo
 
 on:
   push:
-    branches: [main]
+    branches: [main, ANTHONYS-BRANCH]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Let a running deploy finish rather than cancelling it half-published.
+# Serialise per branch: two runs racing on the same subdirectory would leave
+# gh-pages half-written. Different branches write to different subdirectories,
+# so they need not queue behind each other -- only the final push does, and
+# that is rebased and retried below.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Everything downstream keys off these: where on the site this build
+      # lives, and what the provenance ribbon in the UI reports.
+      - name: Resolve deploy target
+        id: target
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_REF_NAME}"
+          if [ "$branch" = "main" ]; then
+            subdir=""
+            base="/${{ github.event.repository.name }}"
+          else
+            # Lowercase and strip anything not URL-safe. A trailing "-branch" is
+            # dropped, so ANTHONYS-BRANCH lands on the short, memorable
+            # /anthony/ rather than /anthonys-branch/.
+            slug=$(printf '%s' "$branch" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -e 's/-branch$//' -e 's/[^a-z0-9._-][^a-z0-9._-]*/-/g' \
+                    -e 's/^-*//' -e 's/-*$//')
+            if [ -z "$slug" ]; then slug="preview"; fi
+            subdir="$slug"
+            base="/${{ github.event.repository.name }}/$slug"
+          fi
+          {
+            echo "branch=$branch"
+            echo "subdir=$subdir"
+            echo "base_path=$base"
+            echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+          # A commit subject can contain quotes; the delimited form carries it
+          # verbatim. Truncated, because the ribbon shows one line.
+          {
+            echo "subject<<COMMIT_SUBJECT_EOF"
+            git log -1 --pretty=%s | cut -c1-160
+            echo "COMMIT_SUBJECT_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing '$branch' to '$base'"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
 
       - name: Install engine dependencies
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
@@ -40,6 +98,9 @@ jobs:
         run: python -m pytest tests/ -q
         working-directory: backend
 
+      # Regenerated on every push, so the deployed fixtures are always THIS
+      # commit's detectors, sizing and scoring -- not a snapshot committed
+      # weeks ago. This is what makes the branch demo track the branch.
       - name: Capture demo fixtures from the real engine
         run: python -m scripts.generate_demo_fixtures
         working-directory: backend
@@ -73,30 +134,103 @@ jobs:
         run: npm run build:demo
         working-directory: frontend
         env:
-          # Pages serves the site from /<repo>, so assets need that prefix.
-          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          # Pages serves the site from /<repo>[/<slug>], so assets need that
+          # prefix or every _next/ request 404s.
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.target.outputs.base_path }}
+          NEXT_PUBLIC_BUILD_BRANCH: ${{ steps.target.outputs.branch }}
+          NEXT_PUBLIC_BUILD_SHA: ${{ github.sha }}
+          NEXT_PUBLIC_BUILD_TIME: ${{ steps.target.outputs.built_at }}
+          NEXT_PUBLIC_BUILD_SUBJECT: ${{ steps.target.outputs.subject }}
+          NEXT_PUBLIC_BUILD_REPO: ${{ github.repository }}
+          NEXT_PUBLIC_BUILD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Disable Jekyll
         # Without this, Pages strips the _next/ directory and the site loads
         # with no JavaScript or CSS at all.
         run: touch frontend/out/.nojekyll
 
-      - uses: actions/configure-pages@v5
-        with:
-          # Turn Pages on for the repo if it is not already, so a fresh clone
-          # deploys without anyone visiting the settings page first.
-          enablement: true
+      # Publishes into gh-pages under this branch's subdirectory, replacing only
+      # that subdirectory. Other branches' demos are left untouched, which is
+      # the whole point of the layout.
+      - name: Publish to gh-pages
+        env:
+          SUBDIR: ${{ steps.target.outputs.subdir }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          COMMIT_SHA: ${{ github.sha }}
+          REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          origin="https://x-access-token:${GH_TOKEN}@${REMOTE#https://}"
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/out
+          work="$(mktemp -d)"
+          if git ls-remote --exit-code --heads "$origin" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$origin" "$work"
+          else
+            git clone --depth 1 "$origin" "$work"
+            git -C "$work" checkout --orphan gh-pages
+            git -C "$work" rm -rf . >/dev/null 2>&1 || true
+          fi
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          git -C "$work" config user.name "github-actions[bot]"
+          git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ -z "$SUBDIR" ]; then
+            # main owns the root. Clear the root's own files, but keep every
+            # branch preview, which lives one level down in its own directory.
+            find "$work" -mindepth 1 -maxdepth 1 -name '.git' -prune -o \
+              -name 'previews' -prune -o -exec rm -rf {} +
+            cp -a frontend/out/. "$work"/
+          else
+            rm -rf "${work:?}/${SUBDIR:?}"
+            mkdir -p "$work/$SUBDIR"
+            cp -a frontend/out/. "$work/$SUBDIR"/
+          fi
+
+          # Pages needs this at the root whichever branch published.
+          touch "$work/.nojekyll"
+
+          cd "$work"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "gh-pages already matches this build; nothing to publish."
+            exit 0
+          fi
+          git commit -m "demo: ${BRANCH} @ ${COMMIT_SHA}"
+
+          # Two branches finishing at once both push to gh-pages. Rebase and
+          # retry rather than failing the run: the trees touch different
+          # directories, so the rebase is always trivial.
+          for attempt in 1 2 3 4 5; do
+            if git push "$origin" gh-pages; then
+              echo "published on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected; rebasing (attempt $attempt)"
+            git fetch "$origin" gh-pages
+            git rebase FETCH_HEAD
+            sleep $(( attempt * 3 ))
+          done
+          echo "could not publish to gh-pages after 5 attempts" >&2
+          exit 1
+
+      - name: Summary
+        if: always()
+        env:
+          SUBDIR: ${{ steps.target.outputs.subdir }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          path="https://${OWNER}.github.io/${REPO}/"
+          if [ -n "$SUBDIR" ]; then path="${path}${SUBDIR}/"; fi
+          {
+            echo "### Demo published"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Branch | \`${BRANCH}\` |"
+            echo "| Commit | ${GITHUB_SHA} |"
+            echo "| URL | ${path} |"
+          } >> "$GITHUB_STEP_SUMMARY"

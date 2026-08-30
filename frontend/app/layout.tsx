@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { BuildRibbon } from "@/components/BuildRibbon";
 import { Nav } from "@/components/Nav";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,7 @@ export default function RootLayout({
       </head>
       <body>
         <div className="flex min-h-screen flex-col">
+          <BuildRibbon />
           <Nav />
           <main className="mx-auto w-full max-w-[1560px] flex-1 px-4 py-6 sm:px-6">
             {children}

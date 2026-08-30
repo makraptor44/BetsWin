@@ -32,10 +32,14 @@ Very much open to change roles
 
 # Implementation
 
-> **[▶ Live demo](https://makraptor44.github.io/BetsWin/)** — a static snapshot captured
-> from the real engine. The detectors, sizing and risk scoring genuinely ran to
-> produce those numbers; nothing is polling live venues. The calculators are fully
-> interactive.
+> **[▶ Live demo — `main`](https://makraptor44.github.io/BetsWin/)** &nbsp;·&nbsp;
+> **[▶ Live demo — `ANTHONYS-BRANCH`](https://makraptor44.github.io/BetsWin/anthony/)**
+>
+> Static snapshots captured from the real engine. The detectors, sizing and risk
+> scoring genuinely ran to produce those numbers; nothing is polling live venues.
+> The calculators are fully interactive. Each branch deploys to its own URL and
+> rebuilds on every push, and the ribbon at the top of the page names the exact
+> commit the build came from.
 
 A working build of the system described above. It polls Polymarket, Kalshi and
 Smarkets (Betfair too, with credentials), finds sets of positions that cost less
@@ -325,9 +329,35 @@ python -m pytest tests/ -q           # the backend test suite
 ## The demo deployment
 
 `.github/workflows/deploy-demo.yml` publishes the dashboard to GitHub Pages on
-every push to `main`. The build runs the test suite, boots the engine in demo
-mode, captures its real API responses as JSON, then exports the frontend as
-static files that read those fixtures instead of calling a backend.
+every push to `main` or `ANTHONYS-BRANCH`. The build runs the test suite, boots
+the engine in demo mode, captures its real API responses as JSON, then exports
+the frontend as static files that read those fixtures instead of calling a
+backend.
+
+**One demo per branch.** `actions/deploy-pages` keeps a single live deployment
+per repository, so whichever branch published last owned the URL -- and with a
+`main`-only trigger, every branch demo was in fact the `main` build. The
+workflow now publishes a directory tree into a `gh-pages` branch instead, one
+subdirectory per branch, so several are live at once:
+
+| Branch | URL |
+|---|---|
+| `main` | https://makraptor44.github.io/BetsWin/ |
+| `ANTHONYS-BRANCH` | https://makraptor44.github.io/BetsWin/anthony/ |
+
+Each run rewrites only its own subdirectory and rebases if another branch
+published while it was building, so the two never clobber each other. Fixtures
+are regenerated from that commit's engine on every run, so a branch demo is
+always that branch's current behaviour rather than a checked-in snapshot.
+
+`frontend/components/BuildRibbon.tsx` renders the branch, short SHA, commit
+subject and build age at the top of every demo page, linked to the commit and
+the workflow run -- two static exports otherwise look identical, and the
+regenerated fixtures move on every build for reasons unrelated to the branch.
+
+> **Requires one settings change:** Settings -> Pages -> Build and deployment ->
+> Source must be **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`.
+> The first workflow run creates that branch.
 
 Pure-arithmetic endpoints (stake sizing, Kelly, void adjustment, odds
 conversion, the backtest Monte Carlo) are ported to TypeScript in
