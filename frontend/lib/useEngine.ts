@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, STATIC_DEMO, api } from "./api";
-import type { Arb, EngineStatus, NearMiss, ScanStats } from "./types";
+import type { Analytics, Arb, EngineStatus, NearMiss, ScanStats } from "./types";
 
 type ConnectionState = "connecting" | "live" | "polling" | "offline" | "snapshot";
 
@@ -87,6 +87,27 @@ function activityFrom(stats: ScanStats): ActivityEntry {
 }
 
 /**
+ * The analytics endpoint reports a narrower row than the live socket does: no
+ * finish time, no near-miss count, no gap. Adapting it explicitly keeps those
+ * absences visible instead of casting a partial object to `ScanStats` and
+ * letting the missing fields read as zero somewhere downstream.
+ */
+function activityFromScanRow(
+  row: Analytics["recent_scans"][number],
+): ActivityEntry {
+  return {
+    at: new Date(row.started_at).getTime() || Date.now(),
+    events: row.events_scanned,
+    arbs: row.arbs_found,
+    newArbs: row.new_arbs,
+    nearMisses: 0,
+    tightestGapBps: null,
+    durationSeconds: row.duration ?? 0,
+    errors: 0,
+  };
+}
+
+/**
  * Live engine state.
  *
  * Prefers a WebSocket push so a new opportunity lands on screen within a second
@@ -124,14 +145,22 @@ export function useEngine(): EngineState {
   // any shared state.
   const genRef = useRef(0);
 
-  const pushActivity = useCallback((stats: ScanStats | null | undefined) => {
-    if (!stats) return;
-    const entry = activityFrom(stats);
+  const pushEntry = useCallback((entry: ActivityEntry) => {
     setActivity((prev) => {
-      if (prev.length > 0 && prev[0].at === entry.at) return prev;
+      // Keyed on the timestamp: the same scan arrives over the socket and again
+      // on the next poll, and a feed that lists it twice reads as two cycles.
+      if (prev.some((e) => e.at === entry.at)) return prev;
       return [entry, ...prev].slice(0, ACTIVITY_LIMIT);
     });
   }, []);
+
+  const pushActivity = useCallback(
+    (stats: ScanStats | null | undefined) => {
+      if (!stats) return;
+      pushEntry(activityFrom(stats));
+    },
+    [pushEntry],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -143,6 +172,23 @@ export function useEngine(): EngineState {
       setArbs(arbRes.arbs);
       setStatus(statusRes);
       setNearMisses(missRes.near_misses);
+
+      // The static demo has no socket and never scans again, so the activity
+      // log would hold the single scan `status` happens to carry -- one lonely
+      // point, no trend, and a feed that looks broken rather than idle. The
+      // fixtures do contain the engine's real scan history, so replay it.
+      if (STATIC_DEMO) {
+        try {
+          const { recent_scans } = await api.analytics(30);
+          // Oldest first, because `pushEntry` prepends.
+          for (const row of [...recent_scans].reverse()) {
+            pushEntry(activityFromScanRow(row));
+          }
+        } catch {
+          // Analytics is not essential to this page; the scan carried by
+          // `status` below still renders on its own.
+        }
+      }
       pushActivity(statusRes.last_scan);
       setLastUpdate(Date.now());
       setLastFrame(Date.now());
@@ -160,7 +206,7 @@ export function useEngine(): EngineState {
       setError(message);
       setConnection("offline");
     }
-  }, [pushActivity]);
+  }, [pushActivity, pushEntry]);
 
   const scanNow = useCallback(async () => {
     setScanning(true);
