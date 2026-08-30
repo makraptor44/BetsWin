@@ -227,8 +227,6 @@ export function CommandPalette() {
     }
   };
 
-  let lastGroup = "";
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]"
@@ -278,8 +276,10 @@ export function CommandPalette() {
           )}
 
           {results.map((command, i) => {
-            const newGroup = command.group !== lastGroup;
-            lastGroup = command.group;
+            // Derived from the neighbour rather than a running variable: the
+            // React compiler rejects mutation during render, and rightly --
+            // the same list rendered twice would group differently.
+            const newGroup = i === 0 || results[i - 1].group !== command.group;
             return (
               <div key={command.id}>
                 {newGroup && (
