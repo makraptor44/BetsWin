@@ -38,9 +38,9 @@ each venue's own terms. Edit them; the engine reads them at scan time.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Optional
+from typing import Iterable
 
 
 class Zone(str, Enum):

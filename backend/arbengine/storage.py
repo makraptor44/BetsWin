@@ -21,7 +21,7 @@ from typing import Any, Optional, Sequence
 
 from loguru import logger
 
-from .models import Arb, ArbKind, ScanStats
+from .models import Arb, ScanStats
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -705,10 +705,6 @@ class ArbStore:
             "DELETE FROM arbs WHERE detected_at < ? AND placed = 0", (cutoff,)
         )
         return removed
-
-    def close(self) -> None:
-        with self._lock:
-            self.conn.close()
 
 
 class AsyncArbStore:

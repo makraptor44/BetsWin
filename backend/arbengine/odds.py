@@ -145,12 +145,12 @@ def worst_case_profit(stakes: Sequence[float], decimal_odds: Sequence[float]) ->
     if not stakes:
         return 0.0
     total = sum(stakes)
-    return min(s * d for s, d in zip(stakes, decimal_odds)) - total
+    return min(s * d for s, d in zip(stakes, decimal_odds, strict=True)) - total
 
 
 def payouts(stakes: Sequence[float], decimal_odds: Sequence[float]) -> list[float]:
     """Per-outcome payout. Payout on leg i is s_i * d_i (Part I s3.1)."""
-    return [s * d for s, d in zip(stakes, decimal_odds)]
+    return [s * d for s, d in zip(stakes, decimal_odds, strict=True)]
 
 
 def profit_by_outcome(stakes: Sequence[float], decimal_odds: Sequence[float]) -> list[float]:
@@ -170,7 +170,7 @@ def skewed_stakes(
     leg i settles at the quoted price, then renormalise. Under-staking a doubtful
     leg trades some hedge completeness for higher conditional return.
     """
-    weights = [q * decimal_to_prob(d) for d, q in zip(decimal_odds, settle_probs)]
+    weights = [q * decimal_to_prob(d) for d, q in zip(decimal_odds, settle_probs, strict=True)]
     tw = sum(weights)
     if tw <= 0:
         return [0.0] * len(decimal_odds)

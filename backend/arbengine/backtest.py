@@ -126,7 +126,7 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
         for r in rows
     ]
     margins = [float(r["net_margin"]) for r in rows]
-    profits = [s * m for s, m in zip(stakes, margins)]
+    profits = [s * m for s, m in zip(stakes, margins, strict=True)]
     void_rates = [_void_rate_for(r, p) for r in rows]
 
     result.n = len(rows)
@@ -148,7 +148,7 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
     for _ in range(max(1, p.simulations)):
         run = 0.0
         mask = 0
-        for i, (stake, profit, vr) in enumerate(zip(stakes, profits, void_rates)):
+        for i, (stake, profit, vr) in enumerate(zip(stakes, profits, void_rates, strict=True)):
             # A voided leg leaves unhedged exposure on the rest of the set
             # (Part I s9.1); `void_loss` is that cost as a fraction of stake.
             if rng.random() < vr:
@@ -187,7 +187,7 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
 
     # Per-kind breakdown.
     by_kind: dict[str, dict[str, Any]] = {}
-    for row, stake, profit, vr in zip(rows, stakes, profits, void_rates):
+    for row, stake, profit, vr in zip(rows, stakes, profits, void_rates, strict=True):
         k = row["kind"]
         b = by_kind.setdefault(
             k, {"kind": k, "n": 0, "turnover": 0.0, "naive_profit": 0.0,
@@ -222,7 +222,7 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
     _, median_mask = runs[median_index]
 
     equity = 0.0
-    for i, (row, stake, profit) in enumerate(zip(rows, stakes, profits)):
+    for i, (row, stake, profit) in enumerate(zip(rows, stakes, profits, strict=True)):
         voided = bool(median_mask >> i & 1)
         equity += (-p.void_loss * stake) if voided else profit
         result.equity_curve.append(

@@ -26,12 +26,11 @@ from __future__ import annotations
 import hashlib
 import itertools
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Iterable, Iterator, Optional, Sequence
+from datetime import datetime, timedelta
+from typing import Iterator, Optional, Sequence
 
 from loguru import logger
 
-from . import odds as om
 from .config import settings
 from .models import (
     Arb,
@@ -41,7 +40,6 @@ from .models import (
     NearMiss,
     Quote,
     RiskFlag,
-    Side,
     utcnow,
 )
 from .normalise import MatchResult, match_titles

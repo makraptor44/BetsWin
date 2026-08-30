@@ -17,7 +17,6 @@ import json
 import math
 import secrets
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -43,13 +42,11 @@ from .correlation_detector import evaluate_pair
 from .fees import configure_from_settings, fee_model_for
 from .models import Arb, ArbKind, EngineStatus, Event
 from .scanner import Scanner
-from .sizing import resize, size_arb
 from .venues import (
     Zone,
     all_venues,
     can_pair,
     describe,
-    venue as venue_info,
     zone_of,
     zones_available_from,
 )

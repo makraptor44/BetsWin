@@ -259,7 +259,7 @@ def size_arb(
     # "available" depth with `depth_limited` false and no THIN_LIQUIDITY flag.
     depth_limited = False
     capacities: list[float] = []
-    for q, w in zip(quotes, weights):
+    for q, w in zip(quotes, weights, strict=True):
         capacity = book_capacity(q.depth, q.price, q.size_available)
         venue_cap = limits.get(q.venue)
         if venue_cap is not None:
@@ -293,24 +293,24 @@ def size_arb(
     def _price(fills_: Sequence[Fill], notionals: Sequence[float]) -> list[float]:
         """Fee-adjusted decimal odds at the average price each leg realised."""
         out: list[float] = []
-        for q, f, notional in zip(quotes, fills_, notionals):
+        for q, f, notional in zip(quotes, fills_, notionals, strict=True):
             fees = fee_model_for(q.venue)
             contracts = max(notional / f.avg_price, 1.0) if f.avg_price > 0 else 1.0
             out.append(om.prob_to_decimal(fees.effective_price(f.avg_price, contracts)))
         return out
 
     notionals = [target * w for w in weights]
-    fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals)]
+    fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals, strict=True)]
     eff_odds = _price(fills, notionals)
 
     for _ in range(_SIZING_REFINEMENTS):
         next_notionals = om.equal_profit_stakes(eff_odds, target)
         if max(
-            abs(a - b) for a, b in zip(next_notionals, notionals)
+            abs(a - b) for a, b in zip(next_notionals, notionals, strict=True)
         ) <= _SIZING_TOLERANCE * max(target, 1.0):
             break
         notionals = next_notionals
-        fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals)]
+        fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals, strict=True)]
         eff_odds = _price(fills, notionals)
 
     # For a payout multiple of k, the arb condition is sum(p_i) < k, so the
@@ -337,7 +337,7 @@ def size_arb(
 
     legs = tuple(
         _build_leg(q, s, f.avg_price, event_title)
-        for q, s, f in zip(quotes, rounded, fills)
+        for q, s, f in zip(quotes, rounded, fills, strict=True)
     )
 
     payout_if, worst = _state_payouts(legs, payout_multiple)
@@ -350,7 +350,7 @@ def size_arb(
     # so every entry is real, but the filter stays off deliberately: if one is
     # ever zero the ceiling should be zero, not the next leg up.
     max_available = min(
-        (c / w for c, w in zip(capacities, weights) if w > 0),
+        (c / w for c, w in zip(capacities, weights, strict=True) if w > 0),
         default=total,
     )
 
@@ -486,7 +486,7 @@ def resize(sized: SizedArb, new_total: float) -> SizedArb:
     rounded = [om.round_down_to_step(s, settings.stake_step) for s in stakes]
 
     legs: list[ArbLeg] = []
-    for leg, stake in zip(sized.legs, rounded):
+    for leg, stake in zip(sized.legs, rounded, strict=True):
         fees = fee_model_for(leg.venue)
         contracts = stake / leg.effective_price if leg.effective_price > 0 else 0.0
         legs.append(

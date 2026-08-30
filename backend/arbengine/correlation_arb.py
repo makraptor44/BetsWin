@@ -284,7 +284,7 @@ def estimate_rho_prior_from_outcomes(
 
     p_a = sum(outcomes_a) / n
     p_b = sum(outcomes_b) / n
-    p_joint = sum(1 for a, b in zip(outcomes_a, outcomes_b) if a and b) / n
+    p_joint = sum(1 for a, b in zip(outcomes_a, outcomes_b, strict=True) if a and b) / n
 
     # A sample can hand back an empirical marginal of exactly 0 or 1; clamp to
     # the tightest value the sample size can actually resolve.

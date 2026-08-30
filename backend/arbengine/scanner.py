@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Iterable, Optional, Sequence
 
 from loguru import logger
@@ -29,7 +29,7 @@ from .alerts import AlertManager
 from .config import settings
 from .correlation_detector import scan_correlation_pairs
 from .detector import candidate_events, scan
-from .models import Arb, ArbKind, EngineStatus, Event, NearMiss, ScanStats, utcnow
+from .models import Arb, EngineStatus, Event, NearMiss, ScanStats, utcnow
 from .sources import (
     BetfairSource,
     KalshiSource,
