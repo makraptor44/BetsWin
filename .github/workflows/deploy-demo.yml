@@ -6,20 +6,30 @@
 # genuinely ran to produce them, rather than being hand-written to look good.
 #
 # ---------------------------------------------------------------------------
-# Why this publishes to a branch rather than `actions/deploy-pages`
+# How several branches stay live at once
 # ---------------------------------------------------------------------------
-# `actions/deploy-pages` keeps exactly ONE live deployment per repository. With
-# it, whichever branch deployed last owned the URL -- and since only `main` had
-# a trigger, every other branch's "demo" was simply the `main` build. Publishing
-# a directory tree into `gh-pages` instead lets several branches be live at
-# once, each at its own path:
+# Pages serves ONE site per repository, and `actions/deploy-pages` replaces all
+# of it on every deployment. With only a `main` trigger, every other branch's
+# "demo" was simply the `main` build; adding a second trigger alone would have
+# made the two branches take turns overwriting each other.
+#
+# So the site is assembled rather than replaced. A `gh-pages` branch holds the
+# accumulated tree -- `main` at the root, every other branch in its own
+# subdirectory -- and each run rewrites only its own directory before deploying
+# the whole tree:
 #
 #     main             -> https://<owner>.github.io/<repo>/
 #     ANTHONYS-BRANCH  -> https://<owner>.github.io/<repo>/anthony/
 #
-# ONE-TIME SETUP: Settings -> Pages -> Build and deployment -> Source must be
-# "Deploy from a branch", branch `gh-pages`, folder `/ (root)`. The first run of
-# this workflow creates that branch.
+# Deploying the assembled tree through `actions/deploy-pages` means this works
+# with the repository's existing "GitHub Actions" Pages source, with no settings
+# change. `gh-pages` is storage here, not the serving root -- though pointing
+# Pages at that branch instead would also work, and would additionally survive
+# the caveat below.
+#
+# CAVEAT until `main` merges this file: a push to `main` still runs main's older
+# workflow, which deploys main alone and drops the branch subdirectories until
+# the next branch build restores them.
 
 name: Deploy demo
 
@@ -30,6 +40,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 # Serialise per branch: two runs racing on the same subdirectory would leave
 # gh-pages half-written. Different branches write to different subdirectories,
@@ -169,7 +181,8 @@ jobs:
           set -euo pipefail
           origin="https://x-access-token:${GH_TOKEN}@${REMOTE#https://}"
 
-          work="$(mktemp -d)"
+          work="${RUNNER_TEMP}/gh-pages"
+          rm -rf "$work"
           if git ls-remote --exit-code --heads "$origin" gh-pages >/dev/null 2>&1; then
             git clone --depth 1 --branch gh-pages "$origin" "$work"
           else
@@ -219,9 +232,12 @@ jobs:
           cd "$work"
           git add -A
           if git diff --cached --quiet; then
-            echo "gh-pages already matches this build; nothing to publish."
+            # Not a failure, and not a reason to skip the deploy below: this
+            # tree is still the one that should be live.
+            echo "gh-pages already matches this build; deploying it unchanged."
             exit 0
           fi
+
           git commit -m "demo: ${BRANCH} @ ${COMMIT_SHA}"
 
           # Two branches finishing at once both push to gh-pages. Rebase and
@@ -239,6 +255,29 @@ jobs:
           done
           echo "could not publish to gh-pages after 5 attempts" >&2
           exit 1
+
+      # The assembled tree -- every branch's demo -- becomes the Pages artifact.
+      # Deploying it through `actions/deploy-pages` is what lets this work with
+      # the repository's existing "GitHub Actions" Pages source: no settings
+      # change, and the branch subdirectories survive because the deployment
+      # carries all of them, not just the branch that triggered the run.
+      - name: Stage the assembled site
+        run: |
+          set -euo pipefail
+          # The artifact is a tarball of this directory; .git is a few thousand
+          # objects of pure noise inside it.
+          rm -rf "${RUNNER_TEMP}/gh-pages/.git"
+          find "${RUNNER_TEMP}/gh-pages" -maxdepth 1 -mindepth 1 -printf '  %f\n'
+
+      - uses: actions/configure-pages@v5
+        with:
+          # Turn Pages on for the repo if it is not already, so a fresh clone
+          # deploys without anyone visiting the settings page first.
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/gh-pages
 
       - name: Summary
         if: always()
@@ -260,3 +299,22 @@ jobs:
             echo "| Commit | ${GITHUB_SHA} |"
             echo "| URL | ${path} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Separate job because `actions/deploy-pages` requires the github-pages
+  # environment, and binding that to the build job would gate every push on an
+  # environment approval rather than just the publish.
+  deploy:
+    needs: build-and-publish
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # A Pages deployment is repository-wide, so unlike the per-branch build it
+    # genuinely cannot run concurrently with another. Never cancel one midway:
+    # a half-published site is worse than a slightly stale one.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

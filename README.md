@@ -334,11 +334,13 @@ the engine in demo mode, captures its real API responses as JSON, then exports
 the frontend as static files that read those fixtures instead of calling a
 backend.
 
-**One demo per branch.** `actions/deploy-pages` keeps a single live deployment
-per repository, so whichever branch published last owned the URL -- and with a
-`main`-only trigger, every branch demo was in fact the `main` build. The
-workflow now publishes a directory tree into a `gh-pages` branch instead, one
-subdirectory per branch, so several are live at once:
+**One demo per branch.** Pages serves a single site per repository and
+`actions/deploy-pages` replaces all of it on every deployment, so whichever
+branch published last owned the URL -- and with a `main`-only trigger, every
+branch demo was in fact the `main` build. The workflow now *assembles* the site
+instead of replacing it: a `gh-pages` branch accumulates one subdirectory per
+branch, and each run rewrites only its own directory before deploying the whole
+tree. Several demos are live at once:
 
 | Branch | URL |
 |---|---|
@@ -350,14 +352,17 @@ published while it was building, so the two never clobber each other. Fixtures
 are regenerated from that commit's engine on every run, so a branch demo is
 always that branch's current behaviour rather than a checked-in snapshot.
 
+`gh-pages` is storage here, not the serving root: the assembled tree is uploaded
+as the Pages artifact, so this needs no change to the repository's Pages source.
+Until `main` merges this workflow, a push to `main` still runs main's older
+single-branch deploy and drops the branch subdirectories until the next branch
+build restores them.
+
 `frontend/components/BuildRibbon.tsx` renders the branch, short SHA, commit
 subject and build age at the top of every demo page, linked to the commit and
 the workflow run -- two static exports otherwise look identical, and the
 regenerated fixtures move on every build for reasons unrelated to the branch.
 
-> **Requires one settings change:** Settings -> Pages -> Build and deployment ->
-> Source must be **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`.
-> The first workflow run creates that branch.
 
 Pure-arithmetic endpoints (stake sizing, Kelly, void adjustment, odds
 conversion, the backtest Monte Carlo) are ported to TypeScript in
