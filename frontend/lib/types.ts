@@ -521,6 +521,9 @@ export interface PositionItem {
   placed: number;
   settled: number;
   realised_pnl: number | null;
+  /** "hold_to_resolution" or "sell_back_early". Null until settled. */
+  settlement_type: string | null;
+  settled_at: string | null;
   placements?: PositionPlacement[];
 }
 

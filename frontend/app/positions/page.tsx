@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Card, EmptyState, ErrorState, SectionTitle, Skeleton, Stat, VenueChip, ZoneChip } from "@/components/ui";
+import { Card, EmptyState, ErrorState, Skeleton, Stat, VenueChip, ZoneChip } from "@/components/ui";
 import { api } from "@/lib/api";
 import {
   KIND_LABEL,
@@ -31,8 +31,10 @@ export default function PositionsPage() {
     try {
       const res = await api.positions();
       setData(res);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load positions ledger.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load positions ledger.",
+      );
     } finally {
       setLoading(false);
     }
@@ -172,7 +174,7 @@ export default function PositionsPage() {
                         <ZoneChip zone={pos.zone} short />
                         {pos.settled ? (
                           <span className="chip chip-positive">
-                            ✓ Settled ({(pos as any).settlement_type === "sell_back_early" ? "Sold Back" : "Resolution"})
+                            ✓ Settled ({pos.settlement_type === "sell_back_early" ? "Sold Back" : "Resolution"})
                           </span>
                         ) : (
                           <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
@@ -362,8 +364,10 @@ function HoldToResolutionModal({
         custom_pnl: customPnl ? parseFloat(customPnl) : undefined,
       });
       onSettled(res.message);
-    } catch (err: any) {
-      setError(err?.message || "Failed to settle position.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to settle position.",
+      );
       setBusy(false);
     }
   };
@@ -497,8 +501,14 @@ function SellBackEarlyModal({
       try {
         const q = await api.unwindQuote(position.id);
         if (mounted) setQuote(q);
-      } catch (err: any) {
-        if (mounted) setError(err?.message || "Failed to fetch live unwind quote.");
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to fetch live unwind quote.",
+          );
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -521,8 +531,12 @@ function SellBackEarlyModal({
         note: note.trim() || undefined,
       });
       onSettled(res.message);
-    } catch (err: any) {
-      setError(err?.message || "Failed to execute sell back orders.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to execute sell back orders.",
+      );
       setBusy(false);
     }
   };

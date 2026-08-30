@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 import {
@@ -8,11 +8,10 @@ import {
   money,
   num,
   pct,
-  usd,
 } from "@/lib/format";
 import type { Arb, ArbLeg } from "@/lib/types";
 
-import { FlagChip, VenueChip, ZoneChip } from "./ui";
+import { VenueChip, ZoneChip } from "./ui";
 
 interface PlaceBetModalProps {
   arb: Arb;
@@ -36,13 +35,59 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
     arb.legs.map((l) => l.stake.toString())
   );
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape" && !busy) {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      // Focus trap. The dialog declares role="dialog" aria-modal="true", which
+      // promises the rest of the page is inert -- but Tab walked straight out
+      // of it into the page behind, so a keyboard user could operate the
+      // controls the overlay was covering.
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, busy]);
+
+  // Move focus into the dialog on open, and put it back where it came from on
+  // close, so the keyboard does not lose its place.
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current
+      ?.querySelector<HTMLElement>("button, input, [tabindex]")
+      ?.focus();
+    return () => previous?.focus?.();
+  }, []);
+
+  // Clear the success timer on unmount: it called onSuccess a second after the
+  // request returned, and firing that against an unmounted tree is a state
+  // update on nothing.
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
 
   const handlePlace = async () => {
     if (!confirmed) {
@@ -66,11 +111,15 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
       });
 
       setSuccess(true);
-      setTimeout(() => {
+      successTimer.current = setTimeout(() => {
         onSuccess(res.message);
       }, 1000);
-    } catch (err: any) {
-      setError(err?.message || "Failed to place bet. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to place bet. Please try again.",
+      );
       setBusy(false);
     }
   };
@@ -89,6 +138,7 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
       />
 
       <div
+        ref={dialogRef}
         className="relative w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         style={{
           background: "var(--bg)",

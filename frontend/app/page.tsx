@@ -8,7 +8,7 @@ import { PlaceBetModal } from "@/components/PlaceBetModal";
 import { StatusBar } from "@/components/StatusBar";
 import { ActivityFeed, Watchlist } from "@/components/Watchlist";
 import { Card, EmptyState, ErrorState, Stat } from "@/components/ui";
-import { KIND_LABEL, ZONE_LABEL, bps, pct, usd, usdCompact } from "@/lib/format";
+import { KIND_LABEL, ZONE_LABEL, pct, usd, usdCompact } from "@/lib/format";
 import type { Arb, ArbKind, ZoneKey } from "@/lib/types";
 import { useEngine } from "@/lib/useEngine";
 

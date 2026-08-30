@@ -253,7 +253,9 @@ export function runBacktest(
     simulations: number;
   },
 ) {
-  const kindRates: Record<string, number> = {
+  // Mirrors BacktestParams.venue_void_rates: keyed by kind AND by venue, worst
+  // one wins. Cross-venue legs carry the most rulebook risk (Part I s9.2).
+  const voidRateFor: Record<string, number> = {
     cross_venue: 0.05,
     sportsbook: 0.03,
   };
@@ -266,8 +268,13 @@ export function runBacktest(
   const stakes = filtered.map((r) => r.total_stake);
   const profits = filtered.map((r) => r.total_stake * r.net_margin);
   const voidRates = filtered.map((r) => {
-    let rate = kindRates[r.kind] ?? opts.voidRate;
-    for (const v of r.venues) rate = Math.max(rate, opts.voidRate);
+    let rate = voidRateFor[r.kind] ?? opts.voidRate;
+    // This loop used to ignore `v` and re-take max against the same global
+    // rate every time, so per-venue rates were silently dropped and the demo
+    // backtest disagreed with the engine's.
+    for (const v of r.venues) {
+      rate = Math.max(rate, voidRateFor[v] ?? opts.voidRate);
+    }
     if (r.venues.length > 1) rate = 1 - (1 - rate) ** 2;
     return Math.min(rate, 0.9);
   });

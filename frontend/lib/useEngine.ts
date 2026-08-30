@@ -40,18 +40,37 @@ const RECONNECT_BASE_MS = 1_500;
 const RECONNECT_MAX_MS = 30_000;
 const ACTIVITY_LIMIT = 40;
 
+/**
+ * Where the live socket lives.
+ *
+ * Order of preference:
+ *   1. NEXT_PUBLIC_WS_URL, if the deployment states one.
+ *   2. NEXT_PUBLIC_API_URL's origin, which is the same backend the rewrite
+ *      proxies /api to -- so the socket follows the API wherever it moved.
+ *   3. The page's own origin.
+ *
+ * This used to hard-code `port === "3000"` -> `:8000`. Both start.sh and
+ * start.ps1 deliberately move to a free port when those are taken, so the
+ * socket pointed at nothing and the UI silently fell back to polling -- and
+ * under `next start` NEXT_PUBLIC_WS_URL is baked in at build time, so it could
+ * not correct it either.
+ */
 function wsUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_WS_URL;
   if (explicit) return explicit;
   if (typeof window === "undefined") return "";
-  // The dev rewrite proxies /api but not the socket, so target the backend
-  // directly on its own port when running against localhost.
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host =
-    window.location.port === "3000"
-      ? `${window.location.hostname}:8000`
-      : window.location.host;
-  return `${proto}//${host}/ws`;
+
+  const toWs = (origin: string) => origin.replace(/^http/, "ws") + "/ws";
+
+  const api = process.env.NEXT_PUBLIC_API_URL;
+  if (api) {
+    try {
+      return toWs(new URL(api).origin);
+    } catch {
+      /* malformed: fall through to the page's own origin */
+    }
+  }
+  return toWs(window.location.origin);
 }
 
 function activityFrom(stats: ScanStats): ActivityEntry {
@@ -285,7 +304,19 @@ export function useAsync<T>(
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const fnRef = useRef(fn);
-  fnRef.current = fn;
+
+  // Assigned in an effect, not during render. Writing to a ref while rendering
+  // is a side effect in the render phase, which React is explicitly allowed to
+  // discard or run twice.
+  useEffect(() => {
+    fnRef.current = fn;
+  });
+
+  // The caller's array is serialised into ONE dependency rather than spread
+  // into the list. Spreading made the dependency list variable-length, and
+  // React throws "The final argument passed to useEffect changed size between
+  // renders" the moment any caller passes a list whose length can change.
+  const depKey = JSON.stringify(deps);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,8 +342,7 @@ export function useAsync<T>(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, nonce]);
+  }, [depKey, nonce]);
 
   return { data, loading, error, reload: () => setNonce((n) => n + 1) };
 }

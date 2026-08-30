@@ -41,7 +41,9 @@ export default function MarketsPage() {
     [venue, zone, category, search, sort, onlyME],
   );
 
-  const rows = data?.markets ?? [];
+  // Memoised so the summary below actually caches: a fresh [] literal each
+  // render invalidated it every time.
+  const rows = useMemo(() => data?.markets ?? [], [data]);
 
   const summary = useMemo(() => {
     if (!rows.length) return null;

@@ -3,7 +3,6 @@
 import {
   KIND_LABEL,
   money,
-  num,
   pct,
   placeableLabel,
   untilLabel,

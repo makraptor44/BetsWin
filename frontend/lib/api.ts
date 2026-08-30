@@ -162,6 +162,16 @@ function filterArbs(all: Arb[], f: ArbFilters): Arb[] {
   if (f.min_margin) out = out.filter((a) => a.net_margin >= f.min_margin!);
   if (f.min_confidence)
     out = out.filter((a) => a.confidence >= f.min_confidence!);
+  if (f.max_hours_to_close !== undefined) {
+    // The live backend honours this; the demo used to render the control and
+    // then ignore it, so the same filter behaved differently in each mode.
+    out = out.filter(
+      (a) =>
+        a.hours_to_close !== null &&
+        a.hours_to_close !== undefined &&
+        a.hours_to_close <= f.max_hours_to_close!,
+    );
+  }
   if (f.search) {
     const q = f.search.toLowerCase();
     out = out.filter((a) => a.title.toLowerCase().includes(q));
@@ -259,10 +269,12 @@ export const api = {
   logPlacement: (id: string, note?: string) =>
     STATIC_DEMO
       ? demoUnavailable("Logging a placement")
-      : post<{ ok: boolean; arb_row_id: number; legs_logged: number }>(
-          `/api/arbs/${id}/log-placement`,
-          { note },
-        ),
+      : // The endpoint returns `legs_placed`; this said `legs_logged`, so the
+        // typed field was always undefined.
+        post<PlaceBetResult>(`/api/arbs/${id}/log-placement`, {
+          confirmed: true,
+          note,
+        }),
 
   placeBet: (id: string, payload: PlaceBetPayload = { confirmed: true, retire: true }) =>
     STATIC_DEMO
@@ -291,13 +303,17 @@ export const api = {
       const q = String(params.search).toLowerCase();
       rows = rows.filter((m) => m.title.toLowerCase().includes(q));
     }
-    const sort = String(params.sort ?? "volume");
     const keys: Record<string, (m: MarketRow) => number | string> = {
       volume: (m) => -m.volume_usd,
       liquidity: (m) => -m.liquidity_usd,
       book: (m) => m.best_book ?? 99,
       close: (m) => m.close_time ?? "9999",
     };
+    // The backend constrains this with a regex on the query parameter; the
+    // demo shim did not, so any unexpected value threw
+    // "keys[sort] is not a function" out of the comparator.
+    const requested = String(params.sort ?? "volume");
+    const sort = requested in keys ? requested : "volume";
     rows = [...rows].sort((a, b) => {
       const ka = keys[sort](a);
       const kb = keys[sort](b);
