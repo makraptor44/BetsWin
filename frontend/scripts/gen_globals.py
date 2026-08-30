@@ -317,6 +317,24 @@ THEME = """
   .scroll-x {
     @apply overflow-x-auto;
     -webkit-overflow-scrolling: touch;
+
+    /* Shadows that appear only on the edge with content scrolled off it.
+       A twelve-column table always overflows on a laptop, and until now the
+       only clue was a column sliced in half at the frame -- which reads as a
+       layout bug rather than as an invitation to scroll.
+
+       The trick is `background-attachment`: the two covers scroll WITH the
+       content (`local`) and so slide away from an edge that has more to show,
+       uncovering the shadow beneath, which is pinned to the frame (`scroll`). */
+    background:
+      linear-gradient(to right, var(--card) 30%, transparent) left / 28px 100% no-repeat,
+      linear-gradient(to left, var(--card) 30%, transparent) right / 28px 100% no-repeat,
+      radial-gradient(farthest-side at 0 50%, oklch(0 0 0 / 0.13), transparent)
+        left / 11px 100% no-repeat,
+      radial-gradient(farthest-side at 100% 50%, oklch(0 0 0 / 0.13), transparent)
+        right / 11px 100% no-repeat;
+    background-color: var(--card);
+    background-attachment: local, local, scroll, scroll;
   }
 
   /* A row that behaves as a button. Keyboard-reachable, which the bare
