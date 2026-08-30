@@ -57,12 +57,12 @@
    "notes": [
     "Directional bet that the market's implied correlation (rho_impl=0.50) converges toward the prior (rho_prior=0.68, historical, n=8) -- not a risk-free arbitrage. The full stake is at risk if the joint contract resolves the other way."
    ],
-   "detected_at": "2026-08-30T19:16:49.223564Z",
-   "close_time": "2027-11-03T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983760Z",
+   "detected_at": "2026-08-30T19:19:47.778424Z",
+   "close_time": "2027-11-03T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591799Z",
    "is_suspect": false,
    "roi_pct": -100.0,
-   "hours_to_close": 10319.999834563889
+   "hours_to_close": 10319.999680721112
   },
   {
    "id": "f1515ab72b13049f",
@@ -144,12 +144,12 @@
     "Markets were paired by title similarity (99/100), not by a shared identifier.",
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:16:49.208628Z",
-   "close_time": "2026-10-14T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983653Z",
+   "detected_at": "2026-08-30T19:19:47.762657Z",
+   "close_time": "2026-10-14T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591694Z",
    "is_suspect": true,
    "roi_pct": 7.602152043040861,
-   "hours_to_close": 1079.9998345583333
+   "hours_to_close": 1079.9996807152777
   },
   {
    "id": "e84c6ec99ff1aa99",
@@ -263,12 +263,12 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:16:49.206566Z",
-   "close_time": "2026-12-28T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983688Z",
+   "detected_at": "2026-08-30T19:19:47.760249Z",
+   "close_time": "2026-12-28T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591726Z",
    "is_suspect": false,
    "roi_pct": 3.624144965798632,
-   "hours_to_close": 2879.9998345530557
+   "hours_to_close": 2879.9996807099997
   },
   {
    "id": "ada41f580085957f",
@@ -342,12 +342,12 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-30T19:16:49.206289Z",
-   "close_time": "2026-10-14T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983709Z",
+   "detected_at": "2026-08-30T19:19:47.759818Z",
+   "close_time": "2026-10-14T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591746Z",
    "is_suspect": false,
    "roi_pct": 1.6260325206504131,
-   "hours_to_close": 1079.9998345494446
+   "hours_to_close": 1079.9996807063887
   },
   {
    "id": "8d554c928ae84f63",
@@ -484,12 +484,12 @@
     "Fees and slippage consume 54% of the gross edge (2.96% -> 1.37%).",
     "5 legs must be filled before prices move."
    ],
-   "detected_at": "2026-08-30T19:16:49.206847Z",
-   "close_time": "2026-11-28T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983721Z",
+   "detected_at": "2026-08-30T19:19:47.760599Z",
+   "close_time": "2026-11-28T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591759Z",
    "is_suspect": false,
    "roi_pct": 1.374,
-   "hours_to_close": 2159.999834543611
+   "hours_to_close": 2159.9996807008333
   },
   {
    "id": "7a617ce7545ae134",
@@ -576,12 +576,12 @@
     "Markets were paired by title similarity (100/100), not by a shared identifier.",
     "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
    ],
-   "detected_at": "2026-08-30T19:16:49.208121Z",
-   "close_time": "2027-06-26T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983737Z",
+   "detected_at": "2026-08-30T19:19:47.762008Z",
+   "close_time": "2027-06-26T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591775Z",
    "is_suspect": false,
    "roi_pct": 1.5480309606192124,
-   "hours_to_close": 7199.9998345397225
+   "hours_to_close": 7199.999680695834
   },
   {
    "id": "d37b7d4db9682a72",
@@ -684,13 +684,13 @@
    "notes": [
     "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
    ],
-   "detected_at": "2026-08-30T19:16:49.207043Z",
-   "close_time": "2026-09-02T19:16:50.394573Z",
-   "last_seen": "2026-08-30T19:16:50.983749Z",
+   "detected_at": "2026-08-30T19:19:47.760824Z",
+   "close_time": "2026-09-02T19:19:50.449014Z",
+   "last_seen": "2026-08-30T19:19:51.591787Z",
    "is_suspect": false,
    "roi_pct": 0.9820196403928079,
-   "hours_to_close": 71.99983453527777
+   "hours_to_close": 71.99968068444444
   }
  ],
- "generated_at": "2026-08-30T19:16:50.990248+00:00"
+ "generated_at": "2026-08-30T19:19:51.598552+00:00"
 }
