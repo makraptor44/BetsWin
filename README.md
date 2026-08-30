@@ -319,7 +319,7 @@ including the zone-pairing rule and the jurisdiction you trade from.
 cd backend
 python -m arbengine.main --scan      # one cycle, print results, exit
 python -m arbengine.main --demo      # serve with offline fixtures
-python -m pytest tests/ -q           # 138 tests
+python -m pytest tests/ -q           # the backend test suite
 ```
 
 ## The demo deployment
@@ -332,8 +332,16 @@ static files that read those fixtures instead of calling a backend.
 Pure-arithmetic endpoints (stake sizing, Kelly, void adjustment, odds
 conversion, the backtest Monte Carlo) are ported to TypeScript in
 `frontend/lib/staticMath.ts`, so the calculators stay genuinely interactive on
-the demo rather than being frozen screenshots. Those ports are formula-for-formula
-copies of `backend/arbengine/odds.py` and produce identical results.
+the demo rather than being frozen screenshots.
+
+Two implementations of one formula drift -- and these had: the odds converter
+returned `Infinity` in TypeScript where Python raised, and the demo backtest
+silently dropped per-venue void rates. Both suites therefore assert against one
+shared fixture, `shared/odds-vectors.json`, whose expected values are generated
+from the Python implementation. The Python half is
+`backend/tests/test_shared_vectors.py`; the TypeScript half is
+`frontend/lib/__tests__/sharedVectors.test.ts` (`npm test`). A divergence now
+fails a test instead of reaching a user.
 
 To enable it once: **Settings → Pages → Source: GitHub Actions**.
 
@@ -357,8 +365,23 @@ figure once you have history — the engine logs every candidate so you can.
 Kalshi is the CFTC-regulated US venue. Check what you are eligible to use.
 
 
-## Current Edge Strategies
-1. Arbitrage of single events:  Binary Complement, Dutch Book, Cross-Venue, Sports Book
-2. Structured Products: Correlation Arbitrage, Distribution Arbitrage, Long-Tail arbitrage
-3. ML Techniques -> Predicted true probabillity of Odds based on data-drive models
-   
+## Strategies
+
+Implemented, and covered by the test suite:
+
+1. **Single-event arbitrage** — binary complement, Dutch books (YES and NO
+   side), cross-venue pairs, and best-price-per-outcome across sportsbooks.
+   All risk-free once every leg fills; see `arbengine/detector.py`.
+2. **Correlation arbitrage** — a joint-event contract priced against a
+   Gaussian-copula fair value from its two marginals. Directional, not
+   risk-free, and reported as such; see `arbengine/correlation_arb.py`.
+
+### Roadmap
+
+Not implemented. Listed so the ambition is visible, not because any code
+exists for them yet:
+
+- Distribution arbitrage across strike ladders.
+- Long-tail arbitrage on many-outcome events.
+- Model-derived true probabilities (data-driven value betting).
+
