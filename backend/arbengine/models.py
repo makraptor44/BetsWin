@@ -207,14 +207,28 @@ class ArbLeg(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def payout(self) -> float:
-        """Gross return if this leg wins: stake * d (Part I s3.1)."""
-        return self.stake * self.decimal_odds
+        """Return if this leg wins.
+
+        `stake` is the ALL-IN outlay -- contract cost plus fees -- so the number
+        of contracts it buys is stake / effective_price, and each settles at $1.
+        Multiplying the all-in stake by `decimal_odds` (which is 1/price, the
+        PRE-fee price) charges the fee and then pays out as though it had not
+        been charged. On $100 all-in at an effective price of 0.52 that reported
+        $200.00 against a true payout of $192.31.
+        """
+        return self.stake * self.effective_decimal_odds
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def net_payout(self) -> float:
-        """Return after this leg's fees."""
-        return self.payout - self.fee
+        """Return net of fees.
+
+        Identical to `payout`: the fee is already inside `stake`, so it is
+        already inside the contract count this pays out on. Subtracting `fee`
+        again here deducted it twice. Kept as a field because the dashboard and
+        the stored payload both read it.
+        """
+        return self.payout
 
 
 class RiskFlag(str, Enum):
