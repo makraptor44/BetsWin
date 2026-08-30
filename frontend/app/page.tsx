@@ -18,6 +18,11 @@ import { useEngine } from "@/lib/useEngine";
 
 type SortKey = "margin" | "profit" | "confidence" | "closing" | "size";
 
+/** One label treatment for the whole filter bar. Repeating the class list per
+ *  field is how six fields end up with four different labels. */
+const LABEL =
+  "mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.075em] text-faint";
+
 const SORTS: Array<{ key: SortKey; label: string }> = [
   { key: "margin", label: "Net margin" },
   { key: "profit", label: "Profit" },
@@ -155,23 +160,33 @@ export default function OpportunitiesPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4 sm:gap-5">
       <StatusBar engine={engine} />
 
       {toast && (
+        // A tinted panel rather than a solid green bar. A full-bleed success
+        // colour is the loudest thing on a page whose colour vocabulary is
+        // otherwise reserved for risk.
         <div
-          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all text-white bg-positive"
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-lg border border-positive/30 bg-positive-soft px-3.5 py-3 text-xs font-medium text-positive"
+          style={{ animation: "rise 180ms ease-out" }}
         >
-          <div className="flex items-center gap-2">
-            <span className="text-sm">✓</span>
+          <div className="flex items-center gap-2.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
             <span>{toast}</span>
           </div>
           <button
             type="button"
-            className="hover:opacity-75 font-bold px-2 py-0.5"
+            className="rounded p-1 transition-opacity hover:opacity-60"
             onClick={() => setToast(null)}
+            aria-label="Dismiss"
           >
-            ✕
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
       )}
@@ -180,7 +195,7 @@ export default function OpportunitiesPage() {
         <ErrorState message={engine.error} onRetry={() => void engine.refresh()} />
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Live opportunities"
           value={filtered.length}
@@ -213,16 +228,16 @@ export default function OpportunitiesPage() {
       </div>
 
       <Card>
-        <div className="flex flex-wrap items-end gap-3 p-4 border-b border-border">
+        <div className="flex flex-wrap items-end gap-3 border-b border-hairline bg-muted/25 p-4">
           <div className="flex-1 min-w-[200px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="search">
+            <label className={LABEL} htmlFor="search">
               Search
             </label>
             <Input id="search" className="w-full" type="search" placeholder="Filter by event, outcome or player…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
           <div className="w-[148px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="kind">
+            <label className={LABEL} htmlFor="kind">
               Arb type
             </label>
             <NativeSelect id="kind" value={kind} onChange={(e) => setKind(e.target.value as ArbKind | "all")} >
@@ -237,7 +252,7 @@ export default function OpportunitiesPage() {
 
           {zones.length > 1 && (
             <div className="w-[186px]">
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="zone">
+              <label className={LABEL} htmlFor="zone">
                 Execution zone
               </label>
               <NativeSelect id="zone" value={zone} onChange={(e) => setZone(e.target.value as ZoneKey | "all")} title="Venues you can hold accounts on from one location, in one currency. Legs are never combined across zones." >
@@ -252,7 +267,7 @@ export default function OpportunitiesPage() {
           )}
 
           <div className="w-[138px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="venue">
+            <label className={LABEL} htmlFor="venue">
               Venue
             </label>
             <NativeSelect id="venue" value={venue} onChange={(e) => setVenue(e.target.value)} >
@@ -266,21 +281,21 @@ export default function OpportunitiesPage() {
           </div>
 
           <div className="w-[118px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="minmargin">
+            <label className={LABEL} htmlFor="minmargin">
               Min margin %
             </label>
             <Input id="minmargin" className="tabular" type="number" step="0.1" min="0" value={minMargin || ""} placeholder="0.0" onChange={(e) => setMinMargin(Number(e.target.value) || 0)} />
           </div>
 
           <div className="w-[118px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="minconf">
+            <label className={LABEL} htmlFor="minconf">
               Min confidence
             </label>
             <Input id="minconf" className="tabular" type="number" step="5" min="0" max="100" value={minConfidence || ""} placeholder="0" onChange={(e) => setMinConfidence(Number(e.target.value) || 0)} />
           </div>
 
           <div className="w-[160px]">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="sort">
+            <label className={LABEL} htmlFor="sort">
               Sort by
             </label>
             <NativeSelect id="sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} >

@@ -38,14 +38,22 @@ export function Card({
   children,
   className,
   padded = true,
+  raised = false,
 }: {
   children: ReactNode;
   className?: string;
   padded?: boolean;
+  /** For a surface that sits above the page rather than in it -- a detail
+   *  panel, a modal body. Ordinary cards stay flat: a page of drop shadows
+   *  reads as a slide deck. */
+  raised?: boolean;
 }) {
   return (
-    <ShadCard className={cn("gap-0 py-0", className)}>
-      {padded ? <CardContent className="p-4">{children}</CardContent> : children}
+    <ShadCard
+      className={cn("gap-0 overflow-hidden py-0 shadow-none", className)}
+      style={{ boxShadow: raised ? "var(--shadow-raised)" : "var(--shadow-flat)" }}
+    >
+      {padded ? <CardContent className="p-4 sm:p-5">{children}</CardContent> : children}
     </ShadCard>
   );
 }
@@ -60,12 +68,16 @@ export function SectionTitle({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-start justify-between gap-4">
-      <div>
-        <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
-        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+    <div className="mb-3.5 flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="text-[14px] font-semibold tracking-[-0.02em]">{title}</h2>
+        {hint && (
+          <p className="mt-1 max-w-[68ch] text-xs leading-relaxed text-muted-foreground">
+            {hint}
+          </p>
+        )}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -77,6 +89,22 @@ const TONE_TEXT = {
   danger: "text-danger",
 } as const;
 
+const TONE_RULE = {
+  positive: "bg-positive",
+  caution: "bg-caution",
+  danger: "bg-danger",
+} as const;
+
+/**
+ * A headline figure.
+ *
+ * The number is the largest thing in the tile and sits in the mono face, so a
+ * row of stats forms a column of digits that can be scanned rather than read.
+ * The label sits above it small and quiet; a tile whose caption competes with
+ * its number has no hierarchy at all. Tone shows as a rule down the left edge
+ * as well as on the figure, because colour alone is not a signal everyone
+ * receives.
+ */
 export function Stat({
   label,
   value,
@@ -91,20 +119,32 @@ export function Stat({
   title?: string;
 }) {
   return (
-    <ShadCard className="gap-0 py-0" title={title}>
-      <CardContent className="p-3.5">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">
+    <ShadCard
+      className="relative gap-0 overflow-hidden py-0 shadow-none"
+      style={{ boxShadow: "var(--shadow-flat)" }}
+      title={title}
+    >
+      {tone && (
+        <span
+          aria-hidden
+          className={cn("absolute inset-y-0 left-0 w-[3px]", TONE_RULE[tone])}
+        />
+      )}
+      <CardContent className="p-3.5 sm:p-4">
+        <div className="text-[10.5px] font-semibold uppercase tracking-[0.075em] text-faint">
           {label}
         </div>
         <div
           className={cn(
-            "text-xl font-semibold leading-tight tabular",
+            "num mt-1.5 text-[26px] font-medium leading-none",
             tone ? TONE_TEXT[tone] : "text-foreground",
           )}
         >
           {value}
         </div>
-        {sub && <div className="mt-1 text-xs text-faint">{sub}</div>}
+        {sub && (
+          <div className="mt-2 text-[11.5px] leading-snug text-faint">{sub}</div>
+        )}
       </CardContent>
     </ShadCard>
   );

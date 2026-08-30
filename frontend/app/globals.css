@@ -43,110 +43,147 @@
 
 /* Light is the base. */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  /* shadcn surface + text scale */
-  --background: oklch(0.985 0.002 250);
-  --foreground: oklch(0.205 0.012 260);
+  /* Surfaces. A near-white ground with true-white cards, so a card reads as
+     lifted without needing a heavy border or a drop shadow to say so. */
+  --background: oklch(0.977 0.003 250);
+  --foreground: oklch(0.185 0.014 258);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.012 260);
+  --card-foreground: oklch(0.185 0.014 258);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.012 260);
-  --primary: oklch(0.52 0.20 268);
+  --popover-foreground: oklch(0.185 0.014 258);
+  --primary: oklch(0.47 0.115 244);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.004 255);
-  --secondary-foreground: oklch(0.30 0.012 260);
-  --muted: oklch(0.962 0.004 255);
-  --muted-foreground: oklch(0.52 0.017 258);
-  --accent: oklch(0.955 0.008 258);
-  --accent-foreground: oklch(0.30 0.012 260);
-  --destructive: oklch(0.56 0.19 27);
-  --border: oklch(0.905 0.006 258);
-  --input: oklch(0.905 0.006 258);
-  --ring: oklch(0.52 0.20 268);
+  --secondary: oklch(0.955 0.004 250);
+  --secondary-foreground: oklch(0.30 0.014 258);
+  --muted: oklch(0.958 0.004 250);
+  --muted-foreground: oklch(0.505 0.017 256);
+  --accent: oklch(0.948 0.008 250);
+  --accent-foreground: oklch(0.28 0.014 258);
+  --destructive: oklch(0.545 0.19 25);
+  --border: oklch(0.916 0.005 250);
+  --input: oklch(0.895 0.006 250);
+  --ring: oklch(0.47 0.115 244);
+
+  /* Two border weights. Hairlines separate rows inside a surface; the stronger
+     one bounds the surface itself. One weight for both made every table read as
+     a wireframe. */
+  --border-strong: oklch(0.862 0.007 250);
+  --hairline: oklch(0.936 0.004 250);
 
   /* Interaction accent. Named `brand` because shadcn's `--accent` is a muted
-     hover surface, not an accent colour. */
-  --brand: oklch(0.52 0.20 268);
+     hover surface, not an accent colour. A deep instrument blue rather than the
+     default violet: this is a trading tool, and violet on a data-dense page
+     reads as decoration. */
+  --brand: oklch(0.47 0.115 244);
   --brand-foreground: oklch(0.99 0 0);
-  --brand-soft: oklch(0.52 0.20 268 / 0.10);
+  --brand-soft: oklch(0.47 0.115 244 / 0.09);
+  --brand-hover: oklch(0.41 0.118 244);
 
   /* The risk ramp. Reserved for risk and nothing else, so a colour always
      means the same thing. Margin is never coloured by size alone -- a fat
      margin is a warning, not a win (Part I s5.3). */
-  --positive: oklch(0.55 0.13 158);
-  --positive-soft: oklch(0.55 0.13 158 / 0.12);
-  --caution: oklch(0.58 0.12 75);
-  --caution-soft: oklch(0.58 0.12 75 / 0.13);
-  --danger: oklch(0.55 0.19 27);
-  --danger-soft: oklch(0.55 0.19 27 / 0.12);
-  --neutral-soft: oklch(0.52 0.017 258 / 0.10);
+  --positive: oklch(0.505 0.125 158);
+  --positive-soft: oklch(0.505 0.125 158 / 0.11);
+  --caution: oklch(0.585 0.115 68);
+  --caution-soft: oklch(0.585 0.115 68 / 0.12);
+  --danger: oklch(0.535 0.185 25);
+  --danger-soft: oklch(0.535 0.185 25 / 0.11);
+  --neutral-soft: oklch(0.505 0.017 256 / 0.09);
 
   /* A third text weight below muted, for labels and captions. */
-  --faint: oklch(0.63 0.014 258);
+  --faint: oklch(0.615 0.014 256);
+
+  /* Elevation. Layered rather than a single blur, so a card reads as sitting on
+     the page rather than floating above a screenshot of one. */
+  --shadow-flat: 0 1px 2px oklch(0.185 0.014 258 / 0.05);
+  --shadow-raised:
+    0 1px 2px oklch(0.185 0.014 258 / 0.06),
+    0 4px 12px oklch(0.185 0.014 258 / 0.05);
+  --shadow-overlay:
+    0 2px 6px oklch(0.185 0.014 258 / 0.08),
+    0 16px 48px oklch(0.185 0.014 258 / 0.14);
 
   /* Venue identity. Categorical, never semantic. */
-  --venue-polymarket: oklch(0.55 0.20 288);
-  --venue-kalshi: oklch(0.52 0.12 175);
-  --venue-sportsbook: oklch(0.55 0.15 45);
-  --venue-smarkets: oklch(0.52 0.16 250);
-  --venue-betfair: oklch(0.55 0.12 90);
+  --venue-polymarket: oklch(0.52 0.18 292);
+  --venue-kalshi: oklch(0.50 0.11 188);
+  --venue-sportsbook: oklch(0.545 0.145 48);
+  --venue-smarkets: oklch(0.50 0.14 252);
+  --venue-betfair: oklch(0.53 0.115 118);
 
-  --chart-1: oklch(0.52 0.20 268);
-  --chart-2: oklch(0.55 0.13 158);
-  --chart-3: oklch(0.58 0.12 75);
-  --chart-4: oklch(0.55 0.20 288);
-  --chart-5: oklch(0.52 0.12 175);
+  --chart-1: oklch(0.47 0.115 244);
+  --chart-2: oklch(0.505 0.125 158);
+  --chart-3: oklch(0.585 0.115 68);
+  --chart-4: oklch(0.52 0.18 292);
+  --chart-5: oklch(0.50 0.11 188);
 }
 
 /* A dark OS, unless light was explicitly chosen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
 
-    --background: oklch(0.17 0.011 265);
-    --foreground: oklch(0.93 0.006 258);
-    --card: oklch(0.213 0.012 265);
-    --card-foreground: oklch(0.93 0.006 258);
-    --popover: oklch(0.213 0.012 265);
-    --popover-foreground: oklch(0.93 0.006 258);
-    --primary: oklch(0.70 0.15 268);
-    --primary-foreground: oklch(0.17 0.011 265);
-    --secondary: oklch(0.26 0.013 265);
-    --secondary-foreground: oklch(0.93 0.006 258);
-    --muted: oklch(0.253 0.013 265);
-    --muted-foreground: oklch(0.70 0.014 258);
-    --accent: oklch(0.28 0.014 265);
-    --accent-foreground: oklch(0.93 0.006 258);
-    --destructive: oklch(0.70 0.17 25);
-    --border: oklch(0.30 0.014 265);
-    --input: oklch(0.30 0.014 265);
-    --ring: oklch(0.70 0.15 268);
+    /* Graphite, not navy, and not pure black. A slight cool cast keeps the
+       accent readable without tinting the numbers. */
+    --background: oklch(0.158 0.008 258);
+    --foreground: oklch(0.945 0.005 250);
+    --card: oklch(0.196 0.009 258);
+    --card-foreground: oklch(0.945 0.005 250);
+    --popover: oklch(0.214 0.010 258);
+    --popover-foreground: oklch(0.945 0.005 250);
+    --primary: oklch(0.72 0.115 240);
+    --primary-foreground: oklch(0.158 0.008 258);
+    --secondary: oklch(0.245 0.010 258);
+    --secondary-foreground: oklch(0.945 0.005 250);
+    --muted: oklch(0.238 0.010 258);
+    --muted-foreground: oklch(0.715 0.012 252);
+    --accent: oklch(0.268 0.011 258);
+    --accent-foreground: oklch(0.945 0.005 250);
+    --destructive: oklch(0.695 0.165 25);
+    --border: oklch(0.278 0.011 258);
+    --input: oklch(0.318 0.012 258);
+    --ring: oklch(0.72 0.115 240);
 
-    --brand: oklch(0.72 0.14 268);
-    --brand-foreground: oklch(0.17 0.011 265);
-    --brand-soft: oklch(0.72 0.14 268 / 0.16);
+    --border-strong: oklch(0.345 0.013 258);
+    --hairline: oklch(0.245 0.010 258);
 
-    --positive: oklch(0.78 0.16 158);
-    --positive-soft: oklch(0.78 0.16 158 / 0.14);
-    --caution: oklch(0.80 0.14 78);
-    --caution-soft: oklch(0.80 0.14 78 / 0.15);
-    --danger: oklch(0.70 0.17 25);
-    --danger-soft: oklch(0.70 0.17 25 / 0.15);
-    --neutral-soft: oklch(0.70 0.014 258 / 0.12);
+    --brand: oklch(0.735 0.112 240);
+    --brand-foreground: oklch(0.158 0.008 258);
+    --brand-soft: oklch(0.735 0.112 240 / 0.15);
+    --brand-hover: oklch(0.795 0.105 240);
 
-    --faint: oklch(0.58 0.013 258);
+    --positive: oklch(0.775 0.145 158);
+    --positive-soft: oklch(0.775 0.145 158 / 0.14);
+    --caution: oklch(0.815 0.13 78);
+    --caution-soft: oklch(0.815 0.13 78 / 0.14);
+    --danger: oklch(0.705 0.165 25);
+    --danger-soft: oklch(0.705 0.165 25 / 0.15);
+    --neutral-soft: oklch(0.715 0.012 252 / 0.12);
 
-    --venue-polymarket: oklch(0.74 0.15 288);
-    --venue-kalshi: oklch(0.78 0.13 175);
-    --venue-sportsbook: oklch(0.76 0.14 50);
-    --venue-smarkets: oklch(0.74 0.13 250);
-    --venue-betfair: oklch(0.82 0.13 90);
+    --faint: oklch(0.605 0.012 252);
 
-    --chart-1: oklch(0.72 0.14 268);
-    --chart-2: oklch(0.78 0.16 158);
-    --chart-3: oklch(0.80 0.14 78);
-    --chart-4: oklch(0.74 0.15 288);
-    --chart-5: oklch(0.78 0.13 175);
+    /* Shadow does almost nothing on a dark ground -- separation there comes from
+       the surface being lighter than the page, so these stay subtle and the card
+       border does the work. */
+    --shadow-flat: 0 1px 2px oklch(0 0 0 / 0.28);
+    --shadow-raised:
+      0 1px 2px oklch(0 0 0 / 0.32),
+      0 4px 14px oklch(0 0 0 / 0.30);
+    --shadow-overlay:
+      0 2px 8px oklch(0 0 0 / 0.40),
+      0 20px 56px oklch(0 0 0 / 0.52);
+
+    --venue-polymarket: oklch(0.755 0.145 292);
+    --venue-kalshi: oklch(0.785 0.115 188);
+    --venue-sportsbook: oklch(0.775 0.135 52);
+    --venue-smarkets: oklch(0.755 0.125 252);
+    --venue-betfair: oklch(0.825 0.125 118);
+
+    --chart-1: oklch(0.735 0.112 240);
+    --chart-2: oklch(0.775 0.145 158);
+    --chart-3: oklch(0.815 0.13 78);
+    --chart-4: oklch(0.755 0.145 292);
+    --chart-5: oklch(0.785 0.115 188);
   }
 }
 
@@ -154,50 +191,67 @@
    block above -- see the note at the top of this file. */
 :root[data-theme="dark"] {
 
-  --background: oklch(0.17 0.011 265);
-  --foreground: oklch(0.93 0.006 258);
-  --card: oklch(0.213 0.012 265);
-  --card-foreground: oklch(0.93 0.006 258);
-  --popover: oklch(0.213 0.012 265);
-  --popover-foreground: oklch(0.93 0.006 258);
-  --primary: oklch(0.70 0.15 268);
-  --primary-foreground: oklch(0.17 0.011 265);
-  --secondary: oklch(0.26 0.013 265);
-  --secondary-foreground: oklch(0.93 0.006 258);
-  --muted: oklch(0.253 0.013 265);
-  --muted-foreground: oklch(0.70 0.014 258);
-  --accent: oklch(0.28 0.014 265);
-  --accent-foreground: oklch(0.93 0.006 258);
-  --destructive: oklch(0.70 0.17 25);
-  --border: oklch(0.30 0.014 265);
-  --input: oklch(0.30 0.014 265);
-  --ring: oklch(0.70 0.15 268);
+  /* Graphite, not navy, and not pure black. A slight cool cast keeps the
+     accent readable without tinting the numbers. */
+  --background: oklch(0.158 0.008 258);
+  --foreground: oklch(0.945 0.005 250);
+  --card: oklch(0.196 0.009 258);
+  --card-foreground: oklch(0.945 0.005 250);
+  --popover: oklch(0.214 0.010 258);
+  --popover-foreground: oklch(0.945 0.005 250);
+  --primary: oklch(0.72 0.115 240);
+  --primary-foreground: oklch(0.158 0.008 258);
+  --secondary: oklch(0.245 0.010 258);
+  --secondary-foreground: oklch(0.945 0.005 250);
+  --muted: oklch(0.238 0.010 258);
+  --muted-foreground: oklch(0.715 0.012 252);
+  --accent: oklch(0.268 0.011 258);
+  --accent-foreground: oklch(0.945 0.005 250);
+  --destructive: oklch(0.695 0.165 25);
+  --border: oklch(0.278 0.011 258);
+  --input: oklch(0.318 0.012 258);
+  --ring: oklch(0.72 0.115 240);
 
-  --brand: oklch(0.72 0.14 268);
-  --brand-foreground: oklch(0.17 0.011 265);
-  --brand-soft: oklch(0.72 0.14 268 / 0.16);
+  --border-strong: oklch(0.345 0.013 258);
+  --hairline: oklch(0.245 0.010 258);
 
-  --positive: oklch(0.78 0.16 158);
-  --positive-soft: oklch(0.78 0.16 158 / 0.14);
-  --caution: oklch(0.80 0.14 78);
-  --caution-soft: oklch(0.80 0.14 78 / 0.15);
-  --danger: oklch(0.70 0.17 25);
-  --danger-soft: oklch(0.70 0.17 25 / 0.15);
-  --neutral-soft: oklch(0.70 0.014 258 / 0.12);
+  --brand: oklch(0.735 0.112 240);
+  --brand-foreground: oklch(0.158 0.008 258);
+  --brand-soft: oklch(0.735 0.112 240 / 0.15);
+  --brand-hover: oklch(0.795 0.105 240);
 
-  --faint: oklch(0.58 0.013 258);
+  --positive: oklch(0.775 0.145 158);
+  --positive-soft: oklch(0.775 0.145 158 / 0.14);
+  --caution: oklch(0.815 0.13 78);
+  --caution-soft: oklch(0.815 0.13 78 / 0.14);
+  --danger: oklch(0.705 0.165 25);
+  --danger-soft: oklch(0.705 0.165 25 / 0.15);
+  --neutral-soft: oklch(0.715 0.012 252 / 0.12);
 
-  --venue-polymarket: oklch(0.74 0.15 288);
-  --venue-kalshi: oklch(0.78 0.13 175);
-  --venue-sportsbook: oklch(0.76 0.14 50);
-  --venue-smarkets: oklch(0.74 0.13 250);
-  --venue-betfair: oklch(0.82 0.13 90);
+  --faint: oklch(0.605 0.012 252);
 
-  --chart-1: oklch(0.72 0.14 268);
-  --chart-2: oklch(0.78 0.16 158);
-  --chart-3: oklch(0.80 0.14 78);
-  --chart-4: oklch(0.74 0.15 288);
-  --chart-5: oklch(0.78 0.13 175);
+  /* Shadow does almost nothing on a dark ground -- separation there comes from
+     the surface being lighter than the page, so these stay subtle and the card
+     border does the work. */
+  --shadow-flat: 0 1px 2px oklch(0 0 0 / 0.28);
+  --shadow-raised:
+    0 1px 2px oklch(0 0 0 / 0.32),
+    0 4px 14px oklch(0 0 0 / 0.30);
+  --shadow-overlay:
+    0 2px 8px oklch(0 0 0 / 0.40),
+    0 20px 56px oklch(0 0 0 / 0.52);
+
+  --venue-polymarket: oklch(0.755 0.145 292);
+  --venue-kalshi: oklch(0.785 0.115 188);
+  --venue-sportsbook: oklch(0.775 0.135 52);
+  --venue-smarkets: oklch(0.755 0.125 252);
+  --venue-betfair: oklch(0.825 0.125 118);
+
+  --chart-1: oklch(0.735 0.112 240);
+  --chart-2: oklch(0.775 0.145 158);
+  --chart-3: oklch(0.815 0.13 78);
+  --chart-4: oklch(0.755 0.145 292);
+  --chart-5: oklch(0.785 0.115 188);
 }
 
 /* Expose the tokens as Tailwind utilities: `text-muted-foreground`,
@@ -234,6 +288,13 @@
   --color-danger-soft: var(--danger-soft);
   --color-neutral-soft: var(--neutral-soft);
   --color-faint: var(--faint);
+  --color-border-strong: var(--border-strong);
+  --color-hairline: var(--hairline);
+  --color-brand-hover: var(--brand-hover);
+
+  --shadow-flat: var(--shadow-flat);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
 
   --color-venue-polymarket: var(--venue-polymarket);
   --color-venue-kalshi: var(--venue-kalshi);
@@ -263,20 +324,52 @@
 
   body {
     @apply bg-background text-foreground;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 13.5px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Optical sizing and a fractionally tighter tracking. At this size the
+       default spacing reads as loose, which is most of what makes a dense
+       dashboard look unconsidered. */
+    letter-spacing: -0.006em;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings tighten as they grow, the way a type specimen does. Uniform
+     tracking across a scale is the giveaway of a layout nobody set. */
+  h1, h2, h3 {
+    letter-spacing: -0.021em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 
   /* Every price, stake, odds and P&L figure is a number in a column, so the
-     digits have to line up. */
+     digits have to line up -- and the zero needs a slash or it reads as an O
+     at 11px. */
   .tabular,
   table {
     font-variant-numeric: tabular-nums;
   }
 
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "zero" 1, "ss01" 1;
+    letter-spacing: -0.012em;
+  }
+
   ::selection {
     background: var(--brand-soft);
+  }
+
+  /* One focus treatment everywhere, and never on a mouse click. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -289,16 +382,82 @@
   }
 
   /* A row that behaves as a button. Keyboard-reachable, which the bare
-     `<tr onClick>` it replaces was not. */
+     `<tr onClick>` it replaces was not. The left rule appears on hover rather
+     than a full-row tint: at this density a background change on every hover
+     makes the whole table flicker as the pointer crosses it. */
   .row-action {
-    @apply cursor-pointer transition-colors;
+    @apply cursor-pointer;
+    transition: background-color 120ms ease, box-shadow 120ms ease;
   }
   .row-action:hover {
-    @apply bg-muted/60;
+    background: color-mix(in oklch, var(--brand) 5%, transparent);
+    box-shadow: inset 2px 0 0 var(--brand);
   }
   .row-action:focus-visible {
     @apply outline-2 outline-offset-[-2px] outline-ring;
   }
+
+  /* The one surface treatment. Components reach for this rather than each
+     re-deciding border, radius and elevation -- which is how a dashboard ends
+     up with four different card styles on one screen. */
+  .surface {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-flat);
+  }
+  .surface-raised {
+    box-shadow: var(--shadow-raised);
+  }
+
+  /* Rows inside a surface are separated by the hairline, not the border that
+     bounds the surface. */
+  .divide-hairline > * + * {
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* A header that stays put while a long table scrolls under it. */
+  .sticky-head th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: color-mix(in oklch, var(--card) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Numbers that have just changed are worth a glance, not a fanfare. */
+  .flash {
+    animation: flash 900ms ease-out;
+  }
+
+  /* Placeholder shimmer, so a loading table reads as loading rather than as
+     empty. */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 25%,
+      color-mix(in oklch, var(--muted) 55%, var(--card)) 37%,
+      var(--muted) 63%
+    );
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes flash {
+  from { background-color: var(--brand-soft); }
+  to { background-color: transparent; }
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

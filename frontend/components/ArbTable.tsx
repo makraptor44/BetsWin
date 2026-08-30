@@ -34,9 +34,11 @@ export function ArbTable({
 }) {
   return (
     <div className="scroll-x">
-      <Table className="w-full border-collapse text-[13px]">
-        <TableHeader>
-          <TableRow>
+      {/* `sticky-head` keeps the column names in view: this table runs to
+          hundreds of rows and a numeric column with no header is unreadable. */}
+      <Table className="w-full border-collapse text-[12.5px]">
+        <TableHeader className="sticky-head">
+          <TableRow className="hover:bg-transparent">
             <TableHead>Opportunity</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Venues</TableHead>
@@ -63,7 +65,7 @@ export function ArbTable({
               {...activatable(() => onSelect(a))}
             >
               <TableCell className="max-w-[360px]">
-                <div className="font-medium truncate" title={a.title}>
+                <div className="truncate font-medium text-foreground" title={a.title}>
                   {a.title}
                 </div>
                 <div
@@ -92,7 +94,7 @@ export function ArbTable({
                   </span>
                 </div>
               </TableCell>
-              <TableCell className="tabular text-right font-semibold">
+              <TableCell className="num text-right font-semibold">
                 {pct(a.net_margin)}
                 {a.margin > a.net_margin + 0.0005 && (
                   <div
@@ -103,11 +105,11 @@ export function ArbTable({
                   </div>
                 )}
               </TableCell>
-              <TableCell className="tabular text-right">
+              <TableCell className="num text-right">
                 {money(a.total_stake, a.currency, 0)}
               </TableCell>
               <TableCell
-                className={`tabular text-right font-semibold ${
+                className={`num text-right font-semibold ${
                   a.worst_case_profit >= 0 ? "text-positive" : "text-danger"
                 }`}
                 title={
@@ -119,7 +121,7 @@ export function ArbTable({
                 {money(a.worst_case_profit, a.currency)}
               </TableCell>
               <TableCell
-                className="tabular text-right text-muted-foreground"
+                className="num text-right text-muted-foreground"
                 title="Total stake the visible order-book depth can absorb"
               >
                 {money(a.max_stake_available, a.currency, 0)}
@@ -141,7 +143,7 @@ export function ArbTable({
                 </div>
               </TableCell>
               <TableCell
-                className="tabular text-right text-muted-foreground"
+                className="num text-right text-muted-foreground"
               >
                 {untilLabel(a.close_time)}
               </TableCell>
