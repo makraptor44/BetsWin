@@ -49,13 +49,20 @@ configure_from_settings(settings)
 scanner: Optional[Scanner] = None
 
 
+#: Strong references to background tasks. asyncio only holds a weak reference
+#: to a running task, so one with no other referent can be collected mid-flight.
+_background: set[asyncio.Task] = set()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global scanner
     scanner = Scanner()
     if settings.autostart_scanner:
         # Run one cycle immediately so the dashboard is populated on first load.
-        asyncio.create_task(_bootstrap(scanner))
+        task = asyncio.create_task(_bootstrap(scanner))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
     logger.info(f"api ready on {settings.host}:{settings.port} (demo={settings.demo_mode})")
     try:
         yield
@@ -1438,8 +1445,16 @@ async def reset_breaker() -> dict[str, Any]:
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
     """Live push of new opportunities and scan telemetry."""
+    # Check the engine BEFORE accepting. `_engine()` raises HTTPException, which
+    # means nothing in a WebSocket scope -- raising it after `accept()` produced
+    # an unhandled server error instead of a close frame the client could read.
+    if scanner is None:
+        # 1013 "try again later": the server is fine, it is just not ready.
+        await ws.close(code=1013, reason="engine not started")
+        return
+
     await ws.accept()
-    eng = _engine()
+    eng = scanner
     queue = eng.alerts.broadcaster.subscribe()
     try:
         await ws.send_json(

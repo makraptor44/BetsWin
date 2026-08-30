@@ -156,27 +156,52 @@ class AlertManager:
     def __init__(self, broadcaster: Optional[Broadcaster] = None):
         self.telegram = TelegramAlerter()
         self.broadcaster = broadcaster or Broadcaster()
-        self.alerted: set[str] = set()
+        #: dedupe key -> when it was last alerted on. A plain set here grew by
+        #: one entry per alerted opportunity and was never pruned, which in a
+        #: process meant to run for weeks is an unbounded leak. Entries expire
+        #: with the dedupe window, which is the interval they were guarding.
+        self._alerted: dict[str, float] = {}
+        #: Strong references to in-flight sends. asyncio only holds a weak
+        #: reference to a running task, so a fire-and-forget task with no other
+        #: referent can be garbage-collected mid-flight.
+        self._pending: set[asyncio.Task] = set()
+
+    def _prune_alerted(self, now: float) -> None:
+        cutoff = now - settings.dedup_window_seconds
+        if len(self._alerted) > 64:
+            self._alerted = {k: v for k, v in self._alerted.items() if v > cutoff}
 
     def should_alert(self, arb: Arb) -> bool:
-        if arb.dedupe_key() in self.alerted:
+        now = time.monotonic()
+        self._prune_alerted(now)
+        last = self._alerted.get(arb.dedupe_key())
+        if last is not None and now - last < settings.dedup_window_seconds:
             return False
         return (
             arb.net_margin >= settings.alert_min_margin
             and arb.confidence >= settings.alert_min_confidence
         )
 
+    def _spawn(self, coro) -> None:
+        task = asyncio.create_task(coro)
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
+
     async def dispatch(self, arb: Arb) -> None:
         await self.broadcaster.publish({"type": "arb", "data": arb.model_dump(mode="json")})
         if not self.should_alert(arb):
             return
-        self.alerted.add(arb.dedupe_key())
+        self._alerted[arb.dedupe_key()] = time.monotonic()
         if self.telegram.enabled:
             # Fire and forget: never block the scan loop on a network round trip.
-            asyncio.create_task(self.telegram.send_arb(arb))
+            self._spawn(self.telegram.send_arb(arb))
 
     async def publish(self, message: dict[str, Any]) -> None:
         await self.broadcaster.publish(message)
 
     async def close(self) -> None:
+        for task in list(self._pending):
+            task.cancel()
+        if self._pending:
+            await asyncio.gather(*self._pending, return_exceptions=True)
         await self.telegram.close()
