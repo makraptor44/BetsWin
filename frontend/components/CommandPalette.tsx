@@ -4,6 +4,8 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { withViewTransition } from "@/components/RouteTransitions";
+
 /**
  * Ctrl/Cmd-K navigation.
  *
@@ -35,7 +37,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Live arbitrage across every venue",
     keywords: "arbs home dashboard edge",
-    run: ({ router }) => router.push("/"),
+    run: ({ router }) => withViewTransition(() => router.push("/")),
   },
   {
     id: "nav-positions",
@@ -43,7 +45,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Open stakes, unwind quotes and settlement",
     keywords: "bets placed open pnl",
-    run: ({ router }) => router.push("/positions"),
+    run: ({ router }) => withViewTransition(() => router.push("/positions")),
   },
   {
     id: "nav-markets",
@@ -51,7 +53,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Everything the scanner has seen this cycle",
     keywords: "events books quotes",
-    run: ({ router }) => router.push("/markets"),
+    run: ({ router }) => withViewTransition(() => router.push("/markets")),
   },
   {
     id: "nav-venues",
@@ -59,7 +61,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Execution zones, fees and pairing rules",
     keywords: "exchanges books zones jurisdiction",
-    run: ({ router }) => router.push("/venues"),
+    run: ({ router }) => withViewTransition(() => router.push("/venues")),
   },
   {
     id: "nav-analytics",
@@ -67,7 +69,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Backtests, yield and the void model",
     keywords: "backtest history charts equity",
-    run: ({ router }) => router.push("/analytics"),
+    run: ({ router }) => withViewTransition(() => router.push("/analytics")),
   },
   {
     id: "nav-calculators",
@@ -75,7 +77,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Stakes, Kelly, odds conversion, void adjustment",
     keywords: "kelly stake convert maths",
-    run: ({ router }) => router.push("/calculators"),
+    run: ({ router }) => withViewTransition(() => router.push("/calculators")),
   },
   {
     id: "nav-settings",
@@ -83,7 +85,7 @@ const COMMANDS: Command[] = [
     group: "Go to",
     hint: "Bankroll, thresholds and scanner controls",
     keywords: "config bankroll thresholds",
-    run: ({ router }) => router.push("/settings"),
+    run: ({ router }) => withViewTransition(() => router.push("/settings")),
   },
   {
     id: "theme-toggle",

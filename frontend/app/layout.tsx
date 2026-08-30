@@ -3,6 +3,7 @@ import { Geist, JetBrains_Mono } from "next/font/google";
 
 import { BuildRibbon } from "@/components/BuildRibbon";
 import { CommandPalette } from "@/components/CommandPalette";
+import { RouteTransitions } from "@/components/RouteTransitions";
 import { Nav } from "@/components/Nav";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +86,8 @@ export default function RootLayout({
           <BuildRibbon />
           <Nav />
           <CommandPalette />
-          <main className="mx-auto w-full max-w-[1560px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <RouteTransitions />
+          <main className="vt-content mx-auto w-full max-w-[1560px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
             {children}
           </main>
           <footer className="mx-auto mt-4 w-full max-w-[1560px] border-t border-hairline px-4 py-6 text-xs leading-relaxed text-faint sm:px-6 lg:px-8">

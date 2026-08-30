@@ -346,6 +346,15 @@ THEME = """
     background: var(--brand-soft);
   }
 
+  /* Named so the view transition can hold the chrome still and move only the
+     content beneath it. */
+  .vt-shell {
+    view-transition-name: shell;
+  }
+  .vt-content {
+    view-transition-name: content;
+  }
+
   /* One focus treatment everywhere, and never on a mouse click. */
   :focus-visible {
     outline: 2px solid var(--ring);
@@ -521,6 +530,44 @@ THEME = """
   }
   .indeterminate::after {
     animation: slide-b 2.1s var(--ease-standard) 1.15s infinite;
+  }
+}
+
+/* ------------------------------------------------------ view transitions */
+
+/* The shell does not move between routes, so it is named and therefore
+   excluded from the cross-fade -- the header and nav stay perfectly still
+   while only the content beneath them changes. Without this the browser
+   fades the entire page including the chrome, which looks like a reload. */
+::view-transition-group(shell) {
+  animation: none;
+}
+
+/* Content crosses over rather than hard-cutting. Short, because a navigation
+   the user initiated should feel instant; the transition exists to preserve
+   continuity, not to be admired. */
+::view-transition-old(content) {
+  animation: vt-out 90ms var(--ease-standard) both;
+}
+::view-transition-new(content) {
+  animation: vt-in 190ms var(--ease-out-quart) both;
+}
+
+@keyframes vt-out {
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* A user who has asked for less motion gets the swap with no animation at
+   all. Suppressed here rather than in the component so it covers every
+   transition, including ones started by code that forgot to check. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }
 

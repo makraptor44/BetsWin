@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { withViewTransition } from "@/components/RouteTransitions";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -18,6 +19,7 @@ const LINKS = [
 
 export function Nav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -41,7 +43,7 @@ export function Nav() {
 
   return (
     <header
-      className="sticky top-0 z-40 border-b border-border backdrop-blur-xl"
+      className="vt-shell sticky top-0 z-40 border-b border-border backdrop-blur-xl"
       style={{ background: "color-mix(in oklch, var(--background) 82%, transparent)" }}
     >
       <div className="mx-auto w-full max-w-[1560px] px-4 sm:px-6 lg:px-8">
@@ -77,6 +79,17 @@ export function Nav() {
                   key={l.href}
                   href={l.href}
                   aria-current={active ? "page" : undefined}
+                  onClick={(e) => {
+                    // Left click only, and never when a modifier says the user
+                    // meant a new tab. Prefetch and history still come from
+                    // next/link; all this does is put the swap inside a
+                    // transition.
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                      return;
+                    }
+                    e.preventDefault();
+                    withViewTransition(() => router.push(l.href));
+                  }}
                   className={cn(
                     "relative flex items-center px-3 text-[13px] font-medium no-underline transition-colors",
                     active
