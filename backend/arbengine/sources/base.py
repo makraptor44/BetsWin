@@ -7,7 +7,6 @@ pagination, price units, fee models, URL construction -- stops here.
 
 from __future__ import annotations
 
-import asyncio
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -15,7 +14,7 @@ import httpx
 from loguru import logger
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -25,6 +24,22 @@ from ..models import Event
 
 class SourceError(RuntimeError):
     """Raised when a venue cannot be reached or returns something unusable."""
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Only retry what a retry could plausibly fix.
+
+    Retrying every HTTPStatusError meant three attempts, with backoff, against
+    a 401 or a 404 -- answers that will not change however many times you ask,
+    and on a metered feed three times the quota to learn the same thing. A 429
+    is retryable because the whole point of backing off is to be asked later.
+    """
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return False
 
 
 class Source(ABC):
@@ -48,7 +63,7 @@ class Source(ABC):
     # ------------------------------------------------------------------ http
 
     @retry(
-        retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+        retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=0.6, min=0.6, max=8),
         reraise=True,
@@ -56,14 +71,14 @@ class Source(ABC):
     async def _get(self, url: str, params: dict[str, Any] | None = None) -> Any:
         resp = await self._client.get(url, params=params)
         if resp.status_code == 429:
+            # Let the retry decorator's backoff do the waiting; sleeping here as
+            # well doubled the delay on every rate-limited call.
             logger.warning(f"{self.name}: rate limited, backing off")
-            await asyncio.sleep(3.0)
-            resp.raise_for_status()
         resp.raise_for_status()
         return resp.json()
 
     @retry(
-        retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
+        retry=retry_if_exception(_is_retryable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=0.6, min=0.6, max=8),
         reraise=True,

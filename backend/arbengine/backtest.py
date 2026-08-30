@@ -194,13 +194,33 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
         b.pop("margins")
     result.by_kind = sorted(by_kind.values(), key=lambda x: -x["n"])
 
-    # Median-path equity curve, in detection order.
+    # Equity curve: the MEDIAN path across the simulations, in detection order.
+    #
+    # This used to re-seed the generator and replay a single draw, which is the
+    # first simulation, not the median one -- so the curve on screen could be an
+    # outlier while the summary statistics beside it described the distribution.
+    # Each opportunity's outcome is now the one the median of the runs took.
     rng = random.Random(p.seed)
+    n = len(rows)
+    void_counts = [0] * n
+    runs = max(1, p.simulations)
+    for _ in range(runs):
+        for i, vr in enumerate(void_rates):
+            if rng.random() < vr:
+                void_counts[i] += 1
+
     equity = 0.0
-    for row, stake, profit, vr in zip(rows, stakes, profits, void_rates):
-        equity += (-p.void_loss * stake) if rng.random() < vr else profit
+    for i, (row, stake, profit) in enumerate(zip(rows, stakes, profits)):
+        # Voided in more than half the runs -> the median path voids it too.
+        voided = void_counts[i] * 2 > runs
+        equity += (-p.void_loss * stake) if voided else profit
         result.equity_curve.append(
-            {"at": row["detected_at"], "equity": round(equity, 2), "kind": row["kind"]}
+            {
+                "at": row["detected_at"],
+                "equity": round(equity, 2),
+                "kind": row["kind"],
+                "voided": voided,
+            }
         )
 
     if result.naive_yield > 0 and result.expected_yield < result.naive_yield * 0.7:

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import cached_property, lru_cache
 from typing import Sequence
 
 # Prices this close to 0 or 1 make Phi^-1 blow up; nothing tradeable prices there.
@@ -124,6 +125,7 @@ def norm_ppf(p: float) -> float:
     return x
 
 
+@lru_cache(maxsize=4096)
 def bivariate_normal_cdf(x: float, y: float, rho: float, n_steps: int = 2000) -> float:
     """P(Z1 <= x, Z2 <= y) for a standard bivariate normal with correlation rho.
 
@@ -172,6 +174,23 @@ def joint_probability(p_a: float, p_b: float, rho: float) -> float:
     return bivariate_normal_cdf(norm_ppf(p_a), norm_ppf(p_b), rho)
 
 
+def check_frechet(p_a: float, p_b: float, p_joint: float) -> float:
+    """Reject a triple no copula can produce, and clamp to the bounds.
+
+    Pure arithmetic -- no integration -- so it stays eager even where the
+    correlation solve itself is deferred.
+    """
+    lo_bound = max(0.0, p_a + p_b - 1.0)  # Frechet-Hoeffding lower bound
+    hi_bound = min(p_a, p_b)              # Frechet-Hoeffding upper bound
+    if not (lo_bound - 1e-9 <= p_joint <= hi_bound + 1e-9):
+        raise ValueError(
+            f"p_joint={p_joint} is outside the Frechet-Hoeffding bounds "
+            f"[{lo_bound:.6f}, {hi_bound:.6f}] implied by p_a={p_a}, p_b={p_b} "
+            "-- these three prices are not jointly consistent under any copula."
+        )
+    return min(max(p_joint, lo_bound), hi_bound)
+
+
 def implied_correlation(
     p_a: float,
     p_b: float,
@@ -190,15 +209,7 @@ def implied_correlation(
     _validate_prob(p_b, "p_b")
     _validate_prob(p_joint, "p_joint")
 
-    lo_bound = max(0.0, p_a + p_b - 1.0)  # Frechet-Hoeffding lower bound
-    hi_bound = min(p_a, p_b)              # Frechet-Hoeffding upper bound
-    if not (lo_bound - 1e-9 <= p_joint <= hi_bound + 1e-9):
-        raise ValueError(
-            f"p_joint={p_joint} is outside the Frechet-Hoeffding bounds "
-            f"[{lo_bound:.6f}, {hi_bound:.6f}] implied by p_a={p_a}, p_b={p_b} "
-            "-- these three prices are not jointly consistent under any copula."
-        )
-    p_joint = min(max(p_joint, lo_bound), hi_bound)
+    p_joint = check_frechet(p_a, p_b, p_joint)
 
     za, zb = norm_ppf(p_a), norm_ppf(p_b)
 
@@ -264,11 +275,25 @@ class CorrelationArbSignal:
     p_a: float
     p_b: float
     p_joint_market: float
-    rho_impl: float
     rho_prior: float
     fair_joint_price: float   # joint_probability(p_a, p_b, rho_prior)
     edge: float                # fair_joint_price - p_joint_market, in probability points
     action: str                 # "BUY", "SELL", or "HOLD"
+
+    @cached_property
+    def rho_impl(self) -> float:
+        """The correlation the market is pricing in.
+
+        Computed on demand, because it costs a bisection over a numerically
+        integrated bivariate normal -- up to a hundred solves of a 2,000-step
+        Simpson's rule, each step calling erfc -- and the BUY/SELL/HOLD decision
+        below does not use it. `evaluate` used to pay that on every pair on
+        every scan cycle, and most pairs are a HOLD that nothing ever displays.
+
+        It is still the honest headline number when an opportunity IS surfaced,
+        so it is a property rather than a deletion.
+        """
+        return implied_correlation(self.p_a, self.p_b, self.p_joint_market)
 
     @property
     def edge_pct(self) -> float:
@@ -299,7 +324,9 @@ def evaluate(
     the signal is HOLD -- the mispricing may not clear fees/slippage.
     """
     _validate_rho(rho_prior)
-    rho_impl = implied_correlation(p_a, p_b, p_joint_market)
+    # Consistency is checked eagerly (cheap); the correlation solve behind
+    # `signal.rho_impl` is deferred until something asks for it.
+    check_frechet(p_a, p_b, p_joint_market)
     fair_price = joint_probability(p_a, p_b, rho_prior)
     edge = fair_price - p_joint_market
 
@@ -314,7 +341,6 @@ def evaluate(
         p_a=p_a,
         p_b=p_b,
         p_joint_market=p_joint_market,
-        rho_impl=rho_impl,
         rho_prior=rho_prior,
         fair_joint_price=fair_price,
         edge=edge,

@@ -382,7 +382,14 @@ export interface BacktestResult {
     expected_profit: number;
     void_rate: number;
   }>;
-  equity_curve: Array<{ at: string; equity: number; kind: string }>;
+  /** The median path across simulations, not a single draw. */
+  equity_curve: Array<{
+    at: string;
+    equity: number;
+    kind: string;
+    /** True where the median run had this leg voided. */
+    voided?: boolean;
+  }>;
   notes: string[];
 }
 
