@@ -389,9 +389,17 @@ export default function OpportunitiesPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-4">
-        <Watchlist rows={watchlist} />
-        <ActivityFeed entries={engine.activity} />
+      {/* Below the fold on every viewport, so these reveal as they are scrolled
+          to rather than animating unseen on first paint. `reveal` is driven by
+          animation-timeline, so there is no observer and no scroll listener --
+          the work happens on the compositor. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <div className="reveal">
+          <Watchlist rows={watchlist} />
+        </div>
+        <div className="reveal">
+          <ActivityFeed entries={engine.activity} />
+        </div>
       </div>
 
       {selected && (
