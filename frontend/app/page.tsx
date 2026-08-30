@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 
 import { ArbDetailPanel } from "@/components/ArbDetail";
@@ -208,8 +209,9 @@ export default function OpportunitiesPage() {
         <ErrorState message={engine.error} onRetry={() => void engine.refresh()} />
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
+          style={{ "--i": 0 } as CSSProperties}
           label="Live opportunities"
           animate={filtered.length}
           format={(n) => String(Math.round(n))}
@@ -222,6 +224,7 @@ export default function OpportunitiesPage() {
           }
         />
         <Stat
+          style={{ "--i": 1 } as CSSProperties}
           label="Guaranteed profit"
           animate={totals.profit}
           format={(n) => usd(n)}
@@ -234,6 +237,7 @@ export default function OpportunitiesPage() {
           tone={totals.profit > 0 ? "positive" : undefined}
         />
         <Stat
+          style={{ "--i": 2 } as CSSProperties}
           label="Best net margin"
           animate={totals.best}
           format={(n) => pct(n)}
@@ -242,6 +246,7 @@ export default function OpportunitiesPage() {
           sub={totals.best > 0 ? "after all fees" : undefined}
         />
         <Stat
+          style={{ "--i": 3 } as CSSProperties}
           label="Total stake"
           animate={totals.stake}
           format={(n) => usdCompact(n)}

@@ -13,7 +13,7 @@
  * accessibility work done.
  */
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,12 +115,15 @@ export function Stat({
   animate,
   format,
   trend,
+  style,
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   tone?: keyof typeof TONE_TEXT;
   title?: string;
+  /** Carries the --i stagger index when the tile sits in a `.stagger` group. */
+  style?: CSSProperties;
   /** Numeric value to tween to. When given, it replaces `value` on screen. */
   animate?: number;
   /** Required alongside `animate` -- how to render each intermediate frame. */
@@ -133,7 +136,7 @@ export function Stat({
   return (
     <ShadCard
       className="lift relative gap-0 overflow-hidden py-0 shadow-none"
-      style={{ boxShadow: "var(--shadow-flat)" }}
+      style={{ boxShadow: "var(--shadow-flat)", ...style }}
       title={title}
     >
       {tone && (

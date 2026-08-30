@@ -51,9 +51,22 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
 
   return (
     <div className="flex flex-col gap-2.5">
+      {/* A scan in flight gets a hairline across the top of the content. The
+          engine cannot report progress -- it does not know how many venues will
+          answer -- so an indeterminate bar is the only honest shape, and it is
+          two pixels rather than a spinner because a scan is background work,
+          not a modal wait. */}
+      {engine.scanning && (
+        <div
+          className="indeterminate relative h-0.5 overflow-hidden rounded-full bg-brand-soft"
+          role="progressbar"
+          aria-label="Scanning venues"
+        />
+      )}
+
       {engine.isStaticDemo && (
         <div
-          className="rounded-lg border border-border bg-card shadow-sm p-3 flex items-start gap-2.5 border-brand bg-brand-soft"
+          className="enter flex items-start gap-2.5 rounded-lg border border-brand bg-brand-soft p-3 shadow-sm"
         >
           <span className="text-brand" aria-hidden>
             ●
@@ -67,7 +80,8 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
             scoring all ran for real, but nothing is updating live and no venue
             is being polled. The calculators are fully interactive.{" "}
             <a
- className="text-brand"              href="https://github.com/makraptor44/BetsWin"
+              className="text-brand"
+              href="https://github.com/makraptor44/BetsWin"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -79,7 +93,7 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
       )}
       {s?.breaker_tripped && (
         <div
-          className="rounded-lg border border-border bg-card shadow-sm p-3 flex items-start gap-2.5 border-danger bg-danger-soft"
+          className="enter flex items-start gap-2.5 rounded-lg border border-danger bg-danger-soft p-3 shadow-sm"
           role="alert"
         >
           <span className="text-danger" aria-hidden>
