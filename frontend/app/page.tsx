@@ -1,5 +1,7 @@
 "use client";
 
+import { AnimatePresence } from "motion/react";
+
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 
@@ -366,13 +368,20 @@ export default function OpportunitiesPage() {
         </div>
       </div>
 
-      {selected && (
-        <ArbDetailPanel
-          arb={selected}
-          onClose={() => setSelected(null)}
-          onPlace={(arb) => setPlacingArb(arb)}
-        />
-      )}
+      {/* AnimatePresence keeps the panel mounted through its exit animation.
+          Without it React unmounts on the same tick the state clears, the exit
+          transition never runs, and the panel vanishes -- which is exactly the
+          moment continuity matters, because the row it came from is behind it. */}
+      <AnimatePresence>
+        {selected && (
+          <ArbDetailPanel
+            key={selected.id}
+            arb={selected}
+            onClose={() => setSelected(null)}
+            onPlace={(arb) => setPlacingArb(arb)}
+          />
+        )}
+      </AnimatePresence>
 
       {placingArb && (
         <PlaceBetModal

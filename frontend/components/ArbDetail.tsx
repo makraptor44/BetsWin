@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "motion/react";
+
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
@@ -67,25 +69,38 @@ export function ArbDetailPanel({
       aria-modal="true"
       aria-label="Opportunity detail"
     >
-      <div
+      <motion.div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
       />
-      <div
-        className="relative h-full overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200"
+      {/* Slides in from the edge it is anchored to, which is the whole point of
+          a side panel: it reads as the row expanding rather than as a dialog
+          arriving from nowhere. Spring rather than a fixed curve, so a panel
+          dismissed mid-flight reverses from wherever it actually is instead of
+          jumping to the start of an ease. */}
+      <motion.div
+        className="relative h-full overflow-y-auto"
         style={{
           width: "min(720px, 100vw)",
           background: "var(--background)",
           borderLeft: "1px solid var(--border)",
         }}
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.9 }}
       >
         <Header arb={arb} onClose={onClose} onPlace={onPlace} />
-        <div className="p-5 flex flex-col gap-5">
+        <div className="flex flex-col gap-5 p-5">
           {loading && <Skeleton rows={7} />}
           {error && <ErrorState message={error} />}
           {data && <Body arb={data.arb} detail={data} onPlace={onPlace} />}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
