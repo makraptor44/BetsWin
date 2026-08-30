@@ -1,0 +1,286 @@
+{
+ "enforce_zone_pairing": true,
+ "operator_jurisdiction": "",
+ "zones": [
+  {
+   "key": "us_prediction",
+   "label": "USD prediction markets",
+   "currency": "USD",
+   "rationale": "Dollar-denominated binary contracts that settle at $1. Both venues quote in probability space, so a price on one is directly comparable to a price on the other with no FX leg.",
+   "settlement": "Contracts resolve to $1 or $0 against a published source.",
+   "venues": [
+    "polymarket",
+    "kalshi"
+   ],
+   "venue_labels": [
+    "Polymarket",
+    "Kalshi"
+   ]
+  },
+  {
+   "key": "uk_exchange",
+   "label": "UK/EU betting exchanges",
+   "currency": "GBP",
+   "rationale": "Sterling peer-to-peer exchanges under UK Gambling Commission licences. Both charge commission on net winnings rather than pricing a margin into the odds, and both settle on the same sporting result.",
+   "settlement": "Bets settle on the official result; voids return the stake.",
+   "venues": [
+    "smarkets",
+    "betfair"
+   ],
+   "venue_labels": [
+    "Smarkets",
+    "Betfair Exchange"
+   ]
+  },
+  {
+   "key": "us_sportsbook",
+   "label": "US sportsbooks",
+   "currency": "USD",
+   "rationale": "Fixed-odds books priced through one aggregator, state-licensed and reachable from the same account footprint.",
+   "settlement": "Fixed-odds settlement on the book's own rulebook.",
+   "venues": [
+    "sportsbook"
+   ],
+   "venue_labels": [
+    "US sportsbooks"
+   ]
+  }
+ ],
+ "zones_available": [
+  "us_prediction",
+  "uk_exchange"
+ ],
+ "venues": [
+  {
+   "name": "polymarket",
+   "label": "Polymarket",
+   "zone": "us_prediction",
+   "structure": "contract",
+   "currency": "USD",
+   "regulator": "CFTC-registered (Polymarket US); offshore CLOB for non-US",
+   "commission": 0.0,
+   "jurisdictions": [
+    "*"
+   ],
+   "excluded": [
+    "US"
+   ],
+   "public_data": true,
+   "url": "https://polymarket.com",
+   "notes": "USDC-settled binary contracts on Polygon. The order book is public and needs no credentials to read. US persons are restricted from trading the offshore book whatever the market data says.",
+   "live": true
+  },
+  {
+   "name": "kalshi",
+   "label": "Kalshi",
+   "zone": "us_prediction",
+   "structure": "contract",
+   "currency": "USD",
+   "regulator": "CFTC-regulated designated contract market",
+   "commission": 0.0,
+   "jurisdictions": [
+    "*"
+   ],
+   "excluded": [],
+   "public_data": true,
+   "url": "https://kalshi.com",
+   "notes": "Dollar-settled event contracts. Charges an explicit trading fee that peaks at a price of 0.50 -- exactly where arbitrage lives.",
+   "live": true
+  },
+  {
+   "name": "smarkets",
+   "label": "Smarkets",
+   "zone": "uk_exchange",
+   "structure": "exchange",
+   "currency": "GBP",
+   "regulator": "UK Gambling Commission / Malta Gaming Authority",
+   "commission": 0.02,
+   "jurisdictions": [
+    "AT",
+    "DE",
+    "ES",
+    "FI",
+    "GB",
+    "IE",
+    "MT",
+    "SE"
+   ],
+   "excluded": [
+    "AU",
+    "FR",
+    "IT",
+    "US"
+   ],
+   "public_data": true,
+   "url": "https://smarkets.com",
+   "notes": "Peer-to-peer exchange quoting in probability units, which maps directly onto the $1-contract model. Market data is public.",
+   "live": true
+  },
+  {
+   "name": "betfair",
+   "label": "Betfair Exchange",
+   "zone": "uk_exchange",
+   "structure": "exchange",
+   "currency": "GBP",
+   "regulator": "UK Gambling Commission",
+   "commission": 0.05,
+   "jurisdictions": [
+    "DK",
+    "ES",
+    "GB",
+    "IE",
+    "IT",
+    "MT",
+    "RO",
+    "SE"
+   ],
+   "excluded": [
+    "US"
+   ],
+   "public_data": false,
+   "url": "https://www.betfair.com/exchange",
+   "notes": "The deepest exchange book in the zone. Requires an application key and a session token; without them the source stays dark.",
+   "live": false
+  },
+  {
+   "name": "sportsbook",
+   "label": "US sportsbooks",
+   "zone": "us_sportsbook",
+   "structure": "book",
+   "currency": "USD",
+   "regulator": "State gaming commissions",
+   "commission": 0.0,
+   "jurisdictions": [
+    "US"
+   ],
+   "excluded": [],
+   "public_data": false,
+   "url": "https://the-odds-api.com",
+   "notes": "Aggregated fixed-odds prices. Needs an ODDS_API_KEY.",
+   "live": false
+  }
+ ],
+ "pairs": [
+  {
+   "a": "polymarket",
+   "b": "kalshi",
+   "allowed": true,
+   "reason": "Both venues sit in USD prediction markets and settle in USD.",
+   "zone": "us_prediction",
+   "jurisdictions": [
+    "*"
+   ],
+   "excluded": [
+    "US"
+   ],
+   "both_live": true
+  },
+  {
+   "a": "polymarket",
+   "b": "smarkets",
+   "allowed": false,
+   "reason": "Polymarket (USD prediction markets, USD) and Smarkets (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": true
+  },
+  {
+   "a": "polymarket",
+   "b": "betfair",
+   "allowed": false,
+   "reason": "Polymarket (USD prediction markets, USD) and Betfair Exchange (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  },
+  {
+   "a": "polymarket",
+   "b": "sportsbook",
+   "allowed": false,
+   "reason": "Polymarket (USD prediction markets, USD) and US sportsbooks (US sportsbooks, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/USD leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  },
+  {
+   "a": "kalshi",
+   "b": "smarkets",
+   "allowed": false,
+   "reason": "Kalshi (USD prediction markets, USD) and Smarkets (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": true
+  },
+  {
+   "a": "kalshi",
+   "b": "betfair",
+   "allowed": false,
+   "reason": "Kalshi (USD prediction markets, USD) and Betfair Exchange (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  },
+  {
+   "a": "kalshi",
+   "b": "sportsbook",
+   "allowed": false,
+   "reason": "Kalshi (USD prediction markets, USD) and US sportsbooks (US sportsbooks, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/USD leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  },
+  {
+   "a": "smarkets",
+   "b": "betfair",
+   "allowed": true,
+   "reason": "Both venues sit in UK/EU betting exchanges and settle in GBP.",
+   "zone": "uk_exchange",
+   "jurisdictions": [
+    "ES",
+    "GB",
+    "IE",
+    "MT",
+    "SE"
+   ],
+   "excluded": [
+    "AU",
+    "FR",
+    "IT",
+    "US"
+   ],
+   "both_live": false
+  },
+  {
+   "a": "smarkets",
+   "b": "sportsbook",
+   "allowed": false,
+   "reason": "Smarkets (UK/EU betting exchanges, GBP) and US sportsbooks (US sportsbooks, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged GBP/USD leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  },
+  {
+   "a": "betfair",
+   "b": "sportsbook",
+   "allowed": false,
+   "reason": "Betfair Exchange (UK/EU betting exchanges, GBP) and US sportsbooks (US sportsbooks, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged GBP/USD leg.",
+   "zone": "unknown",
+   "jurisdictions": [],
+   "excluded": [],
+   "both_live": false
+  }
+ ],
+ "rejected_this_scan": [
+  "betfair/kalshi: Betfair Exchange (UK/EU betting exchanges, GBP) and Kalshi (USD prediction markets, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged GBP/USD leg.",
+  "betfair/polymarket: Betfair Exchange (UK/EU betting exchanges, GBP) and Polymarket (USD prediction markets, USD) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged GBP/USD leg.",
+  "kalshi/smarkets: Kalshi (USD prediction markets, USD) and Smarkets (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg.",
+  "polymarket/smarkets: Polymarket (USD prediction markets, USD) and Smarkets (UK/EU betting exchanges, GBP) sit in different execution zones. Holding both would need accounts in two jurisdictions and would leave an unhedged USD/GBP leg."
+ ]
+}

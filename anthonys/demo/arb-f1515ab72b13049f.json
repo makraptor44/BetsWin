@@ -1,0 +1,128 @@
+{
+ "arb": {
+  "id": "f1515ab72b13049f",
+  "kind": "cross_venue",
+  "strategy": "arbitrage",
+  "title": "Fed cuts rates at the December 2026 meeting?  ==  Will the Federal Reserve cut rates at the December 2026 meeting?",
+  "category": "economics",
+  "venues": [
+   "polymarket",
+   "kalshi"
+  ],
+  "market_key": "cross_venue",
+  "legs": [
+   {
+    "venue": "polymarket",
+    "market_id": "demo-fed:Y",
+    "ticker": "demo-fed:Y",
+    "outcome": "Yes",
+    "side": "YES",
+    "price": 0.462,
+    "effective_price": 0.462,
+    "decimal_odds": 2.1645021645021645,
+    "effective_decimal_odds": 2.1645021645021645,
+    "stake": 248.56,
+    "contracts": 538.0087,
+    "fee": 0.0,
+    "size_available": 19584.0,
+    "url": "https://example.invalid/polymarket/demo-fed:Y",
+    "event_title": "Fed cuts rates at the December 2026 meeting?",
+    "payout": 538.008658008658,
+    "net_payout": 538.008658008658
+   },
+   {
+    "venue": "kalshi",
+    "market_id": "KXFED-26DEC:N",
+    "ticker": "KXFED-26DEC:N",
+    "outcome": "No",
+    "side": "NO",
+    "price": 0.45,
+    "effective_price": 0.467342,
+    "decimal_odds": 2.2222222222222223,
+    "effective_decimal_odds": 2.139760569356987,
+    "stake": 251.43,
+    "contracts": 538.0,
+    "fee": 9.33,
+    "size_available": 9139.2,
+    "url": "https://example.invalid/kalshi/KXFED-26DEC:N",
+    "event_title": "Fed cuts rates at the December 2026 meeting?",
+    "payout": 537.9999999534273,
+    "net_payout": 537.9999999534273
+   }
+  ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
+  "total_stake": 499.99,
+  "book": 0.9293426205644606,
+  "margin": 0.09649122807017552,
+  "net_margin": 0.07602941893768289,
+  "profit": 38.01,
+  "worst_case_profit": 38.01,
+  "payout_if": {
+   "Yes (polymarket)": 538.01,
+   "No (kalshi)": 538.0
+  },
+  "max_stake_available": 3758.46,
+  "confidence": 57,
+  "flags": [
+   "suspect_margin",
+   "cross_venue_rules",
+   "fuzzy_match"
+  ],
+  "notes": [
+   "Margin of 7.6% is above the 5% suspicion threshold - verify both legs describe the same outcome before staking.",
+   "Legs sit with different counterparties (kalshi, polymarket); confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
+   "Markets were paired by title similarity (99/100), not by a shared identifier.",
+   "Broadly available, but not from US -- at least one venue turns those away."
+  ],
+  "detected_at": "2026-08-30T14:13:57.227105Z",
+  "close_time": "2026-10-14T14:13:58.378433Z",
+  "last_seen": "2026-08-30T14:13:58.998475Z",
+  "is_suspect": true,
+  "roi_pct": 7.602152043040861,
+  "hours_to_close": 1079.9998247041667
+ },
+ "payout_matrix": [
+  {
+   "outcome": "Yes",
+   "venue": "polymarket",
+   "gross_return": 538.01,
+   "total_stake": 499.99,
+   "profit": 38.02,
+   "roi_pct": 7.604
+  },
+  {
+   "outcome": "No",
+   "venue": "kalshi",
+   "gross_return": 538.0,
+   "total_stake": 499.99,
+   "profit": 38.01,
+   "roi_pct": 7.602
+  }
+ ],
+ "maths": {
+  "implied_probs": [
+   0.462,
+   0.46734
+  ],
+  "book_quoted": 0.912,
+  "book_effective": 0.92934,
+  "margin_gross": 0.09649122807017552,
+  "margin_net": 0.07602941893768289,
+  "vig_equivalent": -0.09649,
+  "void_rate": 0.02,
+  "void_loss": 0.3,
+  "margin_after_voids": 0.06851,
+  "kelly_arb_fraction": 3.0036,
+  "kelly_arb_unbounded": false,
+  "devig_fair_probs": [
+   0.50658,
+   0.49342
+  ],
+  "bankroll_cap": 500.0
+ }
+}

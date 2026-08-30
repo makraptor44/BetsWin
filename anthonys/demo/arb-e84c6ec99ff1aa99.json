@@ -1,0 +1,180 @@
+{
+ "arb": {
+  "id": "e84c6ec99ff1aa99",
+  "kind": "dutch_yes",
+  "strategy": "arbitrage",
+  "title": "2028 Presidential nominee - buy every outcome",
+  "category": "politics",
+  "venues": [
+   "polymarket"
+  ],
+  "market_key": "dutch_yes",
+  "legs": [
+   {
+    "venue": "polymarket",
+    "market_id": "demo-nom-0:Y",
+    "ticker": "demo-nom-0:Y",
+    "outcome": "Vance",
+    "side": "YES",
+    "price": 0.305,
+    "effective_price": 0.305,
+    "decimal_odds": 3.278688524590164,
+    "effective_decimal_odds": 3.278688524590164,
+    "stake": 158.03,
+    "contracts": 518.1311,
+    "fee": 0.0,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/polymarket/demo-nom-0:Y",
+    "event_title": "2028 Presidential nominee",
+    "payout": 518.1311475409836,
+    "net_payout": 518.1311475409836
+   },
+   {
+    "venue": "polymarket",
+    "market_id": "demo-nom-1:Y",
+    "ticker": "demo-nom-1:Y",
+    "outcome": "Newsom",
+    "side": "YES",
+    "price": 0.276,
+    "effective_price": 0.276,
+    "decimal_odds": 3.623188405797101,
+    "effective_decimal_odds": 3.623188405797101,
+    "stake": 143.0,
+    "contracts": 518.1159,
+    "fee": 0.0,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/polymarket/demo-nom-1:Y",
+    "event_title": "2028 Presidential nominee",
+    "payout": 518.1159420289855,
+    "net_payout": 518.1159420289855
+   },
+   {
+    "venue": "polymarket",
+    "market_id": "demo-nom-2:Y",
+    "ticker": "demo-nom-2:Y",
+    "outcome": "Haley",
+    "side": "YES",
+    "price": 0.221,
+    "effective_price": 0.221,
+    "decimal_odds": 4.524886877828054,
+    "effective_decimal_odds": 4.524886877828054,
+    "stake": 114.5,
+    "contracts": 518.0995,
+    "fee": 0.0,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/polymarket/demo-nom-2:Y",
+    "event_title": "2028 Presidential nominee",
+    "payout": 518.0995475113122,
+    "net_payout": 518.0995475113122
+   },
+   {
+    "venue": "polymarket",
+    "market_id": "demo-nom-3:Y",
+    "ticker": "demo-nom-3:Y",
+    "outcome": "Field",
+    "side": "YES",
+    "price": 0.163,
+    "effective_price": 0.163,
+    "decimal_odds": 6.134969325153374,
+    "effective_decimal_odds": 6.134969325153374,
+    "stake": 84.45,
+    "contracts": 518.0982,
+    "fee": 0.0,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/polymarket/demo-nom-3:Y",
+    "event_title": "2028 Presidential nominee",
+    "payout": 518.0981595092024,
+    "net_payout": 518.0981595092024
+   }
+  ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
+  "total_stake": 499.98,
+  "book": 0.9650000000000001,
+  "margin": 0.03626943005181338,
+  "net_margin": 0.03626943005181338,
+  "profit": 18.13,
+  "worst_case_profit": 18.12,
+  "payout_if": {
+   "Vance (polymarket)": 518.13,
+   "Newsom (polymarket)": 518.12,
+   "Haley (polymarket)": 518.1,
+   "Field (polymarket)": 518.1
+  },
+  "max_stake_available": 12636.4,
+  "confidence": 100,
+  "flags": [],
+  "notes": [
+   "Broadly available, but not from US -- at least one venue turns those away."
+  ],
+  "detected_at": "2026-08-30T14:13:57.224637Z",
+  "close_time": "2026-12-28T14:13:58.378433Z",
+  "last_seen": "2026-08-30T14:13:58.998520Z",
+  "is_suspect": false,
+  "roi_pct": 3.624144965798632,
+  "hours_to_close": 2879.9998243877776
+ },
+ "payout_matrix": [
+  {
+   "outcome": "Vance",
+   "venue": "polymarket",
+   "gross_return": 518.13,
+   "total_stake": 499.98,
+   "profit": 18.15,
+   "roi_pct": 3.63
+  },
+  {
+   "outcome": "Newsom",
+   "venue": "polymarket",
+   "gross_return": 518.12,
+   "total_stake": 499.98,
+   "profit": 18.14,
+   "roi_pct": 3.627
+  },
+  {
+   "outcome": "Haley",
+   "venue": "polymarket",
+   "gross_return": 518.1,
+   "total_stake": 499.98,
+   "profit": 18.12,
+   "roi_pct": 3.624
+  },
+  {
+   "outcome": "Field",
+   "venue": "polymarket",
+   "gross_return": 518.1,
+   "total_stake": 499.98,
+   "profit": 18.12,
+   "roi_pct": 3.624
+  }
+ ],
+ "maths": {
+  "implied_probs": [
+   0.305,
+   0.276,
+   0.221,
+   0.163
+  ],
+  "book_quoted": 0.965,
+  "book_effective": 0.965,
+  "margin_gross": 0.03626943005181338,
+  "margin_net": 0.03626943005181338,
+  "vig_equivalent": -0.03627,
+  "void_rate": 0.02,
+  "void_loss": 0.3,
+  "margin_after_voids": 0.02954,
+  "kelly_arb_fraction": 2.7152,
+  "kelly_arb_unbounded": false,
+  "devig_fair_probs": [
+   0.31606,
+   0.28601,
+   0.22902,
+   0.16891
+  ],
+  "bankroll_cap": 500.0
+ }
+}
