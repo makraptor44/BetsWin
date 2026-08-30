@@ -29,7 +29,7 @@ from ..config import settings
 from ..fees import fee_model_for
 from ..models import Event, Market, Outcome, Quote, Side
 from ..odds import decimal_to_prob
-from .base import Source
+from .base import Source, redact
 
 _CACHE_TTL_SECONDS = 60.0
 
@@ -69,7 +69,9 @@ class OddsAPISource(Source):
         events: list[Event] = []
         for sport, res in zip(sports, results):
             if isinstance(res, BaseException):
-                logger.warning(f"sportsbook: {sport} failed -- {res}")
+                # The key rides along in the URL inside httpx's exception
+                # message; never log one un-redacted.
+                logger.warning(f"sportsbook: {sport} failed -- {redact(str(res))}")
                 continue
             for raw in res:
                 ev = self._build_event(raw, sport)

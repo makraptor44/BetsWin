@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Shared secret for the endpoints that change something: config, scanner
+    # control, placements, settlements. Sent as X-API-Key.
+    #
+    # Blank is allowed ONLY while bound to loopback, which is the default and
+    # the deployment this tool is actually built for. Binding to any other
+    # interface without a key is refused at startup rather than quietly serving
+    # bankroll settings and a stop button to the network.
+    api_key: str = ""
 
     # ------------------------------------------------------------ data feeds
     # Polymarket and Kalshi market data are public and need no credentials.
@@ -188,6 +196,14 @@ class Settings(BaseSettings):
     @classmethod
     def _strip(cls, v: str) -> str:
         return v.strip()
+
+    @property
+    def auth_required(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def binds_loopback(self) -> bool:
+        return self.host in ("127.0.0.1", "::1", "localhost")
 
     @property
     def cors_origin_list(self) -> list[str]:

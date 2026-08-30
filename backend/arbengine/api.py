@@ -15,12 +15,22 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import secrets
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Body,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
@@ -57,6 +67,7 @@ _background: set[asyncio.Task] = set()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global scanner
+    _assert_safe_binding()
     scanner = Scanner()
     if settings.autostart_scanner:
         # Run one cycle immediately so the dashboard is populated on first load.
@@ -101,6 +112,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_api_key(x_api_key: str = Header(default="")) -> None:
+    """Gate for every endpoint that changes something.
+
+    Nothing here was authenticated: anyone who could reach the port could
+    rewrite the bankroll and every risk threshold through PATCH /api/config,
+    stop the scanner, place bets and settle positions.
+
+    A blank `api_key` leaves the gate open, which is only safe because binding
+    to anything other than loopback without one is refused at startup. Reads
+    stay open either way -- they expose prices the venues publish anyway.
+    """
+    if not settings.auth_required:
+        return
+    expected = settings.api_key
+    supplied = x_api_key or ""
+    # Constant-time: the comparison is on a secret.
+    if not secrets.compare_digest(supplied, expected):
+        raise HTTPException(401, "missing or invalid X-API-Key")
+
+
+def _assert_safe_binding() -> None:
+    """Refuse to serve a mutable, unauthenticated API to the network."""
+    if settings.auth_required or settings.binds_loopback:
+        return
+    raise RuntimeError(
+        f"refusing to bind {settings.host} without an API_KEY: the config, "
+        "scanner-control and placement endpoints change state and would be "
+        "reachable by anyone on the network. Set API_KEY, or bind 127.0.0.1."
+    )
 
 
 def _engine() -> Scanner:
@@ -180,18 +222,46 @@ class ConfigPatch(BaseModel):
     near_miss_slack: Optional[float] = Field(None, ge=0, le=0.25)
 
 
-@app.patch("/api/config", tags=["system"])
+@app.patch("/api/config", tags=["system"], dependencies=[Depends(require_api_key)])
 async def patch_config(patch: ConfigPatch) -> dict[str, Any]:
-    """Live-tune thresholds. Applies to the next scan cycle."""
-    changed: dict[str, Any] = {}
-    for key, value in patch.model_dump(exclude_none=True).items():
-        if key == "operator_jurisdiction":
-            value = str(value).strip().upper()
+    """Live-tune thresholds. Applies to the next scan cycle.
+
+    Fields are validated against each other, not just individually. Every bound
+    here is legal on its own, but a min above a max is a detector that silently
+    returns nothing for ever -- indistinguishable from a broken feed.
+    """
+    updates = patch.model_dump(exclude_none=True)
+    if "operator_jurisdiction" in updates:
+        updates["operator_jurisdiction"] = str(
+            updates["operator_jurisdiction"]
+        ).strip().upper()
+
+    lo = updates.get("min_arb_margin", settings.min_arb_margin)
+    hi = updates.get("max_arb_margin", settings.max_arb_margin)
+    if lo > hi:
+        raise HTTPException(
+            400,
+            f"min_arb_margin ({lo}) cannot exceed max_arb_margin ({hi}): "
+            "no margin could satisfy both and the detector would return "
+            "nothing at all.",
+        )
+
+    suspect = updates.get("suspect_margin", settings.suspect_margin)
+    if suspect > hi:
+        raise HTTPException(
+            400,
+            f"suspect_margin ({suspect}) is above max_arb_margin ({hi}), so "
+            "nothing could ever be flagged as suspect -- it would be dropped "
+            "before it got that far.",
+        )
+
+    # Apply only once every check has passed: a half-applied config is worse
+    # than a rejected one.
+    for key, value in updates.items():
         setattr(settings, key, value)
-        changed[key] = value
-    if changed:
-        logger.info(f"config updated: {changed}")
-    return {"updated": changed, "config": await get_config()}
+    if updates:
+        logger.info(f"config updated: {updates}")
+    return {"updated": updates, "config": await get_config()}
 
 
 # --------------------------------------------------------------------- arbs
@@ -435,7 +505,7 @@ class ResizeRequest(BaseModel):
     total_stake: float = Field(..., gt=0)
 
 
-@app.post("/api/arbs/{arb_id}/resize", tags=["arbs"])
+@app.post("/api/arbs/{arb_id}/resize", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
     """Recompute equal-profit stakes at a different total. Backs the calculator."""
     arb = _engine().get_arb(arb_id)
@@ -494,6 +564,8 @@ async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
 class PlaceBetRequest(BaseModel):
     """Execution / confirmation payload when user places a bet."""
 
+    model_config = ConfigDict(extra="forbid")
+
     confirmed: bool = Field(True, description="Explicit confirmation by the user")
     executed_prices: Optional[list[float]] = None
     executed_stakes: Optional[list[float]] = None
@@ -501,11 +573,21 @@ class PlaceBetRequest(BaseModel):
     retire: bool = Field(True, description="Retire from live opportunities after placement")
 
 
-@app.post("/api/arbs/{arb_id}/place", tags=["arbs"])
-@app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"])
+@app.post("/api/arbs/{arb_id}/place", tags=["arbs"], dependencies=[Depends(require_api_key)])
+@app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def place_bet(arb_id: str, body: PlaceBetRequest = Body(default_factory=PlaceBetRequest)) -> dict[str, Any]:
-    """Record placed bet with explicit confirmation and refresh live opportunities."""
+    """Record a placed bet, and refresh the live opportunity list.
+
+    `confirmed` is checked. It was documented as "Explicit confirmation by the
+    user" and then never read, so the control did nothing at all -- which is
+    worse than not having one, because the UI showed a checkbox that implied a
+    gate that was not there.
+    """
     eng = _engine()
+    if not body.confirmed:
+        raise HTTPException(
+            400, "recording a placement requires explicit confirmation"
+        )
     arb = eng.get_arb(arb_id)
     if arb is None:
         # Fallback: check if already in store
@@ -761,7 +843,7 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
     }
 
 
-@app.post("/api/positions/{row_id}/sell-back", tags=["arbs"])
+@app.post("/api/positions/{row_id}/sell-back", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def sell_back_position(
     row_id: int,
     body: SellBackRequest = Body(default_factory=SellBackRequest),
@@ -847,8 +929,8 @@ async def sell_back_position(
     }
 
 
-@app.post("/api/positions/{row_id}/resolve", tags=["arbs"])
-@app.post("/api/positions/{row_id}/settle", tags=["arbs"])
+@app.post("/api/positions/{row_id}/resolve", tags=["arbs"], dependencies=[Depends(require_api_key)])
+@app.post("/api/positions/{row_id}/settle", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def resolve_position(row_id: int, body: ResolveRequest = Body(default_factory=ResolveRequest)) -> dict[str, Any]:
     """Settle an open position upon market resolution (Hold to Resolution)."""
     eng = _engine()
@@ -1095,6 +1177,10 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
     }
 
 
+#: Total Monte Carlo runs one sweep may spend, shared across its thresholds.
+_MAX_SWEEP_SIMULATIONS = 3_500
+
+
 class BacktestRequest(BaseModel):
     days: int = Field(30, ge=1, le=365)
     min_margin: float = Field(0.005, ge=0, le=1)
@@ -1107,7 +1193,7 @@ class BacktestRequest(BaseModel):
     simulations: int = Field(400, ge=10, le=5000)
 
 
-@app.post("/api/backtest", tags=["analytics"])
+@app.post("/api/backtest", tags=["analytics"], dependencies=[Depends(require_api_key)])
 async def run_backtest(req: BacktestRequest) -> dict[str, Any]:
     """Replay stored opportunities under a void model (Part I s13.3)."""
     eng = _engine()
@@ -1116,13 +1202,26 @@ async def run_backtest(req: BacktestRequest) -> dict[str, Any]:
     return result.to_dict()
 
 
-@app.post("/api/backtest/sweep", tags=["analytics"])
+@app.post("/api/backtest/sweep", tags=["analytics"], dependencies=[Depends(require_api_key)])
 async def run_sweep(req: BacktestRequest) -> dict[str, Any]:
-    """Sweep the minimum-margin floor to find where the edge actually peaks."""
+    """Sweep the minimum-margin floor to find where the edge actually peaks.
+
+    The sweep runs `replay` once per threshold, so the work is
+    `len(thresholds) * simulations * rows` -- with the request's own ceiling of
+    5,000 simulations that is 35,000 Monte Carlo runs over the whole stored
+    tape, synchronously, on an unauthenticated endpoint with no cost bound.
+    Each individual replay is capped here so a sweep costs about what one
+    backtest does.
+    """
     eng = _engine()
-    base = BacktestParams(**req.model_dump())
-    rows = await asyncio.to_thread(sweep, eng.store, (0.002, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.03), base)
-    return {"sweep": rows}
+    thresholds = (0.002, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.03)
+    params = req.model_dump()
+    params["simulations"] = max(
+        10, min(params.get("simulations", 400), _MAX_SWEEP_SIMULATIONS // len(thresholds))
+    )
+    base = BacktestParams(**params)
+    rows = await asyncio.to_thread(sweep, eng.store, thresholds, base)
+    return {"sweep": rows, "simulations_per_threshold": base.simulations}
 
 
 @app.get("/api/history", tags=["analytics"])
@@ -1159,7 +1258,7 @@ class StakeCalcRequest(BaseModel):
     round_to: Optional[float] = None
 
 
-@app.post("/api/calc/stakes", tags=["calculators"])
+@app.post("/api/calc/stakes", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_stakes(req: StakeCalcRequest) -> dict[str, Any]:
     ds = req.decimal_odds
     if any(d <= 1.0 for d in ds):
@@ -1194,7 +1293,7 @@ class KellyRequest(BaseModel):
     fraction: float = Field(0.25, gt=0, le=1)
 
 
-@app.post("/api/calc/kelly", tags=["calculators"])
+@app.post("/api/calc/kelly", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_kelly(req: KellyRequest) -> dict[str, Any]:
     """Kelly sizing for value bets (Part I s7.3 / s12)."""
     bankroll = req.bankroll or settings.bankroll
@@ -1216,7 +1315,7 @@ class ConvertRequest(BaseModel):
     from_format: str = Field(..., pattern="^(decimal|american|probability)$")
 
 
-@app.post("/api/calc/convert", tags=["calculators"])
+@app.post("/api/calc/convert", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_convert(req: ConvertRequest) -> dict[str, Any]:
     """Odds format conversion (Part I s2.1).
 
@@ -1253,7 +1352,7 @@ class VoidRequest(BaseModel):
     turnovers_per_year: float = Field(100.0, gt=0)
 
 
-@app.post("/api/calc/void-adjusted", tags=["calculators"])
+@app.post("/api/calc/void-adjusted", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_void(req: VoidRequest) -> dict[str, Any]:
     """Effective margin and Kelly bound once voids are priced in (Part I s13)."""
     eff = om.margin_after_voids(req.margin, req.void_rate, req.void_loss)
@@ -1282,7 +1381,7 @@ class CorrelationCalcRequest(BaseModel):
     min_edge: float = Field(0.0, ge=0, le=1)
 
 
-@app.post("/api/calc/correlation", tags=["calculators"])
+@app.post("/api/calc/correlation", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_correlation(req: CorrelationCalcRequest) -> dict[str, Any]:
     """rho_impl, the fair joint price under rho_prior, and the BUY/SELL/HOLD read."""
     try:
@@ -1332,7 +1431,7 @@ async def list_correlation_pairs() -> dict[str, Any]:
     return {"count": len(rows), "pairs": rows}
 
 
-@app.post("/api/correlation/pairs", tags=["correlation"])
+@app.post("/api/correlation/pairs", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def upsert_correlation_pair(req: CorrelationPairRequest) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.upsert_correlation_pair, req.model_dump())
@@ -1340,7 +1439,7 @@ async def upsert_correlation_pair(req: CorrelationPairRequest) -> dict[str, Any]
     return {"ok": True, "pair": pair}
 
 
-@app.delete("/api/correlation/pairs/{key}", tags=["correlation"])
+@app.delete("/api/correlation/pairs/{key}", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def delete_correlation_pair(key: str) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.delete_correlation_pair, key)
@@ -1389,7 +1488,7 @@ async def list_correlation_outcomes(key: str) -> dict[str, Any]:
     return {"count": len(rows), "outcomes": rows, "rho_prior_from_history": rho}
 
 
-@app.post("/api/correlation/pairs/{key}/outcomes", tags=["correlation"])
+@app.post("/api/correlation/pairs/{key}/outcomes", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def add_correlation_outcome(key: str, req: CorrelationOutcomeRequest) -> dict[str, Any]:
     eng = _engine()
     if await asyncio.to_thread(eng.store.get_correlation_pair, key) is None:
@@ -1400,7 +1499,7 @@ async def add_correlation_outcome(key: str, req: CorrelationOutcomeRequest) -> d
     return {"ok": True, "id": row_id}
 
 
-@app.delete("/api/correlation/outcomes/{outcome_id}", tags=["correlation"])
+@app.delete("/api/correlation/outcomes/{outcome_id}", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def delete_correlation_outcome(outcome_id: int) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.delete_correlation_outcome, outcome_id)
@@ -1410,7 +1509,7 @@ async def delete_correlation_outcome(outcome_id: int) -> dict[str, Any]:
 # ------------------------------------------------------------------ control
 
 
-@app.post("/api/scanner/scan", tags=["system"])
+@app.post("/api/scanner/scan", tags=["system"], dependencies=[Depends(require_api_key)])
 async def force_scan() -> dict[str, Any]:
     eng = _engine()
     found = await eng.scan_once()
@@ -1421,19 +1520,19 @@ async def force_scan() -> dict[str, Any]:
     }
 
 
-@app.post("/api/scanner/start", tags=["system"])
+@app.post("/api/scanner/start", tags=["system"], dependencies=[Depends(require_api_key)])
 async def start_scanner() -> dict[str, Any]:
     await _engine().start()
     return {"ok": True, "running": True}
 
 
-@app.post("/api/scanner/stop", tags=["system"])
+@app.post("/api/scanner/stop", tags=["system"], dependencies=[Depends(require_api_key)])
 async def stop_scanner() -> dict[str, Any]:
     await _engine().stop()
     return {"ok": True, "running": False}
 
 
-@app.post("/api/scanner/reset-breaker", tags=["system"])
+@app.post("/api/scanner/reset-breaker", tags=["system"], dependencies=[Depends(require_api_key)])
 async def reset_breaker() -> dict[str, Any]:
     _engine().breaker.reset()
     return {"ok": True}

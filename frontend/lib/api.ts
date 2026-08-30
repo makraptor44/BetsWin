@@ -75,12 +75,27 @@ async function fixture<T>(name: string): Promise<T> {
   return data;
 }
 
+/**
+ * Shared secret for the endpoints that change something.
+ *
+ * NEXT_PUBLIC_* is inlined into the browser bundle, so this is not a secret
+ * from anyone using the dashboard -- it is not meant to be. The security
+ * boundary is the engine's loopback bind; this key is what lets you move it off
+ * loopback on a trusted network without leaving the config and scanner-control
+ * endpoints open to it.
+ */
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+        ...(init?.headers ?? {}),
+      },
       cache: "no-store",
     });
   } catch {

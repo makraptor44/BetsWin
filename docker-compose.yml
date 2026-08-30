@@ -3,10 +3,18 @@ services:
     build: ./backend
     restart: unless-stopped
     env_file:
-      - ./backend/.env
+      # Optional: a fresh clone has no backend/.env (it is gitignored), and
+      # `docker compose up` used to fail outright before starting anything.
+      # Everything below has a working default, so the file is a convenience.
+      - path: ./backend/.env
+        required: false
     environment:
       HOST: 0.0.0.0
       CORS_ORIGINS: http://localhost:3000
+      # Binding 0.0.0.0 without a key is refused at startup: the config,
+      # scanner-control and placement endpoints change state. Set API_KEY in
+      # backend/.env (or here) before exposing this beyond the compose network.
+      API_KEY: ${API_KEY:?set API_KEY in your environment or backend/.env}
     ports:
       - "8000:8000"
     volumes:
@@ -15,14 +23,18 @@ services:
       - ./backend/logs:/app/logs
 
   dashboard:
-    build: ./frontend
+    build:
+      context: ./frontend
+      # NEXT_PUBLIC_* is inlined by `next build`, so these have to be build
+      # arguments. Passing them as runtime `environment:` did nothing at all --
+      # the image kept the http://127.0.0.1:8000 default and could not reach
+      # the engine over the compose network.
+      args:
+        NEXT_PUBLIC_API_URL: http://engine:8000
+        NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws
+        NEXT_PUBLIC_API_KEY: ${API_KEY:-}
     restart: unless-stopped
     depends_on:
       - engine
-    environment:
-      # Server-side rewrites reach the engine over the compose network.
-      NEXT_PUBLIC_API_URL: http://engine:8000
-      # The browser cannot resolve "engine", so the socket points at the host.
-      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws
     ports:
       - "3000:3000"

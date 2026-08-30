@@ -7,6 +7,7 @@ pagination, price units, fee models, URL construction -- stops here.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -24,6 +25,23 @@ from ..models import Event
 
 class SourceError(RuntimeError):
     """Raised when a venue cannot be reached or returns something unusable."""
+
+
+#: Query parameters whose value must never reach a log line, the scan telemetry
+#: or the database. httpx puts the full request URL into the message of every
+#: HTTPStatusError it raises, so any credential passed in a query string travels
+#: with the exception -- and `safe_fetch` stringifies that into `last_error`,
+#: which `ScanStats.errors` persists and /api/analytics serves back out.
+_SECRET_PARAMS = ("apikey", "api_key", "key", "token", "secret", "password")
+
+_SECRET_RE = re.compile(
+    r"(?i)\b(" + "|".join(_SECRET_PARAMS) + r")=([^&\s'\"]+)"
+)
+
+
+def redact(text: str) -> str:
+    """Mask credentials that appear as query parameters in `text`."""
+    return _SECRET_RE.sub(lambda m: f"{m.group(1)}=***", text)
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -118,6 +136,9 @@ class Source(ABC):
             return events
         except Exception as exc:  # noqa: BLE001 - deliberately broad, logged
             self.healthy = False
-            self.last_error = f"{type(exc).__name__}: {exc}"
+            # Redacted before it is stored: this string ends up in
+            # ScanStats.errors, which is written to SQLite and served by
+            # /api/analytics.
+            self.last_error = redact(f"{type(exc).__name__}: {exc}")
             logger.error(f"{self.name}: fetch failed -- {self.last_error}")
             return []
