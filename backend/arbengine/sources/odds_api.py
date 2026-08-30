@@ -7,6 +7,13 @@ detector a sportsbook reference price for prediction-market lines.
 
 Quota is metered per request, so responses are cached for a configurable TTL and
 all sports are fetched concurrently (Part II s17.2).
+
+One thing this feed cannot give you: depth. It is an odds aggregator, so there
+is no order book and no published stake limit, and the honest reading of a
+sportsbook quote is that its capacity is UNKNOWN. That is not the same as zero,
+and it is certainly not the same as unlimited -- so the size of a sportsbook leg
+comes from `settings.sportsbook_assumed_stake_usd`, an operator-owned risk limit,
+rather than from anything the API said.
 """
 
 from __future__ import annotations
@@ -125,6 +132,14 @@ class OddsAPISource(Source):
                     if d <= 1.0:
                         continue
                     price = decimal_to_prob(d)
+                    # The feed carries no book and no stake limit, so capacity
+                    # here is UNKNOWN, not zero. Reporting 0 used to slip past
+                    # the sizer's depth cap entirely and size every sportsbook
+                    # arb as though depth were unlimited. State the assumption
+                    # instead: `sportsbook_assumed_stake_usd` is the operator's
+                    # own per-leg limit, converted to contracts at this price.
+                    assumed_notional = max(settings.sportsbook_assumed_stake_usd, 0.0)
+                    size_available = (assumed_notional / price) if price > 0 else 0.0
                     by_outcome.setdefault(name, []).append(
                         Quote(
                             venue=self.name,
@@ -134,7 +149,7 @@ class OddsAPISource(Source):
                             side=Side.BACK,
                             price=price,
                             effective_price=price,
-                            size_available=0.0,
+                            size_available=size_available,
                             last_update=updated,
                             url=None,
                         )

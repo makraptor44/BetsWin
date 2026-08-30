@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     odds_api_sports: str = (
         "americanfootball_nfl,basketball_nba,baseball_mlb,icehockey_nhl"
     )
+    # The Odds API publishes prices, not books: there is no depth and no stake
+    # limit in the payload, so the capacity of a sportsbook leg is UNKNOWN
+    # rather than zero. The sizer refuses a leg with no capacity, which is the
+    # right rule -- so the assumption has to be stated explicitly here instead
+    # of arriving by accident as `size_available = 0`. This is the most one leg
+    # at a single book will be sized at; it is a risk limit you own, not a
+    # number the feed told us. Set it to 0 to disable sportsbook sizing.
+    sportsbook_assumed_stake_usd: float = 250.0
 
     # How much of each venue to pull per cycle.
     polymarket_page_limit: int = 100
