@@ -12,10 +12,15 @@ from __future__ import annotations
 import math
 from typing import Iterable, Sequence
 
-# A price of exactly 0 or 1 is unusable; clamp to the tightest tick either venue
-# supports (Polymarket 0.001, Kalshi 0.01).
-MIN_PRICE = 1e-4
-MAX_PRICE = 1.0 - 1e-4
+# A price of exactly 0 or 1 is unusable: it implies certainty and sends d = 1/p
+# to infinity. Clamp to the tightest tick any venue supports, which is
+# Polymarket's 0.001 (Kalshi's is 0.01, a whole cent).
+#
+# The clamp used to be 1e-4 while this comment claimed 0.001 -- an order of
+# magnitude apart, and the looser value admits prices no venue can actually
+# quote. The comment was right and the constant was wrong.
+MIN_PRICE = 1e-3
+MAX_PRICE = 1.0 - 1e-3
 
 
 # --------------------------------------------------------------------- format
@@ -219,7 +224,11 @@ def devig_power(decimal_odds: Sequence[float], tol: float = 1e-10) -> list[float
     prediction markets where prices cluster near 0 and 1.
     """
     raw = [decimal_to_prob(d) for d in decimal_odds]
-    if not raw or min(raw) <= 0:
+    # Any d <= 1 clamps to a probability of exactly 1.0, and 1**k is 1 for every
+    # k -- the sum can then never fall to 1, so the bisection walks to its upper
+    # bound and returns a silently meaningless answer. Proportional de-vigging
+    # degrades honestly on the same input.
+    if not raw or min(raw) <= 0 or max(raw) >= 1.0:
         return devig_proportional(decimal_odds)
     lo, hi = 0.5, 3.0
     k = 1.0

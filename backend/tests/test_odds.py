@@ -51,8 +51,18 @@ class TestFormats:
             assert om.decimal_to_american(om.american_to_decimal(a)) == pytest.approx(a)
 
     def test_price_clamping_avoids_division_blowup(self):
+        """0 and 1 are clamped to the tightest tick a venue can quote.
+
+        Asserted against MIN_PRICE/MAX_PRICE rather than a literal tolerance:
+        the constant moved from 1e-4 to 1e-3 to match its own comment (and
+        Polymarket's actual tick), and a hard-coded 1e-3 tolerance here was
+        measuring the old value.
+        """
+        assert om.prob_to_decimal(0.0) == pytest.approx(1.0 / om.MIN_PRICE)
+        assert om.prob_to_decimal(1.0) == pytest.approx(1.0 / om.MAX_PRICE)
+        # Still finite, still greater than 1, which is the point of the clamp.
+        assert 1.0 < om.prob_to_decimal(1.0) < 1.01
         assert om.prob_to_decimal(0.0) > 0
-        assert om.prob_to_decimal(1.0) == pytest.approx(1.0, abs=1e-3)
 
 
 class TestBook:
@@ -284,3 +294,27 @@ class TestSkewedStakes:
         assert even[0] == pytest.approx(even[1])
         assert skewed[1] < even[1]
         assert sum(skewed) == pytest.approx(1000.0)
+
+
+class TestDevigPowerGuards:
+    """Power de-vigging needs strictly interior probabilities.
+
+    `decimal_to_prob` clamps any d <= 1 to exactly 1.0, and 1**k == 1 for every
+    k, so the sum can never fall to 1 and the bisection walks to its upper bound
+    -- returning a confident, meaningless answer.
+    """
+
+    def test_a_degenerate_price_falls_back_to_proportional(self):
+        odds = [1.0, 3.0, 4.0]
+        assert om.devig_power(odds) == om.devig_proportional(odds)
+
+    def test_output_is_still_a_probability_distribution(self):
+        for odds in ([1.0, 3.0], [2.1, 2.0, 8.0], [1.9, 1.9]):
+            probs = om.devig_power(odds)
+            assert all(0.0 <= p <= 1.0 for p in probs)
+            assert sum(probs) == pytest.approx(1.0)
+
+    def test_healthy_input_is_unaffected_by_the_guard(self):
+        probs = om.devig_power([2.1, 2.0])
+        assert sum(probs) == pytest.approx(1.0)
+        assert all(0.0 < p < 1.0 for p in probs)

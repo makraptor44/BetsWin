@@ -46,7 +46,14 @@ from .models import (
 )
 from .normalise import MatchResult, match_titles
 from .sizing import SizedArb, size_arb
-from .venues import PairVerdict, can_pair, legs_are_placeable, venue, zone_info
+from .venues import (
+    PairVerdict,
+    Structure,
+    can_pair,
+    legs_are_placeable,
+    venue,
+    zone_info,
+)
 
 # Quotes older than this are treated as possibly moved (Part I s9.3).
 _STALE_AFTER = timedelta(minutes=10)
@@ -80,6 +87,18 @@ def _binary_outcomes(market: Market) -> Optional[tuple[Quote, Quote]]:
     if a is None or b is None:
         return None
     return a, b
+
+
+def _counterparty(quote: Quote) -> tuple[str, Optional[str]]:
+    """Who actually holds the other side of this bet.
+
+    For most venues that is the venue. For an aggregated feed it is the
+    bookmaker named in `ticker` -- "sportsbook" is the name of a data source,
+    not of anyone you can open an account with.
+    """
+    if venue(quote.venue).structure is Structure.BOOK and quote.ticker:
+        return (quote.venue, quote.ticker)
+    return (quote.venue, None)
 
 
 def _placeable(quotes: Sequence[Quote]) -> PairVerdict:
@@ -167,13 +186,22 @@ def _score(
         notes.append(f"Oldest quote is {age.total_seconds() / 60:.0f} minutes old.")
 
     # Cross-venue rule risk (Part I s9.2, Part II s6.2).
-    venues = {q.venue for q in quotes}
-    if len(venues) > 1:
+    #
+    # Counted by COUNTERPARTY, not by venue name. Every quote from The Odds API
+    # carries venue="sportsbook" with the actual bookmaker in `ticker`, so a
+    # DraftKings/FanDuel pair looked like a single-venue trade: two accounts,
+    # two rulebooks, and no CROSS_VENUE_RULES flag on any of it. An aggregated
+    # book is identified by its ticker; a venue that is its own counterparty is
+    # identified by its name.
+    counterparties = {_counterparty(q) for q in quotes}
+    if len(counterparties) > 1:
         flags.append(RiskFlag.CROSS_VENUE_RULES)
         score -= 6.0
         notes.append(
-            "Legs sit on different venues; confirm the resolution criteria and "
-            "settlement dates agree before treating this as risk-free."
+            "Legs sit with different counterparties ("
+            + ", ".join(sorted(str(c[1] or c[0]) for c in counterparties))
+            + "); confirm the resolution criteria and settlement dates agree "
+            "before treating this as risk-free."
         )
     if match is not None:
         flags.append(RiskFlag.FUZZY_MATCH)

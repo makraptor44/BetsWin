@@ -103,3 +103,34 @@ class TestSportsbookSizeIsAnExplicitAssumption:
         ev = src._build_event(_raw_h2h(2.10, 2.05), "americanfootball_nfl")
         best = [o.best() for o in ev.markets[0].outcomes]
         assert size_arb(best, target_stake=500) is None
+
+
+class TestSportsbookCounterpartyRisk:
+    """Two bookmakers are two counterparties, whatever the feed calls itself."""
+
+    def test_a_cross_book_arb_is_flagged_as_cross_venue(self):
+        from arbengine.detector import scan_events
+        from arbengine.models import RiskFlag
+
+        src = OddsAPISource()
+        ev = src._build_event(_raw_h2h(2.10, 2.05), "americanfootball_nfl")
+        arbs = scan_events([ev])
+        assert arbs, "expected a cross-book arbitrage"
+
+        arb = arbs[0]
+        # Both legs report venue="sportsbook"; the bookmakers are in `ticker`.
+        assert {l.venue for l in arb.legs} == {"sportsbook"}
+        assert len({l.ticker for l in arb.legs}) == 2
+        assert RiskFlag.CROSS_VENUE_RULES in arb.flags, (
+            "two books means two rulebooks and two accounts"
+        )
+        assert any("counterparties" in n for n in arb.notes)
+
+    def test_the_note_names_the_actual_books(self):
+        from arbengine.detector import scan_events
+
+        src = OddsAPISource()
+        ev = src._build_event(_raw_h2h(2.10, 2.05), "americanfootball_nfl")
+        arb = scan_events([ev])[0]
+        note = next(n for n in arb.notes if "counterparties" in n)
+        assert "draftkings" in note and "fanduel" in note
