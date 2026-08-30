@@ -1,0 +1,76 @@
+# Rejects AI co-author trailers before they reach the default branch.
+#
+# A trailer is not just a line in a message. GitHub reads Co-Authored-By and
+# credits the address as a contributor on the repository, and that credit
+# outlives the commit: force-pushing the commit away leaves the object
+# retained and the sidebar entry standing, recoverable only by asking GitHub
+# Support to garbage-collect the repository. Catching it on the way in is far
+# cheaper than removing it afterwards.
+#
+# Claude Code and similar tools append these by default, so this will fire on
+# an ordinary commit from a contributor who has not turned that off. It is not
+# a comment on how the work was produced -- only on who the repository lists
+# as having produced it.
+
+name: Attribution
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  no-ai-coauthors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need history, not just the tip, to inspect the pushed range.
+          fetch-depth: 0
+
+      - name: Reject AI co-author trailers
+        env:
+          # On a PR, check the branch's own commits; on a push, the new ones.
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -uo pipefail
+
+          # A first push, or a force-push whose old tip is gone, leaves BASE
+          # unusable. Fall back to checking the tip commit alone.
+          if [ -z "${BASE:-}" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            range="$HEAD_SHA -1"
+          else
+            range="$BASE..$HEAD_SHA"
+          fi
+
+          offenders=""
+          for sha in $(git rev-list $range); do
+            if git log -1 --format='%(trailers)' "$sha" \
+                 | grep -qiE '^\s*co-authored-by:.*@(anthropic|openai)\.com>?\s*$'; then
+              offenders="$offenders  $(git log -1 --format='%h %an -- %s' "$sha")"$'\n'
+            fi
+          done
+
+          if [ -n "$offenders" ]; then
+            echo "::error::AI co-author trailer found. GitHub would credit that address"
+            echo "::error::as a repository contributor, and removing it later needs a"
+            echo "::error::history rewrite plus a GitHub Support request."
+            echo ""
+            echo "Offending commits:"
+            printf '%s' "$offenders"
+            echo ""
+            echo "To fix, strip the trailer and force-push, e.g. for the most recent commit:"
+            echo "  git commit --amend    # delete the Co-Authored-By line, save"
+            echo "  git push --force-with-lease"
+            echo ""
+            echo "To stop it recurring, remove the trailer instruction from your agent's"
+            echo "configuration so it is not appended in the first place."
+            exit 1
+          fi
+
+          echo "No AI co-author trailers in $range."
