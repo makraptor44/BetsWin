@@ -271,6 +271,10 @@ async def venues() -> dict[str, Any]:
                     "reason": verdict.reason,
                     "zone": verdict.zone.value,
                     "jurisdictions": list(verdict.jurisdictions),
+                    # ("*",) means "broadly available"; it has to be read
+                    # together with this, or a pair that turns a country away
+                    # reads as available everywhere.
+                    "excluded": list(verdict.excluded),
                     "both_live": a in live and b in live,
                 }
             )

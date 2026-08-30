@@ -245,6 +245,14 @@ def _finalise(
                 + ", ".join(verdict.jurisdictions)
                 + " -- both venues must accept an account there.",
             )
+    elif verdict.excluded:
+        # "Broadly available" still has holes, and the operator needs to see
+        # them: a wildcard used to swallow the exclusion list entirely.
+        notes = notes + (
+            "Broadly available, but not from "
+            + ", ".join(verdict.excluded)
+            + " -- at least one venue turns those away.",
+        )
 
     if confidence < settings.min_confidence:
         return None

@@ -299,22 +299,52 @@ class PairVerdict:
     ok: bool
     reason: str
     zone: Zone = Zone.UNKNOWN
-    #: Places an operator could hold both accounts. Empty when ok is False.
+    #: Places an operator could hold every account. Empty when ok is False.
+    #: ("*",) means "broadly available" -- read it together with `excluded`,
+    #: which is never empty for a pair that turns any country away.
     jurisdictions: tuple[str, ...] = ()
+    #: Countries at least one venue in the set refuses. Meaningful even when
+    #: `jurisdictions` is ("*",): "everywhere except here".
+    excluded: tuple[str, ...] = ()
 
 
-def common_jurisdictions(a: str, b: str) -> tuple[str, ...]:
-    """Where one person could hold funded accounts on both venues."""
-    va, vb = venue(a), venue(b)
-    if "*" in va.jurisdictions and "*" in vb.jurisdictions:
-        merged = ("*",)
-    elif "*" in va.jurisdictions:
-        merged = tuple(sorted(vb.jurisdictions))
-    elif "*" in vb.jurisdictions:
-        merged = tuple(sorted(va.jurisdictions))
+def blocked_jurisdictions(*names: str) -> tuple[str, ...]:
+    """Every country any venue in the set turns away."""
+    blocked: set[str] = set()
+    for n in names:
+        blocked |= venue(n).excluded
+    return tuple(sorted(blocked))
+
+
+def common_jurisdictions(*names: str) -> tuple[str, ...]:
+    """Where one person could hold funded accounts on every venue named.
+
+    Takes any number of venues, not two. `legs_are_placeable` used to walk a
+    chain of pairs and return the FIRST-versus-LAST intersection, so on a
+    three-leg set the middle venue was never intersected and the answer could
+    name a country it does not serve.
+
+    A wildcard is not a licence to ignore exclusions. Polymarket is
+    `jurisdictions={"*"}, excluded={"US"}`; pairing it with Kalshi used to
+    short-circuit to ("*",), and since "*" is not a country code the exclusion
+    filter could never remove anything from it -- so the pair was reported
+    placeable from anywhere, US included. The wildcard is now only returned
+    alongside the exclusions that qualify it.
+    """
+    infos = [venue(n) for n in names]
+    if not infos:
+        return ()
+
+    explicit = [i.jurisdictions for i in infos if "*" not in i.jurisdictions]
+    if not explicit:
+        merged: tuple[str, ...] = ("*",)
     else:
-        merged = tuple(sorted(va.jurisdictions & vb.jurisdictions))
-    blocked = va.excluded | vb.excluded
+        common = set(explicit[0])
+        for js in explicit[1:]:
+            common &= js
+        merged = tuple(sorted(common))
+
+    blocked = set(blocked_jurisdictions(*names))
     return tuple(cc for cc in merged if cc not in blocked)
 
 
@@ -369,34 +399,65 @@ def can_pair(a: str, b: str, operator_jurisdiction: str = "") -> PairVerdict:
         f"{va.currency}.",
         zone=va.zone,
         jurisdictions=shared,
+        excluded=blocked_jurisdictions(a, b),
     )
 
 
 def legs_are_placeable(
     venues: Iterable[str], operator_jurisdiction: str = ""
 ) -> PairVerdict:
-    """Extend `can_pair` to a leg set of any size (Dutch books, sportsbooks)."""
-    names = list(dict.fromkeys(v.lower().strip() for v in venues))
-    if len(names) <= 1:
-        z = zone_of(names[0]) if names else Zone.UNKNOWN
-        cc = ()
-        if names:
-            v = venue(names[0])
-            cc = ("*",) if "*" in v.jurisdictions else tuple(sorted(v.jurisdictions))
-            if operator_jurisdiction and not v.serves(operator_jurisdiction):
-                return PairVerdict(
-                    False,
-                    f"{v.label} does not serve "
-                    f"{operator_jurisdiction.strip().upper()}.",
-                    zone=z,
-                )
-        return PairVerdict(True, "Single-venue trade; no cross-venue risk.", z, cc)
+    """Extend `can_pair` to a leg set of any size (Dutch books, sportsbooks).
 
-    for i in range(len(names) - 1):
-        verdict = can_pair(names[i], names[i + 1], operator_jurisdiction)
-        if not verdict.ok:
-            return verdict
-    return can_pair(names[0], names[-1], operator_jurisdiction)
+    The jurisdictions are intersected across the WHOLE set. This used to check
+    consecutive pairs and then return `can_pair(first, last)`, whose answer is
+    the intersection of those two venues only -- so on a three-leg book across
+    A, B and C the result could name a country B does not serve.
+    """
+    names = list(dict.fromkeys(v.lower().strip() for v in venues))
+    if not names:
+        return PairVerdict(False, "No venues to place.", Zone.UNKNOWN)
+
+    cc = operator_jurisdiction.strip().upper()
+
+    if len(names) == 1:
+        v = venue(names[0])
+        if cc and not v.serves(cc):
+            return PairVerdict(
+                False, f"{v.label} does not serve {cc}.", zone=v.zone
+            )
+        return PairVerdict(
+            True,
+            "Single-venue trade; no cross-venue risk.",
+            v.zone,
+            common_jurisdictions(names[0]),
+            blocked_jurisdictions(names[0]),
+        )
+
+    # Every pair has to clear the zone and jurisdiction rule, not just the
+    # consecutive ones -- zone equality is transitive but "serves" is not.
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            verdict = can_pair(names[i], names[j], operator_jurisdiction)
+            if not verdict.ok:
+                return verdict
+
+    shared = common_jurisdictions(*names)
+    if not shared:
+        return PairVerdict(
+            False,
+            "No single jurisdiction serves every venue in this set: "
+            + ", ".join(venue(n).label for n in names),
+            zone=zone_for_venues(names),
+        )
+
+    return PairVerdict(
+        True,
+        f"All {len(names)} legs sit in "
+        f"{zone_info(zone_for_venues(names)).label}.",
+        zone_for_venues(names),
+        shared,
+        blocked_jurisdictions(*names),
+    )
 
 
 def zones_available_from(jurisdiction: str) -> list[Zone]:
@@ -446,6 +507,7 @@ __all__ = [
     "can_pair",
     "legs_are_placeable",
     "common_jurisdictions",
+    "blocked_jurisdictions",
     "zones_available_from",
     "describe",
 ]
