@@ -79,12 +79,12 @@
    "Markets were paired by title similarity (99/100), not by a shared identifier.",
    "Broadly available, but not from US -- at least one venue turns those away."
   ],
-  "detected_at": "2026-08-30T18:37:05.058646Z",
-  "close_time": "2026-10-14T18:37:07.460236Z",
-  "last_seen": "2026-08-30T18:37:08.585887Z",
+  "detected_at": "2026-08-30T19:05:17.260313Z",
+  "close_time": "2026-10-14T19:05:18.353009Z",
+  "last_seen": "2026-08-30T19:05:18.904211Z",
   "is_suspect": true,
   "roi_pct": 7.602152043040861,
-  "hours_to_close": 1079.9996848986111
+  "hours_to_close": 1079.999843961389
  },
  "payout_matrix": [
   {

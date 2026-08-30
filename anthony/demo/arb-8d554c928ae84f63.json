@@ -134,12 +134,12 @@
    "Fees and slippage consume 54% of the gross edge (2.96% -> 1.37%).",
    "5 legs must be filled before prices move."
   ],
-  "detected_at": "2026-08-30T18:37:05.057271Z",
-  "close_time": "2026-11-28T18:37:07.460236Z",
-  "last_seen": "2026-08-30T18:37:08.585958Z",
+  "detected_at": "2026-08-30T19:05:17.258216Z",
+  "close_time": "2026-11-28T19:05:18.353009Z",
+  "last_seen": "2026-08-30T19:05:18.904274Z",
   "is_suspect": false,
   "roi_pct": 1.374,
-  "hours_to_close": 2159.9996841475
+  "hours_to_close": 2159.9998430025003
  },
  "payout_matrix": [
   {
