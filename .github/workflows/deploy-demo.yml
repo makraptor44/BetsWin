@@ -306,13 +306,14 @@ jobs:
   deploy:
     needs: build-and-publish
     runs-on: ubuntu-latest
-    # No `environment:` block. The `github-pages` environment carries a
-    # deployment branch policy allowing `main` only, and declaring the
-    # environment makes the runner refuse the job outright before the action
-    # runs. Changing that policy needs repository admin, which the branch author
-    # does not have -- so the job takes the deployment as far as it can and
-    # reports honestly if the API enforces the same rule server-side.
-    continue-on-error: true
+    # No `environment:` block, deliberately. The `github-pages` environment
+    # carries a deployment branch policy allowing `main` only; declaring the
+    # environment makes the runner refuse this job before the action even
+    # starts, which is what failed every deploy from this branch. Widening that
+    # policy needs repository admin. The branch protection is on the
+    # ENVIRONMENT, not on the Pages API, so a job that does not claim the
+    # environment deploys normally -- at the cost of the deployment not showing
+    # up under the repository's Environments tab.
     # A Pages deployment is repository-wide, so unlike the per-branch build it
     # genuinely cannot run concurrently with another. Never cancel one midway:
     # a half-published site is worse than a slightly stale one.

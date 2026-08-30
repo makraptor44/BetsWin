@@ -354,6 +354,10 @@ always that branch's current behaviour rather than a checked-in snapshot.
 
 `gh-pages` is storage here, not the serving root: the assembled tree is uploaded
 as the Pages artifact, so this needs no change to the repository's Pages source.
+The deploy job deliberately does not declare the `github-pages` environment --
+that environment's deployment branch policy allows `main` only, and widening it
+needs repository admin. The policy gates the environment, not the Pages API, so
+a job that does not claim it deploys normally.
 Until `main` merges this workflow, a push to `main` still runs main's older
 single-branch deploy and drops the branch subdirectories until the next branch
 build restores them.
