@@ -300,3 +300,50 @@ class TestCandidateSelection:
         ids = {e.id for e in candidate_events([near, far])}
         assert near.id in ids
         assert far.id not in ids
+
+
+class TestShortDatedWindow:
+    """The horizon filter applies to sport, and only to sport.
+
+    A fixture has a kickoff, so "starts within 72 hours" is a meaningful
+    constraint. A prediction-market contract resolves on an election; applying
+    the same rule there rejects every Polymarket and Kalshi line on the book,
+    which is not a horizon policy -- it is switching off every venue except one.
+    """
+
+    @staticmethod
+    def _crossed(days_out: int, category: str) -> Event:
+        """A binary book that genuinely crosses, at a chosen horizon."""
+        market = binary("polymarket", f"w-{category}-{days_out}", "Yes", "No", 0.46, 0.50)
+        return Event(
+            id=f"polymarket:w-{category}-{days_out}",
+            venue="polymarket",
+            title="A crossed book",
+            category=category,
+            close_time=utcnow() + timedelta(days=days_out),
+            volume_usd=1_000_000,
+            liquidity_usd=100_000,
+            markets=(market,),
+        )
+
+    def test_a_distant_fixture_is_dropped(self, monkeypatch):
+        monkeypatch.setattr(settings, "max_hours_to_start", 72.0)
+        assert scan_events([self._crossed(30, "sports")]) == []
+
+    def test_an_imminent_fixture_survives(self, monkeypatch):
+        monkeypatch.setattr(settings, "max_hours_to_start", 72.0)
+        assert scan_events([self._crossed(1, "sports")])
+
+    def test_a_distant_prediction_market_is_untouched(self, monkeypatch):
+        """The regression this scoping exists to prevent."""
+        monkeypatch.setattr(settings, "max_hours_to_start", 72.0)
+        assert scan_events([self._crossed(30, "politics")])
+
+    def test_zero_disables_the_window(self, monkeypatch):
+        monkeypatch.setattr(settings, "max_hours_to_start", 0.0)
+        assert scan_events([self._crossed(300, "sports")])
+
+    def test_a_fixture_already_under_way_is_dropped(self, monkeypatch):
+        """Kickoff has passed; those prices describe a game in progress."""
+        monkeypatch.setattr(settings, "max_hours_to_start", 72.0)
+        assert scan_events([self._crossed(-1, "sports")]) == []

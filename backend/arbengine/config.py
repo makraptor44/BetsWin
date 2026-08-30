@@ -73,10 +73,31 @@ class Settings(BaseSettings):
     # The Odds API is optional; without a key the sportsbook source stays dark.
     odds_api_key: str = ""
     odds_api_url: str = "https://api.the-odds-api.com/v4"
-    odds_api_regions: str = "us,us2"
-    odds_api_sports: str = (
-        "americanfootball_nfl,basketball_nba,baseball_mlb,icehockey_nhl"
+    # Every bookmaker region the key is entitled to. Regions are the single
+    # biggest lever on how many cross-book arbitrages exist at all: an edge
+    # appears when two books disagree, and four regions of books disagree far
+    # more often than one does.
+    odds_api_regions: str = "us,us2,uk,eu,au"
+    # Blank means "every sport The Odds API reports as in season", discovered
+    # per cycle through the free /sports endpoint. A comma-separated list here
+    # pins it to specific sport keys instead.
+    odds_api_sports: str = ""
+    # Outright winner, handicap and over/under lines. Handicaps and totals are
+    # two-way markets, so they arbitrage exactly like a moneyline -- and there
+    # are far more of them, because every book prices its own line.
+    odds_api_markets: str = "h2h,spreads,totals"
+    # Sport groups to consider when discovering in-season sports. Sports only:
+    # politics and entertainment novelty markets are priced by the same books
+    # but settle on rules that do not survive cross-book comparison.
+    odds_api_groups: str = (
+        "American Football,Basketball,Baseball,Ice Hockey,Soccer,Tennis,"
+        "Mixed Martial Arts,Boxing,Cricket,Rugby League,Rugby Union,"
+        "Aussie Rules,Golf,Lacrosse"
     )
+    # Guard on the discovery path. Each sport costs
+    # len(markets) * len(regions) credits per cycle, so an unbounded in-season
+    # list on a busy Saturday will empty a monthly quota in an afternoon.
+    odds_api_max_sports: int = 12
     # The Odds API publishes prices, not books: there is no depth and no stake
     # limit in the payload, so the capacity of a sportsbook leg is UNKNOWN
     # rather than zero. The sizer refuses a leg with no capacity, which is the
@@ -85,6 +106,15 @@ class Settings(BaseSettings):
     # at a single book will be sized at; it is a risk limit you own, not a
     # number the feed told us. Set it to 0 to disable sportsbook sizing.
     sportsbook_assumed_stake_usd: float = 250.0
+
+    # Only surface opportunities that resolve soon.
+    #
+    # An arbitrage locks capital on both legs until settlement, so a 2% edge on
+    # a market resolving in nine months is a worse annualised return than a
+    # savings account, and it carries nine months of rule-change and
+    # account-closure risk on top (Part I s8.2). Short-dated sport is where the
+    # edge is actually collectable. Set to 0 to disable the window.
+    max_hours_to_start: float = 72.0
 
     # How much of each venue to pull per cycle.
     polymarket_page_limit: int = 100
@@ -212,6 +242,14 @@ class Settings(BaseSettings):
     @property
     def odds_api_sport_list(self) -> list[str]:
         return [s.strip() for s in self.odds_api_sports.split(",") if s.strip()]
+
+    @property
+    def odds_api_market_list(self) -> list[str]:
+        return [m.strip() for m in self.odds_api_markets.split(",") if m.strip()]
+
+    @property
+    def odds_api_group_set(self) -> set[str]:
+        return {g.strip() for g in self.odds_api_groups.split(",") if g.strip()}
 
     @property
     def telegram_enabled(self) -> bool:

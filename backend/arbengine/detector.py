@@ -240,6 +240,37 @@ def _score(
     return int(max(0.0, min(100.0, score))), tuple(dict.fromkeys(flags)), tuple(notes)
 
 
+def _within_window(close_time: Optional[datetime], category: str) -> bool:
+    """Does this fixture start soon enough to be worth the capital?
+
+    An arbitrage locks stake on every leg until settlement, so the annualised
+    return on a 2% edge falls with the horizon: collected in two days it is
+    excellent, collected in nine months it is worse than a deposit account, and
+    it carries nine months of rule changes, voids and account closures on top
+    (Part I s8.2).
+
+    Scoped to SPORT deliberately. A fixture has a kickoff, so "short-dated" is a
+    meaningful constraint there and a 72-hour window is most of the tradeable
+    universe. A prediction-market contract resolves on an election or a Fed
+    meeting -- applying the same window would reject every Polymarket and Kalshi
+    contract on the book and silently reduce the engine to one venue, which is
+    not a horizon policy, it is turning off the feature the zone rules exist to
+    serve. Long-dated contracts are still scored down for it (LONG_DATED).
+
+    An opportunity with no stated close time is kept: refusing those would drop
+    a venue that omits the field rather than a horizon.
+    """
+    if settings.max_hours_to_start <= 0 or close_time is None:
+        return True
+    if category != "sports":
+        return True
+    hours = (close_time - utcnow()).total_seconds() / 3600.0
+    # Already under way: not tradeable at these prices, whatever they say.
+    if hours <= 0:
+        return False
+    return hours <= settings.max_hours_to_start
+
+
 def _finalise(
     kind: ArbKind,
     title: str,
@@ -251,6 +282,15 @@ def _finalise(
     match: Optional[MatchResult] = None,
 ) -> Optional[Arb]:
     if not (settings.min_arb_margin <= sized.net_margin <= settings.max_arb_margin):
+        return None
+
+    # Horizon before executability: a long-dated opportunity is not a
+    # lower-quality one to rank down, it is capital committed for longer than
+    # the edge justifies.
+    if not _within_window(close_time, category):
+        logger.debug(
+            f"rejected {title!r}: outside the {settings.max_hours_to_start}h window"
+        )
         return None
 
     # Executability first. An unplaceable "arbitrage" is not a lower-confidence
