@@ -234,3 +234,69 @@ def test_near_miss_separates_gross_and_net_gaps():
     ev = _binary_event("kalshi", "k1", "Fee-sensitive book", 0.10, 0.895)
     miss = find_near_misses([ev])[0]
     assert miss.gap_bps_gross < 0 < miss.gap_bps
+
+
+def _exclusive_event(
+    venue: str, ident: str, title: str, yes_prices: list[float], no_prices: list[float]
+) -> Event:
+    """A mutually exclusive event with the YES and NO books priced independently.
+
+    They have to be independent for this to test anything: with NO = 1 - YES the
+    two sides move together, so an incomplete YES set drags the NO book far
+    outside `near_miss_slack` and the near-miss scan declines it for a reason
+    that has nothing to do with the completeness guard.
+    """
+    return Event(
+        id=f"{venue}:{ident}",
+        venue=venue,
+        title=title,
+        category="politics",
+        mutually_exclusive=True,
+        volume_usd=1_000_000,
+        liquidity_usd=100_000,
+        markets=tuple(
+            Market(
+                key="binary",
+                outcomes=(
+                    Outcome(
+                        name=f"Runner {i}",
+                        quotes=(_quote(venue, f"{ident}{i}", f"Runner {i}", Side.YES, y),),
+                    ),
+                    Outcome(
+                        name=f"Not runner {i}",
+                        quotes=(
+                            _quote(venue, f"{ident}{i}", f"Not runner {i}", Side.NO, n),
+                        ),
+                    ),
+                ),
+            )
+            for i, (y, n) in enumerate(zip(yes_prices, no_prices))
+        ),
+    )
+
+
+def test_incomplete_outcome_set_produces_no_dutch_no_near_miss():
+    """The completeness guard has to cover both sides of the book.
+
+    A YES sum far below 1 means outcomes are missing from the set, so
+    `detect_dutch` refuses it outright. The near-miss scan applied that guard to
+    the YES branch only, so the same event came back as a tight DUTCH_NO gap --
+    a watchlist row for a trade the detector can never promote. The NO book here
+    is deliberately just short of crossing, so nothing but the guard can
+    suppress it.
+    """
+    ev = _exclusive_event(
+        "kalshi", "gap", "Three of a wider field", [0.2, 0.2, 0.2], [0.66, 0.66, 0.67]
+    )
+    kinds = {m.kind.value for m in find_near_misses([ev])}
+    assert "dutch_no" not in kinds
+    assert "dutch_yes" not in kinds
+
+
+def test_complete_outcome_set_still_produces_dutch_near_misses():
+    """Control: the same NO book, on outcomes that do partition the space."""
+    ev = _exclusive_event(
+        "kalshi", "full", "A complete field", [0.33, 0.33, 0.34], [0.66, 0.66, 0.67]
+    )
+    kinds = {m.kind.value for m in find_near_misses([ev])}
+    assert "dutch_no" in kinds

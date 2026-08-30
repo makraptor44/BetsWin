@@ -217,10 +217,15 @@ def implied_correlation(
         return bivariate_normal_cdf(za, zb, rho) - p_joint
 
     lo, hi = -1.0 + _RHO_EDGE_EPS, 1.0 - _RHO_EDGE_EPS
+    # The bracket endpoints, not +-1. Returning the sentinel put the caller on
+    # the other side of the `_RHO_EDGE_EPS` cutoff in `bivariate_normal_cdf`,
+    # where it short-circuits to the comonotonic bound instead of integrating --
+    # so `joint_probability(p_a, p_b, implied_correlation(...))` did not
+    # reproduce the price it was solved from.
     if f(lo) >= 0:
-        return -1.0
+        return lo
     if f(hi) <= 0:
-        return 1.0
+        return hi
 
     for _ in range(max_iter):
         mid = 0.5 * (lo + hi)

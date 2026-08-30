@@ -146,3 +146,30 @@ class TestEvaluateSignal:
         p_joint_market = ca.joint_probability(p_a, p_b, 0.3)
         sig = ca.evaluate(p_a, p_b, p_joint_market, rho_prior)
         assert sig.edge_pct == pytest.approx(100.0 * sig.edge / sig.p_joint_market)
+
+
+class TestSolveBracketEndpoints:
+    """The solver must return a rho the forward model reproduces.
+
+    At the extremes it returned the sentinel +-1.0 rather than the bracket
+    endpoint it actually searched. That is on the far side of the
+    `_RHO_EDGE_EPS` cutoff inside `bivariate_normal_cdf`, where the integral is
+    skipped for the comonotonic bound -- so feeding the answer back into
+    `joint_probability` did not give back the price it was solved from.
+    """
+
+    def test_upper_bound_round_trips(self):
+        p_a, p_b = 0.40, 0.50
+        # The Frechet upper bound: no copula can price the joint above min(p_a, p_b),
+        # so the solve is pinned against the top of the bracket.
+        p_joint = min(p_a, p_b)
+        rho = ca.implied_correlation(p_a, p_b, p_joint)
+        assert abs(rho) <= 1.0
+        assert ca.joint_probability(p_a, p_b, rho) == pytest.approx(p_joint, abs=1e-6)
+
+    def test_lower_bound_round_trips(self):
+        p_a, p_b = 0.40, 0.50
+        p_joint = max(1e-6, p_a + p_b - 1.0)
+        rho = ca.implied_correlation(p_a, p_b, p_joint)
+        assert abs(rho) <= 1.0
+        assert ca.joint_probability(p_a, p_b, rho) == pytest.approx(p_joint, abs=1e-6)

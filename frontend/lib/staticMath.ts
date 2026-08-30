@@ -244,7 +244,13 @@ export function resizeLegs(
  * stake instead of paying the margin. Seeded so the demo is reproducible.
  */
 export function runBacktest(
-  rows: Array<{ kind: string; net_margin: number; total_stake: number; venues: string[] }>,
+  rows: Array<{
+    kind: string;
+    net_margin: number;
+    total_stake: number;
+    venues: string[];
+    detected_at: string;
+  }>,
   opts: {
     minMargin: number;
     maxMargin: number;
@@ -289,15 +295,26 @@ export function runBacktest(
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  const totals: number[] = [];
+  // Each simulation keeps the void mask that produced it, so the equity curve
+  // can replay one real run. Mirrors `backtest.replay`, which uses a bitset --
+  // JavaScript bitwise operators are 32-bit, so this uses a boolean array
+  // rather than silently truncating a tape longer than 32 opportunities.
+  const runs: { total: number; mask: boolean[] }[] = [];
   for (let s = 0; s < opts.simulations; s++) {
     let run = 0;
+    const mask: boolean[] = [];
     for (let i = 0; i < filtered.length; i++) {
-      run += rand() < voidRates[i] ? -opts.voidLoss * stakes[i] : profits[i];
+      const voided = rand() < voidRates[i];
+      mask.push(voided);
+      run += voided ? -opts.voidLoss * stakes[i] : profits[i];
     }
-    totals.push(run);
+    runs.push({ total: run, mask });
   }
-  totals.sort((a, b) => a - b);
+  runs.sort((a, b) => a.total - b.total);
+  const totals = runs.map((r) => r.total);
+  // Lower median, matching `backtest.replay`: an actual simulation rather than
+  // the average of two, so the curve ends on a total something reached.
+  const medianIndex = (runs.length - 1) >> 1;
 
   const turnover = stakes.reduce((s, x) => s + x, 0);
   const naive = profits.reduce((s, x) => s + x, 0);
@@ -306,12 +323,19 @@ export function runBacktest(
     filtered.reduce((s, r) => s + r.net_margin, 0) / filtered.length;
   const avgVoid = voidRates.reduce((s, x) => s + x, 0) / voidRates.length;
 
-  // A single simulated path, for the equity curve.
-  seed = 42;
+  // The median simulation, replayed in detection order.
+  //
+  // This used to re-seed and replay a single draw, which is simulation one, not
+  // the median -- the exact bug the Python side had already fixed, left behind
+  // because the shared-vector suite covers the odds conversions and not this.
+  // The row shape matches `backtest.replay` too: a real timestamp rather than
+  // an array index, and the `voided` flag the chart needs to mark a void.
+  const medianMask = runs[medianIndex].mask;
   let equity = 0;
   const curve = filtered.map((r, i) => {
-    equity += rand() < voidRates[i] ? -opts.voidLoss * stakes[i] : profits[i];
-    return { at: String(i), equity: r2(equity), kind: r.kind };
+    const voided = medianMask[i];
+    equity += voided ? -opts.voidLoss * stakes[i] : profits[i];
+    return { at: r.detected_at, equity: r2(equity), kind: r.kind, voided };
   });
 
   const notes: string[] = [];
@@ -336,7 +360,7 @@ export function runBacktest(
     naive_yield: naiveYield,
     expected_profit: r2(mean),
     expected_yield: expYield,
-    median_profit: r2(totals[Math.floor(totals.length / 2)]),
+    median_profit: r2(totals[medianIndex]),
     p5_profit: r2(totals[Math.floor(0.05 * (totals.length - 1))]),
     p95_profit: r2(totals[Math.floor(0.95 * (totals.length - 1))]),
     stdev_profit: 0,

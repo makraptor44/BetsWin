@@ -139,22 +139,36 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
         result.avg_margin, result.voids_modelled, p.void_loss
     )
 
+    # Each simulation's void mask is kept alongside its total so the equity
+    # curve below can replay one REAL run rather than reconstructing a
+    # plausible-looking one. The masks are bitsets, so the memory cost is one
+    # integer per simulation regardless of how long the tape is.
     rng = random.Random(p.seed)
-    totals: list[float] = []
+    runs: list[tuple[float, int]] = []
     for _ in range(max(1, p.simulations)):
         run = 0.0
-        for stake, profit, vr in zip(stakes, profits, void_rates):
+        mask = 0
+        for i, (stake, profit, vr) in enumerate(zip(stakes, profits, void_rates)):
             # A voided leg leaves unhedged exposure on the rest of the set
             # (Part I s9.1); `void_loss` is that cost as a fraction of stake.
-            run += (-p.void_loss * stake) if rng.random() < vr else profit
-        totals.append(run)
+            if rng.random() < vr:
+                run -= p.void_loss * stake
+                mask |= 1 << i
+            else:
+                run += profit
+        runs.append((run, mask))
 
-    totals.sort()
+    runs.sort(key=lambda r: r[0])
+    totals = [t for t, _ in runs]
+    # The lower median, so it is an actual simulation rather than the average of
+    # two. The equity curve replays this exact run, and a curve has to be a path
+    # something walked -- averaging two runs produces an endpoint no run reached.
+    median_index = (len(runs) - 1) // 2
     result.expected_profit = round(statistics.fmean(totals), 2)
     result.expected_yield = (
         result.expected_profit / result.turnover if result.turnover else 0.0
     )
-    result.median_profit = round(statistics.median(totals), 2)
+    result.median_profit = round(totals[median_index], 2)
     result.p5_profit = round(totals[int(0.05 * (len(totals) - 1))], 2)
     result.p95_profit = round(totals[int(0.95 * (len(totals) - 1))], 2)
     result.stdev_profit = round(statistics.pstdev(totals), 2) if len(totals) > 1 else 0.0
@@ -194,25 +208,22 @@ def replay(store: ArbStore, p: Optional[BacktestParams] = None) -> BacktestResul
         b.pop("margins")
     result.by_kind = sorted(by_kind.values(), key=lambda x: -x["n"])
 
-    # Equity curve: the MEDIAN path across the simulations, in detection order.
+    # Equity curve: the median SIMULATION, replayed in detection order.
     #
-    # This used to re-seed the generator and replay a single draw, which is the
-    # first simulation, not the median one -- so the curve on screen could be an
-    # outlier while the summary statistics beside it described the distribution.
-    # Each opportunity's outcome is now the one the median of the runs took.
-    rng = random.Random(p.seed)
-    n = len(rows)
-    void_counts = [0] * n
-    runs = max(1, p.simulations)
-    for _ in range(runs):
-        for i, vr in enumerate(void_rates):
-            if rng.random() < vr:
-                void_counts[i] += 1
+    # Two earlier versions of this were wrong in the same direction. The first
+    # re-seeded the generator and replayed a single draw, which is simulation
+    # one, not the median. The second counted how often each opportunity voided
+    # across all runs and voided it here if that exceeded half -- a pointwise
+    # marginal median, which is not a path anything simulated: with void rates
+    # of 2-5% no opportunity ever clears 50%, so the curve was the void-free
+    # line while the summary beside it reported voids eating a fifth of the
+    # edge. `runs` is sorted by total, so its midpoint IS the median run, and
+    # the curve now ends exactly on `median_profit`.
+    _, median_mask = runs[median_index]
 
     equity = 0.0
     for i, (row, stake, profit) in enumerate(zip(rows, stakes, profits)):
-        # Voided in more than half the runs -> the median path voids it too.
-        voided = void_counts[i] * 2 > runs
+        voided = bool(median_mask >> i & 1)
         equity += (-p.void_loss * stake) if voided else profit
         result.equity_curve.append(
             {

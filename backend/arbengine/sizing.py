@@ -45,10 +45,6 @@ class Fill:
     levels_cleared: int
     exhausted: bool           # the book ran out before the request was filled
 
-    @property
-    def slippage_vs(self) -> float:
-        return self.avg_price
-
 
 def walk_book(
     levels: Sequence[DepthLevel],

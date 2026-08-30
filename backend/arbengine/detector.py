@@ -686,19 +686,23 @@ def find_near_misses(events: Sequence[Event]) -> list[NearMiss]:
                 n = len(yes_quotes)
                 if n >= 2:
                     yes_sum = sum(q.effective_price for q in yes_quotes)
-                    # Same exhaustiveness guard as the detector: a set summing
-                    # far below 1 is missing outcomes, not close to arbing.
+                    # Same exhaustiveness guard as the detector, and it has to
+                    # cover BOTH sides. The NO branch used to sit outside this
+                    # check, so an incomplete outcome set was suppressed as a
+                    # DUTCH_YES near miss and then published as a DUTCH_NO one
+                    # -- a tight gap on a set `detect_dutch` refuses outright,
+                    # advertising an opportunity the engine cannot ever take.
                     if yes_sum >= _DUTCH_COMPLETENESS_FLOOR:
                         keep(_near_miss(ev, ArbKind.DUTCH_YES, yes_quotes))
-                    if n >= 3:
-                        keep(
-                            _near_miss(
-                                ev,
-                                ArbKind.DUTCH_NO,
-                                no_quotes,
-                                payout_multiple=float(n - 1),
+                        if n >= 3:
+                            keep(
+                                _near_miss(
+                                    ev,
+                                    ArbKind.DUTCH_NO,
+                                    no_quotes,
+                                    payout_multiple=float(n - 1),
+                                )
                             )
-                        )
         except Exception as exc:  # noqa: BLE001 - telemetry must never break a scan
             logger.debug(f"near-miss scan failed on {ev.id}: {exc}")
 

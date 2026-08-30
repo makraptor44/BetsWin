@@ -333,6 +333,7 @@ export const api = {
       net_margin: Number(r.net_margin),
       total_stake: Number(r.total_stake),
       venues: (r.venues as string[]) ?? [],
+      detected_at: String(r.detected_at ?? ""),
     }));
     const result = runBacktest(rows, {
       minMargin: Number(body.min_margin ?? 0.005),
