@@ -582,23 +582,60 @@ class SellBackRequest(BaseModel):
     note: Optional[str] = None
 
 
+def _quote_index(events) -> dict[tuple[str, str], Any]:
+    """Every live quote, keyed by (venue, market_id) -- the leg's own identity.
+
+    The previous lookup keyed live events by `Event.id` and then searched that
+    map with a `market_id`, so it never matched anything and the "live price"
+    branch was unreachable dead code.
+    """
+    index: dict[tuple[str, str], Any] = {}
+    for ev in events:
+        for market in ev.markets:
+            for outcome in market.outcomes:
+                for q in outcome.quotes:
+                    index[(q.venue, q.market_id)] = q
+    return index
+
+
+def _complement_index(events) -> dict[tuple[str, str], Any]:
+    """For each quote, the best ask on the OTHER side of the same binary market.
+
+    On a $1 binary contract, selling a YES is the same trade as buying a NO, so
+    the YES bid is exactly `1 - (NO ask)`. `Quote` carries only the ask side, so
+    this identity is how a genuine exit price is recovered from the tape rather
+    than invented.
+    """
+    index: dict[tuple[str, str], Any] = {}
+    for ev in events:
+        for market in ev.markets:
+            if len(market.outcomes) != 2:
+                continue
+            a, b = market.outcomes[0].best(), market.outcomes[1].best()
+            if a is None or b is None:
+                continue
+            index[(a.venue, a.market_id)] = b
+            index[(b.venue, b.market_id)] = a
+    return index
+
+
 @app.get("/api/positions/{row_id}/unwind-quote", tags=["arbs"])
 async def get_unwind_quote(row_id: int) -> dict[str, Any]:
-    """Calculate real-time sell-back / unwind value across venues.
+    """What this position would fetch if it were sold back right now.
 
-    For each leg you hold N contracts bought at entry_price.
-    To unwind, you SELL those contracts at current_bid (best buy offer for them).
+    You hold N contracts per leg. Unwinding means SELLING them, so the price
+    that matters is the bid, not the ask you bought at.
 
-    For binary contracts (YES/NO on $1):
-      - If you hold YES contracts at entry_price=0.45, selling them at current YES bid
-        gives you current_bid × contracts dollars back.
-      - The exit price for a YES leg is the YES bid.
-      - The exit price for a NO leg is the NO bid (= 1 - YES ask, roughly).
+    `Quote` carries only the ask side of the book, so the bid is recovered from
+    the complementary contract: on a $1 binary, selling a YES is the same trade
+    as buying a NO, so the YES bid is `1 - (NO ask)`. That is a real price off
+    the tape.
 
-    When no live data is available we use the complementary contract price logic:
-      Selling YES contracts → bid ≈ 1 - entry_price_of_NO_leg (the complementary leg)
-      This means the total sell proceeds ≈ total entry cost, reflecting no price movement.
-      We then apply spread friction (typically 0.5-2%) on top.
+    When the tape cannot supply one, this returns no price for that leg and
+    says so. It used to invent `entry_price * (1 - 0.005)` instead, which made
+    every unwind report a loss of about half a percent of stake whatever the
+    market had done -- and `sell-back` wrote that invented figure into the
+    ledger as realised P&L.
     """
     eng = _engine()
     row = await asyncio.to_thread(eng.store.arb_by_id, row_id)
@@ -608,54 +645,67 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
     legs = json.loads(row.get("legs_json") or "[]")
     total_stake = float(row.get("total_stake") or 0.0)
     currency = row.get("currency") or "USD"
-    kind = row.get("kind") or "binary_complement"
 
-    # Search live events to find current bids if available
-    live_events = {e.id: e for e in eng.live_events()}
-    unwind_legs = []
+    events = eng.live_events()
+    quotes = _quote_index(events)
+    complements = _complement_index(events)
+
+    unwind_legs: list[dict[str, Any]] = []
     total_net_proceeds = 0.0
+    priced_legs = 0
 
-    # For arb unwind: if we have no live prices, the correct fallback is to use
-    # the COMPLEMENT leg's price as the sell price for each leg.
-    # e.g. bought YES@0.45 + NO@0.52, book=0.97 → guaranteed $1 payout
-    # Current sell: YES bid ≈ (1 - current_NO_ask), NO bid ≈ (1 - current_YES_ask)
-    # Without live data: use entry prices as baseline (0-movement scenario),
-    # then apply a small market spread cost to exit (typically 0.5%).
-    SPREAD_FRICTION = 0.005  # 0.5% bid-ask spread cost to exit — conservative estimate
-
-    for i, leg in enumerate(legs):
-        venue = leg.get("venue")
-        market_id = leg.get("market_id")
+    for leg in legs:
+        venue = leg.get("venue") or ""
+        market_id = leg.get("market_id") or ""
         outcome = leg.get("outcome")
-        side = leg.get("side", "YES").upper()
-        entry_price = float(leg.get("price") or 0.5)
+        side = str(leg.get("side", "YES")).upper()
+        entry_price = float(leg.get("price") or 0.0)
         stake = float(leg.get("stake") or 0.0)
-        contracts = float(leg.get("contracts") or (stake / entry_price if entry_price > 0 else 0))
+        contracts = float(leg.get("contracts") or 0.0)
 
-        # Attempt to look up current live bid for this outcome
-        current_bid = None
-        ev = live_events.get(market_id)
-        if ev:
-            for m in ev.markets:
-                for o in m.outcomes:
-                    if o.name.lower() == outcome.lower():
-                        for q in o.quotes:
-                            if q.venue == venue:
-                                current_bid = q.price
-                                break
+        key = (venue, market_id)
+        current_bid: Optional[float] = None
+        source = "unavailable"
+
+        complement = complements.get(key)
+        if complement is not None:
+            # Selling this contract == buying its complement.
+            bid = 1.0 - complement.effective_price
+            if 0.0 < bid < 1.0:
+                current_bid = bid
+                source = "complement_ask"
+
+        if current_bid is None and key in quotes:
+            # No complement on the tape. The same-side ask is an upper bound on
+            # the bid, never the bid itself, so it is reported as an estimate
+            # rather than passed off as executable.
+            source = "same_side_ask_upper_bound"
 
         if current_bid is None:
-            # No live data: use entry_price as fair value, deduct spread friction only.
-            # This means selling back immediately (no price movement) costs just the
-            # spread: proceeds = entry_price × (1 - SPREAD_FRICTION) × contracts.
-            # The arb profit is still intact; only spread friction is deducted.
-            current_bid = max(0.01, round(entry_price * (1.0 - SPREAD_FRICTION), 4))
+            unwind_legs.append(
+                {
+                    "venue": venue,
+                    "outcome": outcome,
+                    "side": side,
+                    "contracts": contracts,
+                    "entry_price": entry_price,
+                    "current_bid": None,
+                    "price_source": source,
+                    "gross_proceeds": None,
+                    "fee": None,
+                    "net_proceeds": None,
+                    "stake": stake,
+                    "pnl": None,
+                }
+            )
+            continue
 
         fees = fee_model_for(venue)
         gross = round(contracts * current_bid, 2)
         fee = round(fees.total_fee(current_bid, contracts), 2)
         net_proceeds = round(max(0.0, gross - fee), 2)
         total_net_proceeds += net_proceeds
+        priced_legs += 1
 
         unwind_legs.append(
             {
@@ -665,6 +715,7 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
                 "contracts": contracts,
                 "entry_price": entry_price,
                 "current_bid": round(current_bid, 4),
+                "price_source": source,
                 "gross_proceeds": gross,
                 "fee": fee,
                 "net_proceeds": net_proceeds,
@@ -673,24 +724,30 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
             }
         )
 
-    unwind_pnl = round(total_net_proceeds - total_stake, 2)
-    roi_pct = round((unwind_pnl / total_stake) * 100, 2) if total_stake > 0 else 0.0
+    complete = bool(legs) and priced_legs == len(legs)
+    unwind_pnl = round(total_net_proceeds - total_stake, 2) if complete else None
+    roi_pct = (
+        round((unwind_pnl / total_stake) * 100, 2)
+        if complete and total_stake > 0
+        else None
+    )
 
     return {
         "row_id": row_id,
         "title": row.get("title"),
         "total_stake": total_stake,
         "currency": currency,
-        "total_proceeds": round(total_net_proceeds, 2),
+        "total_proceeds": round(total_net_proceeds, 2) if complete else None,
         "unwind_pnl": unwind_pnl,
         "roi_pct": roi_pct,
         "legs": unwind_legs,
-        "live_prices_used": any(
-            l["current_bid"] != round(float(legs[i].get("price", 0.5)) * (1 - SPREAD_FRICTION), 4)
-            for i, l in enumerate(unwind_legs)
-        ),
+        "priced_legs": priced_legs,
+        "leg_count": len(legs),
+        #: False when at least one leg has no live bid. The position cannot be
+        #: valued, let alone settled, until it is True.
+        "quotable": complete,
+        "live_prices_used": complete,
     }
-
 
 
 @app.post("/api/positions/{row_id}/sell-back", tags=["arbs"])
@@ -698,9 +755,45 @@ async def sell_back_position(
     row_id: int,
     body: SellBackRequest = Body(default_factory=SellBackRequest),
 ) -> dict[str, Any]:
-    """Execute sell-back / unwind orders across venues via API and record in ledger."""
+    """Record an early unwind of a position, at prices sourced from the tape.
+
+    Refuses when any leg has no live bid. A settlement figure written into the
+    ledger is a claim about money that changed hands, so an unpriceable
+    position is a 409 rather than a guess.
+    """
     eng = _engine()
+    if not body.confirmed:
+        raise HTTPException(400, "unwinding a position requires explicit confirmation")
+
     quote = await get_unwind_quote(row_id)
+    if not quote["quotable"] and not body.custom_prices:
+        unpriced = [l["outcome"] for l in quote["legs"] if l["current_bid"] is None]
+        raise HTTPException(
+            409,
+            "no live bid for "
+            + ", ".join(str(o) for o in unpriced)
+            + " -- the position cannot be valued right now. Supply custom_prices "
+            "to record an unwind you executed by hand.",
+        )
+
+    if body.custom_prices:
+        if len(body.custom_prices) != len(quote["legs"]):
+            raise HTTPException(
+                400,
+                f"custom_prices has {len(body.custom_prices)} entries for "
+                f"{len(quote['legs'])} legs",
+            )
+        proceeds = 0.0
+        for leg, price in zip(quote["legs"], body.custom_prices):
+            fees = fee_model_for(leg["venue"])
+            gross = leg["contracts"] * price
+            proceeds += max(0.0, gross - fees.total_fee(price, leg["contracts"]))
+            leg["current_bid"] = round(price, 4)
+            leg["price_source"] = "operator_supplied"
+            leg["net_proceeds"] = round(max(0.0, gross - fees.total_fee(price, leg["contracts"])), 2)
+        quote["total_proceeds"] = round(proceeds, 2)
+        quote["unwind_pnl"] = round(proceeds - quote["total_stake"], 2)
+
     realised_pnl = quote["unwind_pnl"]
 
     # Record SELL placements for each leg
