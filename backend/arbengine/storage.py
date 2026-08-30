@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS arbs (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     arb_key           TEXT NOT NULL,
     kind              TEXT NOT NULL,
+    -- "arbitrage" locks a profit whatever happens; "directional" is a modelled
+    -- edge whose worst_case_profit is a LOSS. Summing the two together is what
+    -- made "profit available" negative on the dashboard.
+    strategy          TEXT NOT NULL DEFAULT 'arbitrage',
     title             TEXT NOT NULL,
     category          TEXT NOT NULL DEFAULT 'other',
     venues            TEXT NOT NULL,
@@ -181,6 +185,7 @@ class ArbStore:
             ("currency", "TEXT NOT NULL DEFAULT 'USD'"),
             ("settlement_type", "TEXT"),
             ("settled_at", "TEXT"),
+            ("strategy", "TEXT NOT NULL DEFAULT 'arbitrage'"),
         ):
             if column not in have:
                 self.conn.execute(f"ALTER TABLE arbs ADD COLUMN {column} {ddl}")
@@ -188,6 +193,20 @@ class ArbStore:
                 added = True
         if added:
             self._backfill_zones()
+            self._backfill_strategy()
+
+    def _backfill_strategy(self) -> None:
+        """Mark historical correlation rows as directional.
+
+        Rows written before the column defaulted to 'arbitrage', which would
+        put a directional position's maximum LOSS into every guaranteed-profit
+        total for as long as the retention window lasts.
+        """
+        n = self.conn.execute(
+            "UPDATE arbs SET strategy = 'directional' WHERE kind = 'correlation'"
+        ).rowcount
+        if n:
+            logger.info(f"storage: marked {n} historical rows as directional")
 
     def _backfill_zones(self) -> None:
         """Derive zone and currency for rows written before those columns.
@@ -269,15 +288,16 @@ class ArbStore:
         legs = [l.model_dump(mode="json") for l in arb.legs]
         return self._exec(
             """INSERT INTO arbs
-               (arb_key, kind, title, category, venues, zone, currency,
+               (arb_key, kind, strategy, title, category, venues, zone, currency,
                 market_key, detected_at,
                 last_seen, close_time, book, margin, net_margin, total_stake,
                 profit, worst_case_profit, max_stake, confidence, flags,
                 legs_json, payload_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 key,
                 arb.kind.value,
+                arb.strategy,
                 arb.title,
                 arb.category,
                 json.dumps(list(arb.venues)),

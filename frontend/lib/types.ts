@@ -342,7 +342,11 @@ export interface Analytics {
     by_kind: Record<string, number>;
     by_venue: Record<string, number>;
     by_zone: Record<string, number>;
+    /** Arbitrage only. Directional positions are reported separately below. */
     total_profit_available: number;
+    /** Stake exposed on directional positions, which carry no guarantee. */
+    directional_at_risk: number;
+    directional_count: number;
     total_stake_required: number;
     avg_margin: number;
     avg_confidence: number;
@@ -483,6 +487,8 @@ export interface PositionPlacement {
 }
 
 export interface PositionItem {
+  /** "arbitrage" or "directional" -- see Arb.strategy. */
+  strategy?: "arbitrage" | "directional";
   id: number;
   arb_key: string;
   kind: ArbKind;
@@ -514,7 +520,13 @@ export interface PositionItem {
 export interface PositionsResponse {
   count: number;
   total_active_stake: number;
+  /** Arbitrage only; same value as `guaranteed_profit`. */
   total_expected_profit: number;
+  /** Locked profit across open arbitrage positions. */
+  guaranteed_profit: number;
+  /** Stake exposed on open directional positions, which carry no guarantee. */
+  directional_at_risk: number;
+  directional_count: number;
   total_realised_pnl: number;
   positions: PositionItem[];
 }

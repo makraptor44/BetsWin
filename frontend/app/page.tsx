@@ -100,11 +100,25 @@ export default function OpportunitiesPage() {
   }, [engine.arbs, search, kind, zone, venue, minMargin, minConfidence, sort]);
 
   const totals = useMemo(() => {
-    const profit = filtered.reduce((s, a) => s + a.worst_case_profit, 0);
+    // An arbitrage's worst_case_profit is a guaranteed gain. A directional
+    // position's is what it loses if the bet is wrong, so adding the two gives
+    // a number that is neither -- one correlation row at -$156.46 was enough to
+    // headline "Profit available: -$72.68" over $83.78 of real arbitrage.
+    const arbs = filtered.filter((a) => a.strategy !== "directional");
+    const directional = filtered.filter((a) => a.strategy === "directional");
+    const profit = arbs.reduce((s, a) => s + a.worst_case_profit, 0);
+    const directionalAtRisk = directional.reduce((s, a) => s + a.total_stake, 0);
     const stake = filtered.reduce((s, a) => s + a.total_stake, 0);
     const best = filtered.reduce((m, a) => Math.max(m, a.net_margin), 0);
     const clean = filtered.filter((a) => a.flags.length === 0).length;
-    return { profit, stake, best, clean };
+    return {
+      profit,
+      stake,
+      best,
+      clean,
+      directionalAtRisk,
+      directionalCount: directional.length,
+    };
   }, [filtered]);
 
   const hasFilters =
@@ -174,9 +188,13 @@ export default function OpportunitiesPage() {
           }
         />
         <Stat
-          label="Profit available"
+          label="Guaranteed profit"
           value={usd(totals.profit)}
-          sub={`on ${usdCompact(totals.stake)} of stake`}
+          sub={
+            totals.directionalCount > 0
+              ? `plus ${usdCompact(totals.directionalAtRisk)} at risk in ${totals.directionalCount} directional`
+              : `on ${usdCompact(totals.stake)} of stake`
+          }
           tone={totals.profit > 0 ? "positive" : undefined}
         />
         <Stat

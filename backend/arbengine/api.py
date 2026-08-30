@@ -816,14 +816,25 @@ async def get_positions(
         r["placements"] = [dict(p) for p in placements]
         out.append(r)
 
-    total_stake = sum(p.get("total_stake", 0) for p in out if not p.get("settled"))
-    expected_profit = sum(p.get("worst_case_profit", 0) for p in out if not p.get("settled"))
+    # An arbitrage's worst_case_profit is a guaranteed gain; a directional
+    # position's is the loss if the bet is simply wrong. Adding them produces a
+    # number that is neither, so they are reported apart.
+    open_rows = [p for p in out if not p.get("settled")]
+    arb_rows = [p for p in open_rows if p.get("strategy", "arbitrage") != "directional"]
+    dir_rows = [p for p in open_rows if p.get("strategy", "arbitrage") == "directional"]
+
+    total_stake = sum(p.get("total_stake") or 0 for p in open_rows)
+    guaranteed_profit = sum(p.get("worst_case_profit") or 0 for p in arb_rows)
+    directional_at_risk = sum(p.get("total_stake") or 0 for p in dir_rows)
     realised_pnl = sum(p.get("realised_pnl") or 0 for p in out if p.get("settled"))
 
     return {
         "count": len(out),
         "total_active_stake": round(total_stake, 2),
-        "total_expected_profit": round(expected_profit, 2),
+        "total_expected_profit": round(guaranteed_profit, 2),
+        "guaranteed_profit": round(guaranteed_profit, 2),
+        "directional_at_risk": round(directional_at_risk, 2),
+        "directional_count": len(dir_rows),
         "total_realised_pnl": round(realised_pnl, 2),
         "positions": out,
     }
@@ -957,7 +968,18 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
             "by_kind": by_kind,
             "by_venue": by_venue,
             "by_zone": by_zone,
-            "total_profit_available": round(sum(a.worst_case_profit for a in live), 2),
+            # Guaranteed profit is an arbitrage concept. A directional position
+            # has no guarantee -- its worst case is losing the stake -- so it is
+            # reported as capital at risk rather than folded into the total.
+            # Summing the two is what put "profit available: -$72.68" on the
+            # dashboard, one correlation row at -$156.46 swamping the rest.
+            "total_profit_available": round(
+                sum(a.worst_case_profit for a in live if a.strategy != "directional"), 2
+            ),
+            "directional_at_risk": round(
+                sum(a.total_stake for a in live if a.strategy == "directional"), 2
+            ),
+            "directional_count": sum(1 for a in live if a.strategy == "directional"),
             "total_stake_required": round(sum(a.total_stake for a in live), 2),
             "avg_margin": round(
                 sum(a.net_margin for a in live) / len(live), 5
