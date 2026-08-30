@@ -39,14 +39,30 @@ def decimal_to_prob(d: float) -> float:
 
 
 def american_to_decimal(a: float) -> float:
-    """American odds -> decimal. Part I s2.1."""
+    """American odds -> decimal. Part I s2.1.
+
+    American odds are undefined between -100 and +100: the format expresses
+    "stake 100 to win a" or "stake |a| to win 100", and neither reading admits a
+    magnitude below 100. Zero is the degenerate case that used to divide by zero.
+    """
+    if abs(a) < 100.0:
+        raise ValueError(
+            f"American odds must be +100 or longer, or -100 or shorter; got {a}"
+        )
     if a > 0:
         return 1.0 + a / 100.0
     return 1.0 + 100.0 / abs(a)
 
 
 def decimal_to_american(d: float) -> float:
-    """Decimal odds -> American. Part I s2.1."""
+    """Decimal odds -> American. Part I s2.1.
+
+    Decimal odds of exactly 1.00 are a bet that returns the stake and nothing
+    else; they have no American representation, and computing one divided by
+    zero.
+    """
+    if d <= 1.0:
+        raise ValueError(f"decimal odds must be greater than 1.0; got {d}")
     if d >= 2.0:
         return (d - 1.0) * 100.0
     return -100.0 / (d - 1.0)
@@ -288,11 +304,21 @@ def kelly_arb_fraction(margin: float, void_rate: float, void_loss: float) -> flo
 
     Typically returns >1 for realistic inputs, which is the formal statement that
     bankroll, not risk aversion, is the binding constraint for an arber.
+
+    Two boundary cases have to be told apart, because collapsing both to 0.0
+    said "stake nothing" for the one input where the trade carries no risk at
+    all:
+
+    * `void_loss == 0` with a positive margin -- nothing can go wrong, so Kelly
+      places no bound and the answer is +infinity. Callers that have to render
+      or serialise it should special-case `math.isinf`.
+    * `margin <= 0` -- there is no edge to stake on, so the answer really is 0.
     """
-    denom = margin * void_loss
-    if denom <= 0:
+    if margin <= 0:
         return 0.0
-    return margin_after_voids(margin, void_rate, void_loss) / denom
+    if void_loss <= 0:
+        return math.inf
+    return margin_after_voids(margin, void_rate, void_loss) / (margin * void_loss)
 
 
 def annualised_return(margin: float, turnovers_per_year: float) -> float:

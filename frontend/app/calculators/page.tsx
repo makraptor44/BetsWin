@@ -346,7 +346,11 @@ function VoidCalculator() {
             />
             <Row
               label="Kelly fraction"
-              value={`${result.kelly_arb_fraction.toFixed(2)}×`}
+              value={
+                result.kelly_arb_unbounded
+                  ? "unbounded"
+                  : `${result.kelly_arb_fraction!.toFixed(2)}×`
+              }
             />
             <Row
               label="Annualised (simple)"
@@ -363,13 +367,23 @@ function VoidCalculator() {
               to be positive <em>after</em> voids, not before them.
             </p>
           )}
-          {result.kelly_arb_fraction > 1 && result.effective_margin > 0 && (
+          {result.kelly_arb_unbounded && result.effective_margin > 0 && (
             <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
-              Kelly says stake more than the whole bankroll, which you cannot do.
-              Bankroll, not risk aversion, is the binding constraint here — so
-              per-venue concentration limits are what actually govern sizing.
+              With no cost to a voided leg there is nothing to lose, so Kelly
+              places no bound at all. Bankroll and per-venue concentration
+              limits are the only things governing size here.
             </p>
           )}
+          {!result.kelly_arb_unbounded &&
+            result.kelly_arb_fraction! > 1 &&
+            result.effective_margin > 0 && (
+              <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+                Kelly says stake more than the whole bankroll, which you cannot
+                do. Bankroll, not risk aversion, is the binding constraint here
+                — so per-venue concentration limits are what actually govern
+                sizing.
+              </p>
+            )}
         </div>
       )}
     </Card>

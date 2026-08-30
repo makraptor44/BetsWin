@@ -59,11 +59,18 @@ export function kellyFraction(p: number, d: number): number {
 export const marginAfterVoids = (m: number, v: number, l: number) =>
   (1 - v) * m - v * l;
 
-/** f* = ((1-v)*m - v*L) / (m*L) (Part I s13.4). */
+/**
+ * f* = ((1-v)*m - v*L) / (m*L) (Part I s13.4).
+ *
+ * Mirrors `odds.kelly_arb_fraction`, boundary cases included. With no void
+ * cost the trade carries no risk and Kelly places no bound, so the answer is
+ * Infinity -- not 0, which reads as "stake nothing" for the one input where
+ * the trade is riskless. No edge at all really is 0.
+ */
 export function kellyArbFraction(m: number, v: number, l: number): number {
-  const denom = m * l;
-  if (denom <= 0) return 0;
-  return marginAfterVoids(m, v, l) / denom;
+  if (m <= 0) return 0;
+  if (l <= 0) return Infinity;
+  return marginAfterVoids(m, v, l) / (m * l);
 }
 
 const roundTo = (v: number, step: number) =>
@@ -127,6 +134,14 @@ export function calcConvert(value: number, from: string): ConvertResult {
   if (from === "decimal") {
     d = value;
   } else if (from === "american") {
+    // American odds are undefined between -100 and +100. Without this guard
+    // Math.abs(0) yields Infinity rather than throwing, so the demo returned
+    // {decimal: Infinity} where the Python path raised. Same rule both sides.
+    if (Math.abs(value) < 100) {
+      throw new Error(
+        "American odds must be +100 or longer, or -100 or shorter",
+      );
+    }
     d = value > 0 ? 1 + value / 100 : 1 + 100 / Math.abs(value);
   } else {
     if (!(value > 0 && value < 1)) throw new Error("probability must be 0-1");
@@ -142,6 +157,20 @@ export function calcConvert(value: number, from: string): ConvertResult {
   };
 }
 
+/** JSON has no Infinity, so an unbounded Kelly bound travels as null + a flag. */
+function kellyArbPayload(
+  m: number,
+  v: number,
+  l: number,
+): Pick<VoidResult, "kelly_arb_fraction" | "kelly_arb_unbounded"> {
+  const f = kellyArbFraction(m, v, l);
+  const unbounded = !Number.isFinite(f);
+  return {
+    kelly_arb_fraction: unbounded ? null : Math.round(f * 10000) / 10000,
+    kelly_arb_unbounded: unbounded,
+  };
+}
+
 export function calcVoid(
   margin: number,
   voidRate: number,
@@ -153,7 +182,7 @@ export function calcVoid(
     nominal_margin: margin,
     effective_margin: Math.round(eff * 1000000) / 1000000,
     edge_retained_pct: margin ? r2((100 * eff) / margin) : 0,
-    kelly_arb_fraction: Math.round(kellyArbFraction(margin, voidRate, voidLoss) * 10000) / 10000,
+    ...kellyArbPayload(margin, voidRate, voidLoss),
     annualised_simple: Math.round(eff * turnovers * 10000) / 10000,
     annualised_compounded:
       Math.round((Math.pow(1 + eff, turnovers) - 1) * 10000) / 10000,

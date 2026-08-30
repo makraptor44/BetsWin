@@ -522,10 +522,12 @@ function Derivation({ detail }: { detail: ArbDetailData }) {
     ],
     [
       "Kelly fraction",
-      `${m.kelly_arb_fraction.toFixed(2)}×`,
-      m.kelly_arb_fraction > 1
-        ? "Above 1.0, meaning bankroll — not risk appetite — is the binding constraint."
-        : "The share of bankroll this edge justifies.",
+      m.kelly_arb_unbounded ? "unbounded" : `${m.kelly_arb_fraction!.toFixed(2)}×`,
+      m.kelly_arb_unbounded
+        ? "No cost to a voided leg means nothing to lose, so Kelly places no bound. Bankroll is the only constraint."
+        : m.kelly_arb_fraction! > 1
+          ? "Above 1.0, meaning bankroll — not risk appetite — is the binding constraint."
+          : "The share of bankroll this edge justifies.",
     ],
     [
       "Per-event cap",

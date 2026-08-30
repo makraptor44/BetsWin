@@ -265,7 +265,10 @@ export interface ArbMaths {
   void_rate: number;
   void_loss: number;
   margin_after_voids: number;
-  kelly_arb_fraction: number;
+  /** Null when Kelly places no bound -- see `kelly_arb_unbounded`. */
+  kelly_arb_fraction: number | null;
+  /** True when there is no void cost, so bankroll is the only constraint. */
+  kelly_arb_unbounded: boolean;
   devig_fair_probs: number[];
   bankroll_cap: number;
 }
@@ -410,7 +413,10 @@ export interface VoidResult {
   nominal_margin: number;
   effective_margin: number;
   edge_retained_pct: number;
-  kelly_arb_fraction: number;
+  /** Null when Kelly places no bound -- see `kelly_arb_unbounded`. */
+  kelly_arb_fraction: number | null;
+  /** True when there is no void cost, so bankroll is the only constraint. */
+  kelly_arb_unbounded: boolean;
   annualised_simple: number;
   annualised_compounded: number;
 }

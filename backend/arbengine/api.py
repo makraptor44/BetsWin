@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -377,6 +378,22 @@ async def get_arb(arb_id: str) -> dict[str, Any]:
     }
 
 
+def _kelly_arb_payload(margin: float, void_rate: float, void_loss: float) -> dict[str, Any]:
+    """Serialise the Kelly arb bound, which may legitimately be unbounded.
+
+    With no void cost the trade carries no risk, Kelly places no bound, and the
+    honest answer is "bankroll is the only constraint" -- not the 0.0 this used
+    to report, which reads as "stake nothing". JSON has no infinity, so it goes
+    over the wire as a null plus an explicit flag the UI can render.
+    """
+    f = om.kelly_arb_fraction(margin, void_rate, void_loss)
+    unbounded = math.isinf(f)
+    return {
+        "kelly_arb_fraction": None if unbounded else round(f, 4),
+        "kelly_arb_unbounded": unbounded,
+    }
+
+
 def _maths_for(arb: Arb) -> dict[str, Any]:
     """The derivation behind the numbers, so the UI can show its working."""
     eff = [l.effective_decimal_odds for l in arb.legs]
@@ -395,9 +412,7 @@ def _maths_for(arb: Arb) -> dict[str, Any]:
         "margin_after_voids": round(
             om.margin_after_voids(arb.net_margin, void_rate, void_loss), 5
         ),
-        "kelly_arb_fraction": round(
-            om.kelly_arb_fraction(arb.net_margin, void_rate, void_loss), 4
-        ),
+        **_kelly_arb_payload(arb.net_margin, void_rate, void_loss),
         "devig_fair_probs": [round(p, 5) for p in om.devig_proportional(raw)],
         "bankroll_cap": round(
             settings.bankroll * settings.max_stake_fraction_per_event, 2
@@ -1069,20 +1084,29 @@ class ConvertRequest(BaseModel):
 
 @app.post("/api/calc/convert", tags=["calculators"])
 async def calc_convert(req: ConvertRequest) -> dict[str, Any]:
-    """Odds format conversion (Part I s2.1)."""
-    if req.from_format == "decimal":
-        d = req.value
-    elif req.from_format == "american":
-        d = om.american_to_decimal(req.value)
-    else:
-        if not 0 < req.value < 1:
-            raise HTTPException(400, "probability must be between 0 and 1")
-        d = om.prob_to_decimal(req.value)
-    if d <= 1.0:
-        raise HTTPException(400, "decimal odds must be greater than 1.0")
+    """Odds format conversion (Part I s2.1).
+
+    Bad input is the user's mistake, not the server's: every rejection here is a
+    400 with the reason. `value: 0, from_format: "american"` used to divide by
+    zero and return a 500.
+    """
+    try:
+        if req.from_format == "decimal":
+            d = req.value
+        elif req.from_format == "american":
+            d = om.american_to_decimal(req.value)
+        else:
+            if not 0 < req.value < 1:
+                raise HTTPException(400, "probability must be between 0 and 1")
+            d = om.prob_to_decimal(req.value)
+        if d <= 1.0:
+            raise HTTPException(400, "decimal odds must be greater than 1.0")
+        american = round(om.decimal_to_american(d), 2)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return {
         "decimal": round(d, 5),
-        "american": round(om.decimal_to_american(d), 2),
+        "american": american,
         "probability": round(om.decimal_to_prob(d), 5),
         "contract_price": round(om.decimal_to_prob(d), 4),
     }
@@ -1103,9 +1127,7 @@ async def calc_void(req: VoidRequest) -> dict[str, Any]:
         "nominal_margin": req.margin,
         "effective_margin": round(eff, 6),
         "edge_retained_pct": round(100.0 * eff / req.margin, 2) if req.margin else 0.0,
-        "kelly_arb_fraction": round(
-            om.kelly_arb_fraction(req.margin, req.void_rate, req.void_loss), 4
-        ),
+        **_kelly_arb_payload(req.margin, req.void_rate, req.void_loss),
         "annualised_simple": round(om.annualised_return(eff, req.turnovers_per_year), 4),
         "annualised_compounded": round(
             om.compounded_return(eff, req.turnovers_per_year), 4

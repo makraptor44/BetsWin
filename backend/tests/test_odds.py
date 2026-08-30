@@ -26,6 +26,30 @@ class TestFormats:
         assert om.fractional_to_decimal(1, 1) == pytest.approx(2.0)
         assert om.fractional_to_decimal(5, 2) == pytest.approx(3.5)
 
+    @pytest.mark.parametrize("value", [0, 1, -1, 50, -99, 99.9, -0.0])
+    def test_american_odds_inside_plus_minus_100_are_rejected(self, value):
+        """American odds have no magnitude below 100.
+
+        `american_to_decimal(0)` used to evaluate 1 + 100/abs(0) and raise
+        ZeroDivisionError, which surfaced as a 500 from /api/calc/convert.
+        """
+        with pytest.raises(ValueError, match="American odds"):
+            om.american_to_decimal(value)
+
+    @pytest.mark.parametrize("value", [100, -100, 250, -250])
+    def test_american_odds_at_and_beyond_the_boundary_are_accepted(self, value):
+        assert om.american_to_decimal(value) > 1.0
+
+    @pytest.mark.parametrize("value", [1.0, 0.5, 0.0, -2.0])
+    def test_decimal_to_american_rejects_odds_of_one_or_less(self, value):
+        """d = 1.00 returns the stake and nothing else; -100/(d-1) divided by zero."""
+        with pytest.raises(ValueError, match="greater than 1.0"):
+            om.decimal_to_american(value)
+
+    def test_american_roundtrip_is_stable(self):
+        for a in (-500, -250, -110, 100, 150, 400):
+            assert om.decimal_to_american(om.american_to_decimal(a)) == pytest.approx(a)
+
     def test_price_clamping_avoids_division_blowup(self):
         assert om.prob_to_decimal(0.0) > 0
         assert om.prob_to_decimal(1.0) == pytest.approx(1.0, abs=1e-3)
