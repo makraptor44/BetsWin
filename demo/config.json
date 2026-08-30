@@ -1,0 +1,36 @@
+{
+ "bankroll": 10000.0,
+ "default_stake": 500.0,
+ "min_arb_margin": 0.004,
+ "max_arb_margin": 0.25,
+ "suspect_margin": 0.05,
+ "min_confidence": 25,
+ "max_stake_fraction_per_event": 0.05,
+ "poll_interval_seconds": 45,
+ "alert_min_margin": 0.015,
+ "alert_min_confidence": 55,
+ "assumed_void_rate": 0.02,
+ "assumed_void_loss": 0.3,
+ "fuzzy_match_threshold": 82,
+ "demo_mode": true,
+ "sources": {
+  "polymarket": true,
+  "kalshi": true,
+  "sportsbook": false,
+  "smarkets": true,
+  "betfair": false
+ },
+ "telegram_enabled": false,
+ "kinds": [
+  "binary_complement",
+  "dutch_yes",
+  "dutch_no",
+  "cross_venue",
+  "sportsbook"
+ ],
+ "enforce_zone_pairing": true,
+ "operator_jurisdiction": "",
+ "near_miss_slack": 0.02,
+ "smarkets_commission": 0.02,
+ "betfair_commission": 0.05
+}

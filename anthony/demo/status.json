@@ -1,0 +1,48 @@
+{
+ "running": false,
+ "demo_mode": true,
+ "last_scan": {
+  "started_at": "2026-08-30T14:21:35.513045Z",
+  "finished_at": "2026-08-30T14:21:36.077396Z",
+  "duration_seconds": 0.564,
+  "events_scanned": 20,
+  "markets_scanned": 29,
+  "quotes_scanned": 58,
+  "arbs_found": 7,
+  "new_arbs": 0,
+  "near_misses": 8,
+  "tightest_gap_bps": 74.5,
+  "by_venue": {
+   "polymarket": 6,
+   "kalshi": 10,
+   "smarkets": 2,
+   "betfair": 2
+  },
+  "by_zone": {
+   "us_prediction": 16,
+   "uk_exchange": 4
+  },
+  "cross_zone_rejected": 4,
+  "errors": [],
+  "breaker_tripped": false
+ },
+ "next_scan_in": 0.0,
+ "poll_interval": 45,
+ "live_arbs": 7,
+ "total_detected": 7,
+ "uptime_seconds": 2.4796547329999967,
+ "sources": {
+  "polymarket": true,
+  "kalshi": true,
+  "smarkets": true
+ },
+ "breaker_tripped": false,
+ "breaker_reason": null,
+ "zones": [
+  "uk_exchange",
+  "us_prediction"
+ ],
+ "operator_jurisdiction": "",
+ "enforce_zone_pairing": true,
+ "near_misses": 8
+}
