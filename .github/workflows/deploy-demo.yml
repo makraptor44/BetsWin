@@ -195,10 +195,22 @@ jobs:
           git -C "$work" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if [ -z "$SUBDIR" ]; then
-            # main owns the root. Clear the root's own files, but keep every
-            # branch preview, which lives one level down in its own directory.
-            find "$work" -mindepth 1 -maxdepth 1 -name '.git' -prune -o \
-              -exec rm -rf {} +
+            # main owns the root -- but only the part of it main produces.
+            #
+            # Clearing the root wholesale is the obvious way to drop files a
+            # later build no longer emits, and it is wrong here: a branch
+            # preview is a directory at exactly that level, so wholesale is how
+            # every preview gets deleted on the next push to main. The set main
+            # owns is precisely the set of names in its own build output, so
+            # remove those and leave anything else standing.
+            for entry in "$work"/* "$work"/.[!.]*; do
+              [ -e "$entry" ] || continue
+              name="$(basename "$entry")"
+              [ "$name" = ".git" ] && continue
+              if [ -e "frontend/out/$name" ]; then
+                rm -rf "$entry"
+              fi
+            done
             cp -a frontend/out/. "$work"/
           else
             rm -rf "${work:?}/${SUBDIR:?}"
