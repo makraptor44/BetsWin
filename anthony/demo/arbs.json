@@ -57,17 +57,17 @@
    "notes": [
     "Directional bet that the market's implied correlation (rho_impl=0.50) converges toward the prior (rho_prior=0.68, historical, n=8) -- not a risk-free arbitrage. The full stake is at risk if the joint contract resolves the other way."
    ],
-   "detected_at": "2026-08-31T08:19:25.569800Z",
-   "close_time": "2027-11-04T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.569802Z",
-   "expires_at": "2026-08-31T08:29:02.600315Z",
+   "detected_at": "2026-08-31T09:36:40.311760Z",
+   "close_time": "2027-11-04T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.311762Z",
+   "expires_at": "2026-08-31T09:46:17.286831Z",
    "invalidated_at": null,
    "is_suspect": false,
    "roi_pct": -100.0,
-   "seconds_to_expiry": 575.519304,
+   "seconds_to_expiry": 575.543317,
    "status": "live",
-   "hours_to_close": 10319.999865960555
+   "hours_to_close": 10319.999872704444
   },
   {
    "id": "f1515ab72b13049f",
@@ -149,17 +149,17 @@
     "Markets were paired by title similarity (99/100), not by a shared identifier.",
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-31T08:19:25.554225Z",
-   "close_time": "2026-10-15T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.554227Z",
-   "expires_at": "2026-08-31T08:28:06.598624Z",
+   "detected_at": "2026-08-31T09:36:40.296629Z",
+   "close_time": "2026-10-15T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.296630Z",
+   "expires_at": "2026-08-31T09:45:21.285403Z",
    "invalidated_at": null,
    "is_suspect": true,
    "roi_pct": 7.602152043040861,
-   "seconds_to_expiry": 519.517583,
+   "seconds_to_expiry": 519.541863,
    "status": "live",
-   "hours_to_close": 1079.999865953611
+   "hours_to_close": 1079.9998726980555
   },
   {
    "id": "e84c6ec99ff1aa99",
@@ -273,17 +273,17 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-31T08:19:25.551564Z",
-   "close_time": "2026-12-29T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.551566Z",
-   "expires_at": "2026-08-31T08:28:00.598769Z",
+   "detected_at": "2026-08-31T09:36:40.294157Z",
+   "close_time": "2026-12-29T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.294158Z",
+   "expires_at": "2026-08-31T09:45:15.285507Z",
    "invalidated_at": null,
    "is_suspect": false,
    "roi_pct": 3.624144965798632,
-   "seconds_to_expiry": 513.517702,
+   "seconds_to_expiry": 513.541946,
    "status": "live",
-   "hours_to_close": 2879.999865946389
+   "hours_to_close": 2879.999872692222
   },
   {
    "id": "ada41f580085957f",
@@ -357,17 +357,17 @@
    "notes": [
     "Broadly available, but not from US -- at least one venue turns those away."
    ],
-   "detected_at": "2026-08-31T08:19:25.550932Z",
-   "close_time": "2026-10-15T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.550937Z",
-   "expires_at": "2026-08-31T08:28:18.598514Z",
+   "detected_at": "2026-08-31T09:36:40.293600Z",
+   "close_time": "2026-10-15T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.293604Z",
+   "expires_at": "2026-08-31T09:45:33.285286Z",
    "invalidated_at": null,
    "is_suspect": false,
    "roi_pct": 1.6260325206504131,
-   "seconds_to_expiry": 531.51743,
+   "seconds_to_expiry": 531.541709,
    "status": "live",
-   "hours_to_close": 1079.9998659413889
+   "hours_to_close": 1079.9998726880556
   },
   {
    "id": "7a617ce7545ae134",
@@ -454,17 +454,17 @@
     "Markets were paired by title similarity (100/100), not by a shared identifier.",
     "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
    ],
-   "detected_at": "2026-08-31T08:19:25.553576Z",
-   "close_time": "2027-06-27T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.553578Z",
-   "expires_at": "2026-08-31T08:28:12.599082Z",
+   "detected_at": "2026-08-31T09:36:40.296021Z",
+   "close_time": "2027-06-27T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.296023Z",
+   "expires_at": "2026-08-31T09:45:27.285783Z",
    "invalidated_at": null,
    "is_suspect": false,
    "roi_pct": 1.5480309606192124,
-   "seconds_to_expiry": 525.517975,
+   "seconds_to_expiry": 525.54219,
    "status": "live",
-   "hours_to_close": 7199.999865935279
+   "hours_to_close": 7199.999872683333
   },
   {
    "id": "d37b7d4db9682a72",
@@ -567,18 +567,18 @@
    "notes": [
     "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
    ],
-   "detected_at": "2026-08-31T08:19:25.552308Z",
-   "close_time": "2026-09-03T08:19:26.598476Z",
-   "last_seen": "2026-08-31T08:19:27.074151Z",
-   "last_updated_at": "2026-08-31T08:19:25.552310Z",
-   "expires_at": "2026-08-31T08:27:57.599975Z",
+   "detected_at": "2026-08-31T09:36:40.294840Z",
+   "close_time": "2026-09-03T09:36:41.285255Z",
+   "last_seen": "2026-08-31T09:36:41.737297Z",
+   "last_updated_at": "2026-08-31T09:36:40.294842Z",
+   "expires_at": "2026-08-31T09:45:12.286533Z",
    "invalidated_at": null,
    "is_suspect": false,
    "roi_pct": 0.9820196403928079,
-   "seconds_to_expiry": 510.518847,
+   "seconds_to_expiry": 510.542921,
    "status": "live",
-   "hours_to_close": 71.99986592944445
+   "hours_to_close": 71.99987267805555
   }
  ],
- "generated_at": "2026-08-31T08:19:27.081131+00:00"
+ "generated_at": "2026-08-31T09:36:41.743616+00:00"
 }
