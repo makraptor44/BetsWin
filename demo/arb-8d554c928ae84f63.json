@@ -2,6 +2,7 @@
  "arb": {
   "id": "8d554c928ae84f63",
   "kind": "dutch_no",
+  "strategy": "arbitrage",
   "title": "Super Bowl LXI winner - fade every outcome",
   "category": "sports",
   "venues": [
@@ -25,8 +26,8 @@
     "size_available": 11315.2,
     "url": "https://example.invalid/kalshi/KXSB-Chiefs:N",
     "event_title": "Super Bowl LXI winner",
-    "payout": 128.70012870012872,
-    "net_payout": 127.16012870012871
+    "payout": 126.71814669120202,
+    "net_payout": 126.71814669120202
    },
    {
     "venue": "kalshi",
@@ -44,8 +45,8 @@
     "size_available": 11315.2,
     "url": "https://example.invalid/kalshi/KXSB-49ers:N",
     "event_title": "Super Bowl LXI winner",
-    "payout": 128.70012870012872,
-    "net_payout": 127.16012870012871
+    "payout": 126.71814669120202,
+    "net_payout": 126.71814669120202
    },
    {
     "venue": "kalshi",
@@ -63,8 +64,8 @@
     "size_available": 11315.2,
     "url": "https://example.invalid/kalshi/KXSB-Ravens:N",
     "event_title": "Super Bowl LXI winner",
-    "payout": 128.70012870012872,
-    "net_payout": 127.16012870012871
+    "payout": 126.71814669120202,
+    "net_payout": 126.71814669120202
    },
    {
     "venue": "kalshi",
@@ -82,8 +83,8 @@
     "size_available": 11315.2,
     "url": "https://example.invalid/kalshi/KXSB-Lions:N",
     "event_title": "Super Bowl LXI winner",
-    "payout": 128.70012870012872,
-    "net_payout": 127.16012870012871
+    "payout": 126.71814669120202,
+    "net_payout": 126.71814669120202
    },
    {
     "venue": "kalshi",
@@ -101,8 +102,8 @@
     "size_available": 11315.2,
     "url": "https://example.invalid/kalshi/KXSB-Bills:N",
     "event_title": "Super Bowl LXI winner",
-    "payout": 128.70012870012872,
-    "net_payout": 127.16012870012871
+    "payout": 126.71814669120202,
+    "net_payout": 126.71814669120202
    }
   ],
   "zone": "us_prediction",
@@ -133,12 +134,12 @@
    "Fees and slippage consume 54% of the gross edge (2.96% -> 1.37%).",
    "5 legs must be filled before prices move."
   ],
-  "detected_at": "2026-08-29T13:14:26.261679Z",
-  "close_time": "2026-11-27T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153653Z",
+  "detected_at": "2026-08-30T13:58:14.530252Z",
+  "close_time": "2026-11-28T13:58:17.642652Z",
+  "last_seen": "2026-08-30T13:58:19.103788Z",
   "is_suspect": false,
   "roi_pct": 1.374,
-  "hours_to_close": 2159.9990855508336
+  "hours_to_close": 2159.9995886
  },
  "payout_matrix": [
   {
@@ -199,6 +200,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.00741,
   "kelly_arb_fraction": 1.8053,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.2,
    0.2,

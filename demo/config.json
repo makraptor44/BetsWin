@@ -26,7 +26,8 @@
   "dutch_yes",
   "dutch_no",
   "cross_venue",
-  "sportsbook"
+  "sportsbook",
+  "correlation"
  ],
  "enforce_zone_pairing": true,
  "operator_jurisdiction": "",
