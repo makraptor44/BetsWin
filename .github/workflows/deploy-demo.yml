@@ -18,8 +18,8 @@
 # subdirectory -- and each run rewrites only its own directory before deploying
 # the whole tree:
 #
-#     main             -> https://<owner>.github.io/<repo>/
-#     ANTHONYS-BRANCH  -> https://<owner>.github.io/<repo>/anthony/
+#     main          -> https://<owner>.github.io/<repo>/
+#     some-branch   -> https://<owner>.github.io/<repo>/some-branch/
 #
 # Deploying the assembled tree through `actions/deploy-pages` means this works
 # with the repository's existing "GitHub Actions" Pages source, with no settings
@@ -35,7 +35,7 @@ name: Deploy demo
 
 on:
   push:
-    branches: [main, ANTHONYS-BRANCH]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -68,15 +68,11 @@ jobs:
             main)
               subdir=""
               ;;
-            # Named explicitly. Deriving a short slug from the branch name by
-            # rule produced "anthonys", which is nobody's idea of a URL: the
-            # only honest way to get the documented /anthony/ is to say so.
-            ANTHONYS-BRANCH)
-              subdir="anthony"
-              ;;
             *)
-              # Anything else gets a mechanical slug: lowercased, with runs of
-              # URL-unsafe characters collapsed to a single dash.
+              # A mechanical slug: lowercased, with runs of URL-unsafe
+              # characters collapsed to a single dash. Add a branch to the
+              # trigger above and its preview appears at that slug; nothing
+              # here needs to know the name.
               subdir=$(printf '%s' "$branch" \
                 | tr '[:upper:]' '[:lower:]' \
                 | sed -e 's/[^a-z0-9._-][^a-z0-9._-]*/-/g' -e 's/^-*//' -e 's/-*$//')
@@ -117,7 +113,7 @@ jobs:
 
       # Regenerated on every push, so the deployed fixtures are always THIS
       # commit's detectors, sizing and scoring -- not a snapshot committed
-      # weeks ago. This is what makes the branch demo track the branch.
+      # weeks ago. This is what makes a demo track the branch it came from.
       - name: Capture demo fixtures from the real engine
         run: python -m scripts.generate_demo_fixtures
         working-directory: backend

@@ -643,10 +643,10 @@ overwriting each other's demo. The workflow assembles the site instead: a
 `gh-pages` branch accumulates one subdirectory per branch, and each run
 rewrites only its own before deploying the whole tree.
 
-| Branch | URL |
-|---|---|
-| `main` | https://makraptor44.github.io/BetsWin/ |
-| `ANTHONYS-BRANCH` | https://makraptor44.github.io/BetsWin/anthony/ |
+`main` publishes to the root, at
+https://makraptor44.github.io/BetsWin/. Adding a branch to the workflow's
+trigger gives it a preview at a slug derived from its name, alongside rather
+than instead of the others.
 
 A ribbon at the top of each demo page names the branch, commit and build time,
 since two static exports are otherwise indistinguishable.
