@@ -317,6 +317,24 @@ async def list_arbs(
 # --------------------------------------------------------- execution zones
 
 
+@app.get("/api/providers", tags=["system"])
+async def providers() -> dict[str, Any]:
+    """Health and telemetry for every configured data provider.
+
+    A read endpoint: it exposes latency and error counts the venues publish
+    about themselves, nothing an operator owns. `last_error` has already been
+    redacted at the source layer, so a credential passed in a query string
+    cannot surface here.
+    """
+    eng = _engine()
+    rows = eng.provider_health()
+    return {
+        "providers": rows,
+        "online": sum(1 for r in rows if r["health"] in ("healthy", "degraded")),
+        "total": len(rows),
+    }
+
+
 @app.get("/api/venues", tags=["system"])
 async def venues() -> dict[str, Any]:
     """The venue registry and the pairing rule derived from it.

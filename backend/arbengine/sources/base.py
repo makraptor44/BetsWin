@@ -8,7 +8,13 @@ pagination, price units, fee models, URL construction -- stops here.
 from __future__ import annotations
 
 import re
+import statistics
+import time
 from abc import ABC, abstractmethod
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Optional
 
 import httpx
@@ -33,6 +39,9 @@ class SourceError(RuntimeError):
 #: with the exception -- and `safe_fetch` stringifies that into `last_error`,
 #: which `ScanStats.errors` persists and /api/analytics serves back out.
 _SECRET_PARAMS = ("apikey", "api_key", "key", "token", "secret", "password")
+
+#: How long a 429 keeps a provider in RATE_LIMITED before it is retried.
+_RATE_LIMIT_COOLDOWN_SECONDS = 60.0
 
 _SECRET_RE = re.compile(
     r"(?i)\b(" + "|".join(_SECRET_PARAMS) + r")=([^&\s'\"]+)"
@@ -60,6 +69,87 @@ def _is_retryable(exc: BaseException) -> bool:
     return False
 
 
+class Health(str, Enum):
+    """How much of what a provider says can currently be relied on.
+
+    A boolean cannot express the state that matters most. A feed answering
+    slowly, or answering but rate-limited into partial coverage, is neither
+    healthy nor offline -- and the difference decides whether you widen the poll
+    interval or stop trusting the prices altogether.
+    """
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    RATE_LIMITED = "rate_limited"
+    OFFLINE = "offline"
+
+
+#: Consecutive failures before a provider is called offline rather than
+#: degraded. One failure is a blip; three in a row is a feed that is down.
+_OFFLINE_AFTER = 3
+#: Rolling window for the error-rate and latency figures.
+_WINDOW = 40
+
+
+@dataclass
+class ProviderStats:
+    """Rolling telemetry for one provider.
+
+    Bounded on purpose: this is an operational readout, not an audit log. The
+    scan tape in SQLite is the durable record, and keeping every latency sample
+    here would grow without limit in a process designed to run for weeks.
+    """
+
+    requests: int = 0
+    failures: int = 0
+    consecutive_failures: int = 0
+    last_success: Optional[datetime] = None
+    last_failure: Optional[datetime] = None
+    last_error: Optional[str] = None
+    #: Recent request durations in milliseconds, newest last.
+    latencies_ms: deque = field(default_factory=lambda: deque(maxlen=_WINDOW))
+    #: Recent outcomes, True for success. Drives the windowed error rate.
+    outcomes: deque = field(default_factory=lambda: deque(maxlen=_WINDOW))
+    rate_limited_until: Optional[datetime] = None
+
+    @property
+    def latency_p50_ms(self) -> Optional[float]:
+        if not self.latencies_ms:
+            return None
+        return statistics.median(self.latencies_ms)
+
+    @property
+    def latency_p95_ms(self) -> Optional[float]:
+        """The figure that sets scan time: a cycle waits on its slowest feed."""
+        if not self.latencies_ms:
+            return None
+        ordered = sorted(self.latencies_ms)
+        idx = min(len(ordered) - 1, int(0.95 * (len(ordered) - 1)))
+        return ordered[idx]
+
+    @property
+    def error_rate(self) -> float:
+        """Windowed rather than lifetime.
+
+        A feed that failed all morning and has answered cleanly since should
+        read as fine now -- a lifetime ratio would keep it marked bad for as
+        long as the process lives.
+        """
+        if not self.outcomes:
+            return 0.0
+        return sum(1 for ok in self.outcomes if not ok) / len(self.outcomes)
+
+    def health(self, now: Optional[datetime] = None) -> "Health":
+        now = now or datetime.now(timezone.utc)
+        if self.rate_limited_until is not None and self.rate_limited_until > now:
+            return Health.RATE_LIMITED
+        if self.consecutive_failures >= _OFFLINE_AFTER:
+            return Health.OFFLINE
+        if self.consecutive_failures > 0 or self.error_rate > 0.2:
+            return Health.DEGRADED
+        return Health.HEALTHY
+
+
 class Source(ABC):
     """Base class for a venue adapter."""
 
@@ -77,6 +167,11 @@ class Source(ABC):
         self.last_error: Optional[str] = None
         self.last_fetch_count: int = 0
         self.healthy: bool = True
+        self.stats = ProviderStats()
+
+    @property
+    def health(self) -> Health:
+        return self.stats.health()
 
     # ------------------------------------------------------------------ http
 
@@ -127,18 +222,44 @@ class Source(ABC):
     # ------------------------------------------------------------- helpers
 
     async def safe_fetch(self) -> list[Event]:
-        """fetch_events with failure isolation -- one dead venue must not stop a scan."""
+        """fetch_events with failure isolation -- one dead venue must not stop a scan.
+
+        Also the single place provider telemetry is recorded, so every adapter
+        gets latency, error rate and health without implementing any of it.
+        """
+        started = time.monotonic()
+        now = datetime.now(timezone.utc)
+        self.stats.requests += 1
         try:
             events = await self.fetch_events()
-            self.healthy = True
-            self.last_error = None
-            self.last_fetch_count = len(events)
-            return events
         except Exception as exc:  # noqa: BLE001 - deliberately broad, logged
             self.healthy = False
+            self.stats.failures += 1
+            self.stats.consecutive_failures += 1
+            self.stats.last_failure = now
+            self.stats.outcomes.append(False)
+            self.stats.latencies_ms.append((time.monotonic() - started) * 1000.0)
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+                # Held for one cooldown. The provider is reachable and
+                # answering, so calling it offline would be wrong -- it simply
+                # has nothing left to give us this cycle.
+                self.stats.rate_limited_until = now + timedelta(
+                    seconds=_RATE_LIMIT_COOLDOWN_SECONDS
+                )
             # Redacted before it is stored: this string ends up in
             # ScanStats.errors, which is written to SQLite and served by
             # /api/analytics.
             self.last_error = redact(f"{type(exc).__name__}: {exc}")
+            self.stats.last_error = self.last_error
             logger.error(f"{self.name}: fetch failed -- {self.last_error}")
             return []
+
+        self.healthy = True
+        self.last_error = None
+        self.last_fetch_count = len(events)
+        self.stats.consecutive_failures = 0
+        self.stats.last_success = now
+        self.stats.last_error = None
+        self.stats.outcomes.append(True)
+        self.stats.latencies_ms.append((time.monotonic() - started) * 1000.0)
+        return events

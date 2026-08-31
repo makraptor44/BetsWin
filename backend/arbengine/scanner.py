@@ -226,6 +226,54 @@ class Scanner:
         """Remove an opportunity from live memory once placed."""
         return self._live.pop(arb_id, None)
 
+    def provider_health(self) -> list[dict[str, object]]:
+        """Operational readout for every configured provider.
+
+        Separate from `status().sources`, which stays a plain name-to-bool map
+        because a dozen callers and the stored scan tape depend on that shape.
+        """
+        rows: list[dict[str, object]] = []
+        for src in self.sources:
+            st = src.stats
+            rows.append(
+                {
+                    "name": src.name,
+                    "label": src.label,
+                    "enabled": getattr(src, "enabled", True),
+                    "health": src.health.value,
+                    "requests": st.requests,
+                    "failures": st.failures,
+                    "consecutive_failures": st.consecutive_failures,
+                    "error_rate": round(st.error_rate, 4),
+                    "latency_p50_ms": (
+                        round(st.latency_p50_ms, 1)
+                        if st.latency_p50_ms is not None
+                        else None
+                    ),
+                    "latency_p95_ms": (
+                        round(st.latency_p95_ms, 1)
+                        if st.latency_p95_ms is not None
+                        else None
+                    ),
+                    "last_success": (
+                        st.last_success.isoformat() if st.last_success else None
+                    ),
+                    "last_failure": (
+                        st.last_failure.isoformat() if st.last_failure else None
+                    ),
+                    "last_error": st.last_error,
+                    "rate_limited_until": (
+                        st.rate_limited_until.isoformat()
+                        if st.rate_limited_until
+                        else None
+                    ),
+                    # Quota is provider-specific; only The Odds API reports it.
+                    "quota_remaining": getattr(src, "quota_remaining", None),
+                    "events_last_scan": src.last_fetch_count,
+                }
+            )
+        return rows
+
     def status(self) -> EngineStatus:
         return EngineStatus(
             running=self._running,
