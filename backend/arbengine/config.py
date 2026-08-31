@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Shared secret for the endpoints that change something: config, scanner
+    # control, placements, settlements. Sent as X-API-Key.
+    #
+    # Blank is allowed ONLY while bound to loopback, which is the default and
+    # the deployment this tool is actually built for. Binding to any other
+    # interface without a key is refused at startup rather than quietly serving
+    # bankroll settings and a stop button to the network.
+    api_key: str = ""
 
     # ------------------------------------------------------------ data feeds
     # Polymarket and Kalshi market data are public and need no credentials.
@@ -65,10 +73,48 @@ class Settings(BaseSettings):
     # The Odds API is optional; without a key the sportsbook source stays dark.
     odds_api_key: str = ""
     odds_api_url: str = "https://api.the-odds-api.com/v4"
-    odds_api_regions: str = "us,us2"
-    odds_api_sports: str = (
-        "americanfootball_nfl,basketball_nba,baseball_mlb,icehockey_nhl"
+    # Every bookmaker region the key is entitled to. Regions are the single
+    # biggest lever on how many cross-book arbitrages exist at all: an edge
+    # appears when two books disagree, and four regions of books disagree far
+    # more often than one does.
+    odds_api_regions: str = "us,us2,uk,eu,au"
+    # Blank means "every sport The Odds API reports as in season", discovered
+    # per cycle through the free /sports endpoint. A comma-separated list here
+    # pins it to specific sport keys instead.
+    odds_api_sports: str = ""
+    # Outright winner, handicap and over/under lines. Handicaps and totals are
+    # two-way markets, so they arbitrage exactly like a moneyline -- and there
+    # are far more of them, because every book prices its own line.
+    odds_api_markets: str = "h2h,spreads,totals"
+    # Sport groups to consider when discovering in-season sports. Sports only:
+    # politics and entertainment novelty markets are priced by the same books
+    # but settle on rules that do not survive cross-book comparison.
+    odds_api_groups: str = (
+        "American Football,Basketball,Baseball,Ice Hockey,Soccer,Tennis,"
+        "Mixed Martial Arts,Boxing,Cricket,Rugby League,Rugby Union,"
+        "Aussie Rules,Golf,Lacrosse"
     )
+    # Guard on the discovery path. Each sport costs
+    # len(markets) * len(regions) credits per cycle, so an unbounded in-season
+    # list on a busy Saturday will empty a monthly quota in an afternoon.
+    odds_api_max_sports: int = 12
+    # The Odds API publishes prices, not books: there is no depth and no stake
+    # limit in the payload, so the capacity of a sportsbook leg is UNKNOWN
+    # rather than zero. The sizer refuses a leg with no capacity, which is the
+    # right rule -- so the assumption has to be stated explicitly here instead
+    # of arriving by accident as `size_available = 0`. This is the most one leg
+    # at a single book will be sized at; it is a risk limit you own, not a
+    # number the feed told us. Set it to 0 to disable sportsbook sizing.
+    sportsbook_assumed_stake_usd: float = 250.0
+
+    # Only surface opportunities that resolve soon.
+    #
+    # An arbitrage locks capital on both legs until settlement, so a 2% edge on
+    # a market resolving in nine months is a worse annualised return than a
+    # savings account, and it carries nine months of rule-change and
+    # account-closure risk on top (Part I s8.2). Short-dated sport is where the
+    # edge is actually collectable. Set to 0 to disable the window.
+    max_hours_to_start: float = 72.0
 
     # How much of each venue to pull per cycle.
     polymarket_page_limit: int = 100
@@ -136,6 +182,16 @@ class Settings(BaseSettings):
 
     # --------------------------------------------------------------- scanner
     poll_interval_seconds: int = 45
+
+    # How long a quote stays evidence.
+    #
+    # A price is a fact about the book at the instant its venue published it,
+    # and it decays from there. This is the horizon past which the engine will
+    # not assert an opportunity still holds -- it drives `expires_at` and so the
+    # countdown the operator sees. Ten minutes matches the STALE_QUOTE risk
+    # flag, so the point at which a quote is flagged as possibly-moved is the
+    # same point at which the opportunity built on it expires.
+    stale_quote_seconds: float = 600.0
     dedup_window_seconds: int = 300
     autostart_scanner: bool = True
     demo_mode: bool = False            # serve deterministic fixtures, no network
@@ -187,12 +243,28 @@ class Settings(BaseSettings):
         return v.strip()
 
     @property
+    def auth_required(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def binds_loopback(self) -> bool:
+        return self.host in ("127.0.0.1", "::1", "localhost")
+
+    @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def odds_api_sport_list(self) -> list[str]:
         return [s.strip() for s in self.odds_api_sports.split(",") if s.strip()]
+
+    @property
+    def odds_api_market_list(self) -> list[str]:
+        return [m.strip() for m in self.odds_api_markets.split(",") if m.strip()]
+
+    @property
+    def odds_api_group_set(self) -> set[str]:
+        return {g.strip() for g in self.odds_api_groups.split(",") if g.strip()}
 
     @property
     def telegram_enabled(self) -> bool:

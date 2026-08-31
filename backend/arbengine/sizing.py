@@ -45,10 +45,6 @@ class Fill:
     levels_cleared: int
     exhausted: bool           # the book ran out before the request was filled
 
-    @property
-    def slippage_vs(self) -> float:
-        return self.avg_price
-
 
 def walk_book(
     levels: Sequence[DepthLevel],
@@ -57,14 +53,22 @@ def walk_book(
 ) -> Fill:
     """Volume-weighted cost of spending `target_notional` against an ask stack.
 
-    `levels` must be sorted cheapest-first. When no depth is published the top
-    price is assumed to hold for the whole order -- optimistic, so the caller
-    marks such a result as thin liquidity rather than trusting it.
+    Levels are sorted cheapest-first here rather than assumed to arrive that
+    way. The docstring used to require it of the caller while `book_capacity`
+    directly below made no such assumption (it takes a `min`), and a source that
+    ever published its book in a different order would have produced a wrong
+    VWAP silently -- walking the stack from the most expensive end.
+
+    When no depth is published the top price is assumed to hold for the whole
+    order -- optimistic, so the caller marks such a result as thin liquidity
+    rather than trusting it.
     """
     if target_notional <= 0 or top_price <= 0:
         return Fill(max(top_price, om.MIN_PRICE), 0.0, 0.0, 0, False)
 
-    usable = [l for l in levels if l.price > 0 and l.size > 0]
+    usable = sorted(
+        (l for l in levels if l.price > 0 and l.size > 0), key=lambda l: l.price
+    )
     if not usable:
         return Fill(top_price, target_notional / top_price, target_notional, 0, True)
 
@@ -90,6 +94,14 @@ def walk_book(
     avg = spent / contracts if contracts > 0 else top_price
     return Fill(avg, contracts, spent, cleared, exhausted)
 
+
+#: Passes of the weight/fill fixed point in `size_arb`. Each pass is a
+#: contraction and the books involved are a handful of levels deep, so three is
+#: comfortably past convergence; the loop exits early on the tolerance below.
+_SIZING_REFINEMENTS = 4
+#: Convergence tolerance, as a fraction of the total stake. A tenth of a basis
+#: point of the trade is far below the rounding step the stakes land on anyway.
+_SIZING_TOLERANCE = 1e-5
 
 #: How far above the best price a fill may reach before the edge is gone.
 #: Arb margins live in the 0.5-3% band, so paying 2% more than top of book
@@ -237,15 +249,25 @@ def size_arb(
     weights = [om.decimal_to_prob(d) / b_top for d in top_odds]
 
     # --- Ceiling from order-book depth and venue limits ---------------------
+    #
+    # A leg with no capacity is not a leg that caps the trade at a small size --
+    # it is a leg that cannot be filled at all, and an arbitrage with an
+    # unfillable leg is not an arbitrage, it is an unhedged bet on the others.
+    # Skipping such a leg (as this loop used to) sized the whole set at the full
+    # target and reported the depth of the legs that DID have a book, so a
+    # sportsbook pair could come back as $500 staked against $9,700 of
+    # "available" depth with `depth_limited` false and no THIN_LIQUIDITY flag.
     depth_limited = False
     capacities: list[float] = []
-    for q, w in zip(quotes, weights):
+    for q, w in zip(quotes, weights, strict=True):
         capacity = book_capacity(q.depth, q.price, q.size_available)
         venue_cap = limits.get(q.venue)
         if venue_cap is not None:
             capacity = min(capacity, venue_cap)
         capacities.append(capacity)
-        if w <= 0 or capacity <= 0:
+        if capacity <= 0:
+            return None  # nothing fillable on this leg; the set is not sizeable
+        if w <= 0:
             continue
         leg_ceiling = capacity / w
         if leg_ceiling < target:
@@ -255,15 +277,41 @@ def size_arb(
     if target < settings.min_total_stake:
         return None
 
-    # --- Walk each book at the sized allocation -----------------------------
-    fills = [walk_book(q.depth, q.price, target * w) for q, w in zip(quotes, weights)]
+    # --- Walk each book at the sized allocation, to a fixed point -----------
+    #
+    # The weights and the fills define each other: the book is walked at
+    # `target * w`, and the resulting prices then produce a different `w`. Doing
+    # that once left the two inconsistent -- the leg was walked for one notional
+    # and priced, below, at a stake derived from another. On a steep book any
+    # leg whose stake grew was quoted a VWAP it could not be filled at, so
+    # `net_margin` and `worst_case_profit` came out optimistic on exactly the
+    # thin books where the guarantee is worth something.
+    #
+    # Iterating converges in two or three passes because each step is a
+    # contraction: a bigger stake buys a worse average price, which lowers the
+    # weight, which shrinks the stake.
+    def _price(fills_: Sequence[Fill], notionals: Sequence[float]) -> list[float]:
+        """Fee-adjusted decimal odds at the average price each leg realised."""
+        out: list[float] = []
+        for q, f, notional in zip(quotes, fills_, notionals, strict=True):
+            fees = fee_model_for(q.venue)
+            contracts = max(notional / f.avg_price, 1.0) if f.avg_price > 0 else 1.0
+            out.append(om.prob_to_decimal(fees.effective_price(f.avg_price, contracts)))
+        return out
 
-    # --- Re-price at realised average fill, including fees at that size -----
-    eff_odds: list[float] = []
-    for q, f, w in zip(quotes, fills, weights):
-        fees = fee_model_for(q.venue)
-        contracts = max((target * w) / f.avg_price, 1.0) if f.avg_price > 0 else 1.0
-        eff_odds.append(om.prob_to_decimal(fees.effective_price(f.avg_price, contracts)))
+    notionals = [target * w for w in weights]
+    fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals, strict=True)]
+    eff_odds = _price(fills, notionals)
+
+    for _ in range(_SIZING_REFINEMENTS):
+        next_notionals = om.equal_profit_stakes(eff_odds, target)
+        if max(
+            abs(a - b) for a, b in zip(next_notionals, notionals, strict=True)
+        ) <= _SIZING_TOLERANCE * max(target, 1.0):
+            break
+        notionals = next_notionals
+        fills = [walk_book(q.depth, q.price, n) for q, n in zip(quotes, notionals, strict=True)]
+        eff_odds = _price(fills, notionals)
 
     # For a payout multiple of k, the arb condition is sum(p_i) < k, so the
     # comparable book is B/k (Part I s5.1 generalised).
@@ -289,15 +337,20 @@ def size_arb(
 
     legs = tuple(
         _build_leg(q, s, f.avg_price, event_title)
-        for q, s, f in zip(quotes, rounded, fills)
+        for q, s, f in zip(quotes, rounded, fills, strict=True)
     )
 
     payout_if, worst = _state_payouts(legs, payout_multiple)
     theoretical = total * net_margin
     rounding_exposure = abs(worst - theoretical) > max(0.02, 0.05 * abs(theoretical))
 
+    # The binding leg sets the ceiling. `c > 0` used to filter here too, which
+    # dropped an unfillable leg out of the minimum and reported the capacity of
+    # whichever leg happened to have a book. Zero capacity is now rejected above,
+    # so every entry is real, but the filter stays off deliberately: if one is
+    # ever zero the ceiling should be zero, not the next leg up.
     max_available = min(
-        (c / w for c, w in zip(capacities, weights) if w > 0 and c > 0),
+        (c / w for c, w in zip(capacities, weights, strict=True) if w > 0),
         default=total,
     )
 
@@ -379,9 +432,13 @@ def size_correlation_trade(
     venue_cap = (venue_limits or {}).get(quote.venue)
     if venue_cap is not None:
         capacity = min(capacity, venue_cap)
-    depth_limited = capacity > 0 and target > capacity
-    if capacity > 0:
-        target = min(target, capacity)
+    # Same rule as `size_arb`: no capacity means nothing to fill against, not
+    # "no ceiling". Guarding the `min` on `capacity > 0` left the target
+    # uncapped in exactly the case where it should have been zero.
+    if capacity <= 0:
+        return None
+    depth_limited = target > capacity
+    target = min(target, capacity)
     target = om.round_down_to_step(target, settings.stake_step)
     if target < settings.min_stake_per_leg:
         return None
@@ -429,7 +486,7 @@ def resize(sized: SizedArb, new_total: float) -> SizedArb:
     rounded = [om.round_down_to_step(s, settings.stake_step) for s in stakes]
 
     legs: list[ArbLeg] = []
-    for leg, stake in zip(sized.legs, rounded):
+    for leg, stake in zip(sized.legs, rounded, strict=True):
         fees = fee_model_for(leg.venue)
         contracts = stake / leg.effective_price if leg.effective_price > 0 else 0.0
         legs.append(

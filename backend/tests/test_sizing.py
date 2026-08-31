@@ -181,6 +181,88 @@ class TestSizeArb:
         assert s.legs[0].price > 0.47  # filled above the quoted top of book
 
 
+class TestUnfillableLegs:
+    """A leg nobody can fill must sink the whole set.
+
+    The depth-capping loop used to `continue` past a zero-capacity leg, so it
+    neither capped the size nor stopped the trade. The set was then sized at the
+    full target and reported the depth of whichever leg DID have a book. This is
+    the shape every Odds API quote arrives in: `size_available=0.0`, no depth.
+    """
+
+    @staticmethod
+    def _dead(venue: str, name: str, price: float, side: Side = Side.YES) -> Quote:
+        """A quote with no published depth and no size -- nothing to fill."""
+        fees = fee_model_for(venue)
+        return Quote(
+            venue=venue,
+            market_id=f"{venue}:{name}",
+            ticker=name,
+            outcome=name,
+            side=side,
+            price=price,
+            effective_price=fees.effective_price(price, 1.0),
+            size_available=0.0,
+            depth=(),
+        )
+
+    def test_zero_capacity_leg_makes_the_set_unsizeable(self):
+        s = size_arb(
+            [q("polymarket", "Yes", 0.47), self._dead("polymarket", "No", 0.51, Side.NO)],
+            target_stake=500,
+        )
+        assert s is None
+
+    def test_every_leg_dead_is_also_unsizeable(self):
+        s = size_arb(
+            [self._dead("polymarket", "Yes", 0.47), self._dead("polymarket", "No", 0.51, Side.NO)],
+            target_stake=500,
+        )
+        assert s is None
+
+    def test_a_venue_limit_of_zero_stops_the_trade(self):
+        """An operator limit of zero is an instruction, not a suggestion."""
+        s = size_arb(
+            [q("polymarket", "Yes", 0.47), q("polymarket", "No", 0.51)],
+            target_stake=500,
+            venue_limits={"polymarket": 0.0},
+        )
+        assert s is None
+
+    def test_max_stake_available_is_set_by_the_thinnest_leg(self):
+        """The binding leg sets the ceiling, not the deepest one.
+
+        A shallow leg beside a very deep one must not have its capacity
+        overlooked in favour of the leg that happens to have a book.
+        """
+        deep = q("polymarket", "Yes", 0.47, size=900_000.0)
+        thin = q("polymarket", "No", 0.51, Side.NO, size=400.0)
+        s = size_arb([deep, thin], target_stake=1e9)
+        assert s is not None
+
+        thin_capacity = book_capacity(thin.depth, thin.price, thin.size_available)
+        deep_capacity = book_capacity(deep.depth, deep.price, deep.size_available)
+        assert thin_capacity < deep_capacity
+
+        # The ceiling is the thin leg's capacity divided by its share of the
+        # stake, so it can never imply more than the thin leg can absorb.
+        assert s.max_stake_available < deep_capacity
+        assert s.depth_limited
+
+    def test_correlation_trade_refuses_a_dead_quote(self):
+        quote = self._dead("kalshi", "Yes", 0.45)
+        assert size_correlation_trade(quote, "YES", fair_probability=0.65) is None
+
+    def test_correlation_trade_respects_a_zero_venue_limit(self):
+        quote = q("kalshi", "Yes", 0.45)
+        assert (
+            size_correlation_trade(
+                quote, "YES", fair_probability=0.65, venue_limits={"kalshi": 0.0}
+            )
+            is None
+        )
+
+
 class TestResize:
     def test_scaling_down_preserves_the_ratio(self):
         s = size_arb([q("polymarket", "Yes", 0.47), q("polymarket", "No", 0.51)], target_stake=400)
@@ -311,3 +393,116 @@ class TestCategoryClassification:
         from arbengine.normalise import classify_category
 
         assert classify_category("Super Bowl LXI winner", "Wibble") == "sports"
+
+
+class TestWalkBookOrdering:
+    """The stack is sorted here rather than assumed sorted.
+
+    The docstring required cheapest-first of its caller while `book_capacity`
+    right below made no such assumption. A feed that ever published its book the
+    other way round would have been walked from the expensive end, producing a
+    wrong volume-weighted price with nothing to show for it.
+    """
+
+    LEVELS = [
+        DepthLevel(price=0.50, size=100.0),
+        DepthLevel(price=0.46, size=100.0),
+        DepthLevel(price=0.48, size=100.0),
+    ]
+
+    def test_order_does_not_change_the_fill(self):
+        shuffled = walk_book(self.LEVELS, 0.46, 60.0)
+        ordered = walk_book(sorted(self.LEVELS, key=lambda l: l.price), 0.46, 60.0)
+        assert shuffled.avg_price == pytest.approx(ordered.avg_price)
+        assert shuffled.contracts == pytest.approx(ordered.contracts)
+
+    def test_the_cheapest_level_is_taken_first(self):
+        fill = walk_book(self.LEVELS, 0.46, 46.0)
+        assert fill.avg_price == pytest.approx(0.46)
+
+    def test_walking_deeper_raises_the_average(self):
+        shallow = walk_book(self.LEVELS, 0.46, 46.0)
+        deep = walk_book(self.LEVELS, 0.46, 140.0)
+        assert deep.avg_price > shallow.avg_price
+
+
+class TestFillsMatchTheStakesTheyPrice:
+    """A leg must be quoted the price its own stake actually clears.
+
+    The book was walked once at top-of-book weights, then the stakes were
+    reallocated at the post-slippage prices that walk produced -- a different
+    split -- and each leg was then priced at the VWAP of the notional it was
+    NOT given. The error is small in practice, because `book_capacity` only
+    counts depth within `MAX_PRICE_SLACK` of best and so keeps fills shallow,
+    but it is one-directional: a leg whose share grew is always quoted better
+    than it can be filled, so `worst_case_profit` overstates the guarantee.
+    """
+
+    @staticmethod
+    def _stepped(price: float, name: str) -> Quote:
+        """Thin top levels, so a few hundred dollars walks past the first.
+
+        All three levels sit inside `MAX_PRICE_SLACK` of the best price, or
+        `book_capacity` would cap the trade before any of them were reached and
+        there would be no slippage to converge on.
+        """
+        return q(
+            "polymarket",
+            name,
+            price,
+            levels=[
+                DepthLevel(price=price, size=120.0),
+                DepthLevel(price=round(price * 1.010, 4), size=120.0),
+                DepthLevel(price=round(price * 1.019, 4), size=40_000.0),
+            ],
+        )
+
+    def test_leg_price_is_the_vwap_of_that_leg_s_own_stake(self):
+        """The invariant the fixed point exists to hold.
+
+        Re-walking each book at the stake finally allocated to it must return
+        the price the leg was reported at.
+        """
+        quotes = [
+            self._stepped(0.45, "yes"),
+            q("polymarket", "no", 0.49, levels=[DepthLevel(price=0.49, size=40_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=2000.0)
+        assert sized is not None
+        for leg, quote in zip(sized.legs, quotes):
+            realised = walk_book(quote.depth, quote.price, leg.stake).avg_price
+            assert leg.price == pytest.approx(realised, abs=1e-6), (
+                f"{leg.outcome} priced at {leg.price} but fills at {realised}"
+            )
+
+    def test_worst_case_profit_is_not_above_what_the_book_delivers(self):
+        quotes = [
+            self._stepped(0.45, "yes"),
+            q("polymarket", "no", 0.49, levels=[DepthLevel(price=0.49, size=40_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=2000.0)
+        assert sized is not None
+
+        # One leg settles at $1 per contract, so the worst state pays out the
+        # smallest contract count across the legs.
+        contracts = []
+        for leg, quote in zip(sized.legs, quotes):
+            fill = walk_book(quote.depth, quote.price, leg.stake)
+            eff = fee_model_for(quote.venue).effective_price(
+                fill.avg_price, max(leg.contracts, 1.0)
+            )
+            contracts.append(leg.stake / eff if eff > 0 else 0.0)
+        assert sized.worst_case_profit <= min(contracts) - sized.total_stake + 0.005
+
+    def test_flat_book_is_unaffected(self):
+        """Control: with one deep level there is no slippage to converge on."""
+        quotes = [
+            q("polymarket", "yes", 0.47, levels=[DepthLevel(price=0.47, size=20_000.0)]),
+            q("polymarket", "no", 0.51, levels=[DepthLevel(price=0.51, size=20_000.0)]),
+        ]
+        sized = size_arb(quotes, target_stake=1500.0)
+        assert sized is not None
+        assert all(
+            leg.price == pytest.approx(quote.price)
+            for leg, quote in zip(sized.legs, quotes)
+        )

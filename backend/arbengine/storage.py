@@ -21,7 +21,7 @@ from typing import Any, Optional, Sequence
 
 from loguru import logger
 
-from .models import Arb, ArbKind, ScanStats
+from .models import Arb, ScanStats
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS arbs (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     arb_key           TEXT NOT NULL,
     kind              TEXT NOT NULL,
+    -- "arbitrage" locks a profit whatever happens; "directional" is a modelled
+    -- edge whose worst_case_profit is a LOSS. Summing the two together is what
+    -- made "profit available" negative on the dashboard.
+    strategy          TEXT NOT NULL DEFAULT 'arbitrage',
     title             TEXT NOT NULL,
     category          TEXT NOT NULL DEFAULT 'other',
     venues            TEXT NOT NULL,
@@ -152,6 +156,10 @@ class ArbStore:
         self._lock = threading.Lock()
         self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # SQLite ignores every REFERENCES clause in the schema unless foreign
+        # keys are switched on, and the setting is per connection rather than
+        # per database -- so the constraints below were decorative.
+        self.conn.execute("PRAGMA foreign_keys = ON")
         with self._lock:
             self.conn.executescript(SCHEMA)
             self._migrate()
@@ -177,6 +185,7 @@ class ArbStore:
             ("currency", "TEXT NOT NULL DEFAULT 'USD'"),
             ("settlement_type", "TEXT"),
             ("settled_at", "TEXT"),
+            ("strategy", "TEXT NOT NULL DEFAULT 'arbitrage'"),
         ):
             if column not in have:
                 self.conn.execute(f"ALTER TABLE arbs ADD COLUMN {column} {ddl}")
@@ -184,6 +193,20 @@ class ArbStore:
                 added = True
         if added:
             self._backfill_zones()
+            self._backfill_strategy()
+
+    def _backfill_strategy(self) -> None:
+        """Mark historical correlation rows as directional.
+
+        Rows written before the column defaulted to 'arbitrage', which would
+        put a directional position's maximum LOSS into every guaranteed-profit
+        total for as long as the retention window lasts.
+        """
+        n = self.conn.execute(
+            "UPDATE arbs SET strategy = 'directional' WHERE kind = 'correlation'"
+        ).rowcount
+        if n:
+            logger.info(f"storage: marked {n} historical rows as directional")
 
     def _backfill_zones(self) -> None:
         """Derive zone and currency for rows written before those columns.
@@ -223,65 +246,124 @@ class ArbStore:
             return [dict(r) for r in cur.fetchall()]
 
     def _exec(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run an INSERT and return the new row's id."""
         with self._lock:
             cur = self.conn.execute(sql, params)
             self.conn.commit()
             return int(cur.lastrowid or 0)
 
+    def _write(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run an UPDATE or DELETE and return the number of rows it touched.
+
+        `lastrowid` is only meaningful after an INSERT -- after a DELETE it
+        still holds whatever the connection's last insert set it to. `prune()`
+        returned that as a deletion count, so seven freshly written price rows
+        and a cutoff that matched none of them reported seven deletions.
+        """
+        with self._lock:
+            cur = self.conn.execute(sql, params)
+            self.conn.commit()
+            return int(cur.rowcount or 0)
+
     # ------------------------------------------------------------------ arbs
 
     def upsert_arb(self, arb: Arb) -> int:
-        """Insert a new arb, or refresh `last_seen` if it is the same opportunity.
+        """Insert a new arb, or refresh the existing row for the same opportunity.
 
         Deduping on the leg signature means a price that persists across cycles
         is one row with a moving `last_seen`, not a thousand near-duplicates.
+
+        The whole thing runs inside one transaction, under one acquisition of
+        the lock. It used to SELECT through `_rows` and then INSERT through
+        `_exec`, each taking the lock separately -- and the store is driven from
+        `asyncio.to_thread`, so two workers could both see "no existing row" and
+        both insert.
+
+        The UPDATE branch refreshes the full payload, not just `last_seen`,
+        `net_margin` and `confidence`. Leaving `legs_json`, `total_stake`,
+        `profit` and `book` at their first-seen values meant a placement
+        recorded against a long-lived opportunity was attached to stale legs.
         """
         key = arb.dedupe_key()
-        existing = self._rows(
-            "SELECT id FROM arbs WHERE arb_key = ? ORDER BY id DESC LIMIT 1", (key,)
-        )
-        if existing:
-            arb_id = int(existing[0]["id"])
-            self._exec(
-                "UPDATE arbs SET last_seen = ?, net_margin = ?, confidence = ? WHERE id = ?",
-                (_iso(arb.last_seen), arb.net_margin, arb.confidence, arb_id),
-            )
-            return arb_id
+        legs_json = json.dumps([l.model_dump(mode="json") for l in arb.legs])
+        flags_json = json.dumps([f.value for f in arb.flags])
+        venues_json = json.dumps(list(arb.venues))
 
-        legs = [l.model_dump(mode="json") for l in arb.legs]
-        return self._exec(
-            """INSERT INTO arbs
-               (arb_key, kind, title, category, venues, zone, currency,
-                market_key, detected_at,
-                last_seen, close_time, book, margin, net_margin, total_stake,
-                profit, worst_case_profit, max_stake, confidence, flags,
-                legs_json, payload_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                key,
-                arb.kind.value,
-                arb.title,
-                arb.category,
-                json.dumps(list(arb.venues)),
-                arb.zone,
-                arb.currency,
-                arb.market_key,
-                _iso(arb.detected_at),
-                _iso(arb.last_seen),
-                _iso(arb.close_time),
-                arb.book,
-                arb.margin,
-                arb.net_margin,
-                arb.total_stake,
-                arb.profit,
-                arb.worst_case_profit,
-                arb.max_stake_available,
-                arb.confidence,
-                json.dumps([f.value for f in arb.flags]),
-                json.dumps(legs),
-                arb.model_dump_json(),
-            ),
-        )
+        with self._lock:
+            try:
+                cur = self.conn.execute("BEGIN IMMEDIATE")
+                row = self.conn.execute(
+                    "SELECT id FROM arbs WHERE arb_key = ? ORDER BY id DESC LIMIT 1",
+                    (key,),
+                ).fetchone()
+
+                if row is not None:
+                    arb_id = int(row["id"])
+                    self.conn.execute(
+                        """UPDATE arbs SET
+                               last_seen = ?, net_margin = ?, confidence = ?,
+                               margin = ?, book = ?, total_stake = ?, profit = ?,
+                               worst_case_profit = ?, max_stake = ?,
+                               flags = ?, legs_json = ?, payload_json = ?
+                           WHERE id = ?""",
+                        (
+                            _iso(arb.last_seen),
+                            arb.net_margin,
+                            arb.confidence,
+                            arb.margin,
+                            arb.book,
+                            arb.total_stake,
+                            arb.profit,
+                            arb.worst_case_profit,
+                            arb.max_stake_available,
+                            flags_json,
+                            legs_json,
+                            arb.model_dump_json(),
+                            arb_id,
+                        ),
+                    )
+                    self.conn.commit()
+                    return arb_id
+
+                cur = self.conn.execute(
+                    """INSERT INTO arbs
+                       (arb_key, kind, strategy, title, category, venues, zone,
+                        currency, market_key, detected_at,
+                        last_seen, close_time, book, margin, net_margin,
+                        total_stake, profit, worst_case_profit, max_stake,
+                        confidence, flags, legs_json, payload_json)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        key,
+                        arb.kind.value,
+                        arb.strategy,
+                        arb.title,
+                        arb.category,
+                        venues_json,
+                        arb.zone,
+                        arb.currency,
+                        arb.market_key,
+                        _iso(arb.detected_at),
+                        _iso(arb.last_seen),
+                        _iso(arb.close_time),
+                        arb.book,
+                        arb.margin,
+                        arb.net_margin,
+                        arb.total_stake,
+                        arb.profit,
+                        arb.worst_case_profit,
+                        arb.max_stake_available,
+                        arb.confidence,
+                        flags_json,
+                        legs_json,
+                        arb.model_dump_json(),
+                    ),
+                )
+                self.conn.commit()
+                return int(cur.lastrowid or 0)
+            except Exception:
+                self.conn.rollback()
+                raise
 
     def recent_arbs(
         self,
@@ -307,7 +389,7 @@ class ArbStore:
         return rows[0] if rows else None
 
     def mark_placed(self, arb_id: int, placed: bool = True) -> None:
-        self._exec("UPDATE arbs SET placed = ? WHERE id = ?", (1 if placed else 0, arb_id))
+        self._write("UPDATE arbs SET placed = ? WHERE id = ?", (1 if placed else 0, arb_id))
 
     def settle(
         self,
@@ -317,7 +399,7 @@ class ArbStore:
         settled_at: Optional[datetime] = None,
     ) -> None:
         dt = (settled_at or datetime.now(timezone.utc)).isoformat()
-        self._exec(
+        self._write(
             "UPDATE arbs SET settled = 1, realised_pnl = ?, settlement_type = ?, settled_at = ? WHERE id = ?",
             (realised_pnl, settlement_type, dt, arb_id),
         )
@@ -514,7 +596,7 @@ class ArbStore:
         )
 
     def delete_correlation_outcome(self, outcome_id: int) -> None:
-        self._exec("DELETE FROM correlation_outcomes WHERE id = ?", (outcome_id,))
+        self._write("DELETE FROM correlation_outcomes WHERE id = ?", (outcome_id,))
 
     # ------------------------------------------------------------- analytics
 
@@ -601,17 +683,28 @@ class ArbStore:
         ]
 
     def prune(self, days: int) -> int:
+        """Drop history past the retention window; returns rows actually removed.
+
+        Placements are deleted alongside the arbs they belong to. SQLite does
+        not enforce the REFERENCES clause unless foreign keys are switched on
+        per connection, so deleting an arb used to leave its placement rows
+        pointing at nothing.
+        """
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        removed = self._exec("DELETE FROM price_history WHERE recorded_at < ?", (cutoff,))
-        self._exec("DELETE FROM scans WHERE started_at < ?", (cutoff,))
-        self._exec(
+        removed = self._write(
+            "DELETE FROM price_history WHERE recorded_at < ?", (cutoff,)
+        )
+        removed += self._write("DELETE FROM scans WHERE started_at < ?", (cutoff,))
+        removed += self._write(
+            """DELETE FROM placements WHERE arb_id IN (
+                   SELECT id FROM arbs WHERE detected_at < ? AND placed = 0
+               )""",
+            (cutoff,),
+        )
+        removed += self._write(
             "DELETE FROM arbs WHERE detected_at < ? AND placed = 0", (cutoff,)
         )
         return removed
-
-    def close(self) -> None:
-        with self._lock:
-            self.conn.close()
 
 
 class AsyncArbStore:

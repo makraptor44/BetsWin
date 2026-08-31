@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { ZoneChip } from "@/components/ui";
 import { VENUE_LABEL, agoLabel, bps, duration } from "@/lib/format";
 import type { EngineStatus, ZoneKey } from "@/lib/types";
@@ -19,9 +20,9 @@ interface EngineLike {
 const CONNECTION = {
   live: { label: "Live", color: "var(--positive)", pulse: true },
   polling: { label: "Polling", color: "var(--caution)", pulse: false },
-  connecting: { label: "Connecting", color: "var(--text-faint)", pulse: true },
+  connecting: { label: "Connecting", color: "var(--faint)", pulse: true },
   offline: { label: "Offline", color: "var(--danger)", pulse: false },
-  snapshot: { label: "Snapshot", color: "var(--accent)", pulse: false },
+  snapshot: { label: "Snapshot", color: "var(--brand)", pulse: false },
 } as const;
 
 /**
@@ -50,16 +51,28 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
 
   return (
     <div className="flex flex-col gap-2.5">
+      {/* A scan in flight gets a hairline across the top of the content. The
+          engine cannot report progress -- it does not know how many venues will
+          answer -- so an indeterminate bar is the only honest shape, and it is
+          two pixels rather than a spinner because a scan is background work,
+          not a modal wait. */}
+      {engine.scanning && (
+        <div
+          className="indeterminate relative h-0.5 overflow-hidden rounded-full bg-brand-soft"
+          role="progressbar"
+          aria-label="Scanning venues"
+        />
+      )}
+
       {engine.isStaticDemo && (
         <div
-          className="card p-3 flex items-start gap-2.5"
-          style={{ borderColor: "var(--accent)", background: "var(--accent-soft)" }}
+          className="enter flex items-start gap-2.5 rounded-lg border border-brand bg-brand-soft p-3 shadow-sm"
         >
-          <span style={{ color: "var(--accent-text)" }} aria-hidden>
+          <span className="text-brand" aria-hidden>
             ●
           </span>
-          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-            <strong style={{ color: "var(--accent-text)" }}>
+          <div className="text-xs text-muted-foreground">
+            <strong className="text-brand">
               Static demo.
             </strong>{" "}
             These opportunities are a fixed snapshot captured from the real
@@ -67,10 +80,10 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
             scoring all ran for real, but nothing is updating live and no venue
             is being polled. The calculators are fully interactive.{" "}
             <a
+              className="text-brand"
               href="https://github.com/makraptor44/BetsWin"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "var(--accent-text)" }}
             >
               Clone the repo
             </a>{" "}
@@ -80,18 +93,17 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
       )}
       {s?.breaker_tripped && (
         <div
-          className="card p-3 flex items-start gap-2.5"
-          style={{ borderColor: "var(--danger)", background: "var(--danger-soft)" }}
+          className="enter flex items-start gap-2.5 rounded-lg border border-danger bg-danger-soft p-3 shadow-sm"
           role="alert"
         >
-          <span style={{ color: "var(--danger)" }} aria-hidden>
+          <span className="text-danger" aria-hidden>
             ⚡
           </span>
           <div className="text-xs">
-            <strong style={{ color: "var(--danger)" }}>
+            <strong className="text-danger">
               Circuit breaker tripped.
             </strong>{" "}
-            <span style={{ color: "var(--text-muted)" }}>
+            <span className="text-muted-foreground">
               {s.breaker_reason ??
                 "An implausible burst of opportunities was detected; scanning has halted."}
             </span>
@@ -99,31 +111,33 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
         </div>
       )}
 
-      <div className="card px-3.5 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="rounded-lg border border-border bg-card shadow-sm px-3.5 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
         <span className="flex items-center gap-1.5 text-xs font-medium">
           <span
-            className={`rounded-full ${conn.pulse ? "pulse-dot" : ""}`}
-            style={{ width: 7, height: 7, background: conn.color }}
+            className={`size-[7px] rounded-full ${
+              conn.pulse ? "animate-pulse" : ""
+            }`}
+            style={{ background: conn.color }}
             aria-hidden
           />
           {conn.label}
         </span>
 
         {s?.demo_mode && (
-          <span className="chip chip-caution" title="Serving deterministic fixtures, no network">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-caution-soft text-caution" title="Serving deterministic fixtures, no network">
             Demo data
           </span>
         )}
 
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="text-xs text-muted-foreground">
           Scanner{" "}
-          <strong style={{ color: s?.running ? "var(--positive)" : "var(--text-faint)" }}>
+          <strong className={s?.running ? "text-positive" : "text-faint"}>
             {s?.running ? "running" : "stopped"}
           </strong>
           {s?.running && nextIn !== null && (
             <>
               {" · next in "}
-              <span className="mono">{Math.ceil(nextIn)}s</span>
+              <span className="tabular">{Math.ceil(nextIn)}s</span>
             </>
           )}
         </span>
@@ -133,8 +147,7 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
             {Object.entries(s.sources).map(([name, healthy]) => (
               <span
                 key={name}
-                className="flex items-center gap-1"
-                style={{ color: "var(--text-muted)" }}
+                className="flex items-center gap-1 text-muted-foreground"
                 title={healthy ? "Reachable" : "Last fetch failed"}
               >
                 <span
@@ -167,8 +180,7 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
         */}
         {scan && (
           <span
-            className="text-xs mono hidden md:inline"
-            style={{ color: "var(--text-faint)" }}
+            className="text-xs tabular hidden md:inline text-faint"
             title="Events read on the last cycle, and how far the tightest book was from crossing"
           >
             {scan.events_scanned.toLocaleString()} events
@@ -179,35 +191,30 @@ export function StatusBar({ engine }: { engine: EngineLike }) {
         )}
 
         {scan && (
-          <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+          <span className="text-xs text-faint">
             {agoLabel(scan.started_at)}
           </span>
         )}
 
         {s && s.uptime_seconds > 0 && (
-          <span className="text-xs hidden lg:inline" style={{ color: "var(--text-faint)" }}>
+          <span className="text-xs hidden lg:inline text-faint">
             Up {duration(s.uptime_seconds)} · {s.total_detected} found
           </span>
         )}
 
         {engine.isStaticDemo ? (
           <a
-            className="btn btn-sm ml-auto"
+            className="btn btn-sm ml-auto no-underline"
             href="https://github.com/makraptor44/BetsWin"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ textDecoration: "none" }}
           >
             View source ↗
           </a>
         ) : (
-          <button
-            className="btn btn-sm ml-auto"
-            onClick={() => void engine.scanNow()}
-            disabled={engine.scanning}
-          >
+          <Button size="sm" variant="outline" className="ml-auto" onClick={() => void engine.scanNow()} disabled={engine.scanning} >
             {engine.scanning ? "Scanning…" : "Scan now"}
-          </button>
+          </Button>
         )}
       </div>
     </div>

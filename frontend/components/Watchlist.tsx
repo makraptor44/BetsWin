@@ -2,16 +2,25 @@
 
 import { useMemo } from "react";
 
+import { Countdown } from "@/components/Countdown";
 import { Card, EmptyState, SectionTitle, VenueChip, ZoneChip } from "@/components/ui";
 import {
   KIND_LABEL,
   bps,
   compactNum,
-  untilLabel,
   usdCompact,
 } from "@/lib/format";
 import type { ActivityEntry } from "@/lib/useEngine";
 import type { NearMiss } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 /**
  * The near-miss watchlist.
@@ -50,8 +59,8 @@ export function Watchlist({
           action={
             tightest !== null ? (
               <div className="text-right">
-                <div className="label">Tightest</div>
-                <div className="mono text-sm font-semibold">{bps(tightest)}</div>
+                <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Tightest</div>
+                <div className="tabular text-sm font-semibold">{bps(tightest)}</div>
               </div>
             ) : undefined
           }
@@ -66,25 +75,25 @@ export function Watchlist({
         />
       ) : (
         <div className="scroll-x">
-          <table className="data mt-2">
-            <thead>
-              <tr>
-                <th>Market</th>
-                <th>Structure</th>
-                <th>Venue</th>
-                <th style={{ textAlign: "right" }}>Gap to cross</th>
-                <th style={{ textAlign: "right" }}>Cost of fees</th>
-                <th style={{ textAlign: "right" }}>Book</th>
-                <th style={{ textAlign: "right" }}>Liquidity</th>
-                <th style={{ textAlign: "right" }}>Closes</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full border-collapse text-[13px] mt-2">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Market</TableHead>
+                <TableHead>Structure</TableHead>
+                <TableHead>Venue</TableHead>
+                <TableHead className="text-right">Gap to cross</TableHead>
+                <TableHead className="text-right">Cost of fees</TableHead>
+                <TableHead className="text-right">Book</TableHead>
+                <TableHead className="text-right">Liquidity</TableHead>
+                <TableHead className="text-right">Closes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rows.map((n) => (
                 <WatchRow key={n.id} row={n} />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </Card>
@@ -99,9 +108,9 @@ function WatchRow({ row }: { row: NearMiss }) {
   const feeKilled = row.gap_bps_gross < 0 && row.gap_bps >= 0;
 
   return (
-    <tr>
-      <td>
-        <div className="truncate" style={{ maxWidth: 380 }} title={row.title}>
+    <TableRow>
+      <TableCell>
+        <div className="truncate max-w-[380px]" title={row.title}>
           {row.url ? (
             <a href={row.url} target="_blank" rel="noopener noreferrer">
               {row.title}
@@ -110,34 +119,36 @@ function WatchRow({ row }: { row: NearMiss }) {
             row.title
           )}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: "var(--text-faint)" }}>
+        <div className="text-xs mt-0.5 text-faint">
           best leg {row.best_outcome} · {row.outcomes} outcomes
         </div>
-      </td>
-      <td>
-        <span className="chip">{KIND_LABEL[row.kind]}</span>
-      </td>
-      <td>
+      </TableCell>
+      <TableCell>
+        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">{KIND_LABEL[row.kind]}</span>
+      </TableCell>
+      <TableCell>
         <div className="flex items-center gap-1.5 flex-wrap">
           <VenueChip venue={row.venue} />
           <ZoneChip zone={row.zone} short />
         </div>
-      </td>
-      <td className="mono" style={{ textAlign: "right" }}>{bps(row.gap_bps)}</td>
-      <td className="mono" style={{ textAlign: "right", color: feeKilled ? "var(--caution)" : undefined }}>
+      </TableCell>
+      <TableCell className="tabular text-right">{bps(row.gap_bps)}</TableCell>
+      <TableCell className={cn("tabular text-right", feeKilled && "text-caution")}>
         {feeCost > 0.5 ? bps(feeCost) : "—"}
         {feeKilled && (
-          <div className="text-xs" style={{ color: "var(--caution)" }}>
+          <div className="text-xs text-caution">
             crossed before fees
           </div>
         )}
-      </td>
-      <td className="mono" style={{ textAlign: "right" }}>{row.book.toFixed(4)}</td>
-      <td className="mono" style={{ textAlign: "right" }}>
+      </TableCell>
+      <TableCell className="tabular text-right">{row.book.toFixed(4)}</TableCell>
+      <TableCell className="tabular text-right">
         {row.liquidity_usd > 0 ? usdCompact(row.liquidity_usd) : "—"}
-      </td>
-      <td className="mono" style={{ textAlign: "right" }}>{untilLabel(row.close_time)}</td>
-    </tr>
+      </TableCell>
+      <TableCell className="text-right">
+        <Countdown iso={row.close_time} />
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -172,10 +183,10 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
 
       {entries.length === 0 ? (
         <div className="px-3.5 pb-4">
-          <div className="skeleton" style={{ height: 28 }} />
+          <div className="animate-pulse rounded-md bg-muted h-[28px]" />
         </div>
       ) : (
-        <ol className="px-3.5 pb-3" style={{ listStyle: "none", margin: 0 }}>
+        <ol className="px-3.5 pb-3 list-none m-0">
           {entries.slice(0, 12).map((e, i) => (
             <li
               key={`${e.at}-${i}`}
@@ -186,8 +197,7 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
               }}
             >
               <span
-                className="mono shrink-0"
-                style={{ color: "var(--text-faint)", width: 62 }}
+                className="tabular shrink-0 text-faint w-[62px]"
               >
                 {new Date(e.at).toLocaleTimeString([], {
                   hour: "2-digit",
@@ -195,26 +205,26 @@ export function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
                   second: "2-digit",
                 })}
               </span>
-              <span className="mono shrink-0" style={{ width: 76 }}>
+              <span className="tabular shrink-0 w-[76px]">
                 {compactNum(e.events)} events
               </span>
               <span
-                className="mono shrink-0"
+                className="tabular shrink-0"
                 style={{
                   width: 74,
-                  color: e.newArbs > 0 ? "var(--positive)" : "var(--text-muted)",
+                  color: e.newArbs > 0 ? "var(--positive)" : "var(--muted-foreground)",
                 }}
               >
                 {e.newArbs > 0 ? `${e.newArbs} new arb${e.newArbs > 1 ? "s" : ""}` : "0 new"}
               </span>
-              <span className="mono shrink-0" style={{ color: "var(--text-muted)", width: 96 }}>
+              <span className="tabular shrink-0 text-muted-foreground w-[96px]">
                 {e.tightestGapBps != null ? `${bps(e.tightestGapBps)} closest` : "—"}
               </span>
-              <span className="mono" style={{ color: "var(--text-faint)" }}>
+              <span className="tabular text-faint">
                 {(e.durationSeconds ?? 0).toFixed(1)}s
               </span>
               {e.errors > 0 && (
-                <span className="chip chip-caution ml-auto">
+                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-caution-soft text-caution ml-auto">
                   {e.errors} feed error{e.errors > 1 ? "s" : ""}
                 </span>
               )}

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Iterable, Optional
 
 from rapidfuzz import fuzz
@@ -98,6 +99,36 @@ _BELOW_WORDS = re.compile(
 )
 
 
+def _alias_pattern(alias: str, full: str) -> re.Pattern[str]:
+    """Match `alias` only where it has not already been expanded.
+
+    Several aliases are prefixes of their own expansion -- "inter" -> "inter
+    milan", "bayern" -> "bayern munich". A plain substitution fires on text that
+    already reads "inter milan" and doubles the tail:
+
+        "Inter Milan to win Serie A"  ->  "inter milan milan serie"
+        "Bayern Munich to win"        ->  "bayern munich munich"
+
+    which wrecks the fuzzy score on exactly the titles the alias exists to help.
+    A negative lookahead for the remainder makes the rewrite idempotent.
+    """
+    body = rf"\b{re.escape(alias)}\b"
+    if full.startswith(alias + " "):
+        remainder = re.escape(full[len(alias) + 1 :])
+        body += rf"(?!\s+{remainder}\b)"
+    return re.compile(body)
+
+
+#: Compiled once, in declaration order -- longest alias first so "man united"
+#: is consumed before "us" could touch anything inside it.
+_ALIAS_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (_alias_pattern(alias, full), full)
+    for alias, full in sorted(
+        _TEAM_ALIASES.items(), key=lambda kv: len(kv[0]), reverse=True
+    )
+]
+
+
 def _normalise_numbers(text: str) -> str:
     """Rewrite every number into one canonical spelling.
 
@@ -119,6 +150,19 @@ def _normalise_numbers(text: str) -> str:
     return _NUM_RE.sub(_expand, t)
 
 
+#: Every one of these is a pure function of a title, and `detect_cross_venue`
+#: compares every event on one venue against every event on another -- so each
+#: title is re-parsed once per candidate PAIR rather than once per event, which
+#: is the difference between O(n + m) and O(n * m) regex passes over the same
+#: strings. A snapshot is a few thousand distinct titles, so the cache holds a
+#: whole scan and is bounded well below that ceiling.
+#:
+#: They return frozensets because a cached mutable set is shared by every
+#: caller, and one caller mutating it would corrupt the others.
+_TITLE_CACHE = 8192
+
+
+@lru_cache(maxsize=_TITLE_CACHE)
 def canonical_text(text: str) -> str:
     """Lowercase, normalise numbers and dates, expand aliases, drop filler."""
     t = (text or "").lower().strip()
@@ -128,13 +172,14 @@ def canonical_text(text: str) -> str:
     t = _MONTH_RE.sub(lambda m: m.group(1)[:3].lower(), t)
     t = re.sub(r"[^\w\s.$%-]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
-    for alias, full in _TEAM_ALIASES.items():
-        t = re.sub(rf"\b{re.escape(alias)}\b", full, t)
+    for pattern, full in _ALIAS_PATTERNS:
+        t = pattern.sub(full, t)
     words = [w for w in t.split() if w not in _STOPWORDS]
     return " ".join(words)
 
 
-def extract_numbers(text: str) -> set[float]:
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_numbers(text: str) -> frozenset[float]:
     """Pull thresholds out of a title, expanding k/m/b suffixes.
 
     Calendar fragments are stripped first so the "31" in "Dec 31" is never
@@ -153,25 +198,28 @@ def extract_numbers(text: str) -> set[float]:
         if 2000 <= value <= 2100 and float(value).is_integer():
             continue
         out.add(round(value, 4))
-    return out
+    return frozenset(out)
 
 
-def extract_years(text: str) -> set[int]:
-    return {int(y) for y in _YEAR_RE.findall(text or "")}
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_years(text: str) -> frozenset[int]:
+    return frozenset(int(y) for y in _YEAR_RE.findall(text or ""))
 
 
-def extract_months(text: str) -> set[int]:
-    return {_MONTHS[m.lower()] for m in _MONTH_RE.findall(text or "")}
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_months(text: str) -> frozenset[int]:
+    return frozenset(_MONTHS[m.lower()] for m in _MONTH_RE.findall(text or ""))
 
 
-def extract_direction(text: str) -> set[str]:
+@lru_cache(maxsize=_TITLE_CACHE)
+def extract_direction(text: str) -> frozenset[str]:
     """Which way the question points, if it says."""
     out: set[str] = set()
     if _ABOVE_WORDS.search(text or ""):
         out.add("above")
     if _BELOW_WORDS.search(text or ""):
         out.add("below")
-    return out
+    return frozenset(out)
 
 
 @dataclass(frozen=True)
@@ -309,7 +357,42 @@ _CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
                "sanction", "hostage", "peace", "pope", "coup", "strike")),
 ]
 
-_KNOWN_CATEGORIES = {c for c, _ in _CATEGORY_KEYWORDS} | {"other"}
+#: Ordered, not a set. The hint scan below walks this looking for a substring,
+#: and iterating a set made the answer depend on hash ordering whenever a hint
+#: contained more than one category name.
+_CATEGORY_NAMES: tuple[str, ...] = tuple(c for c, _ in _CATEGORY_KEYWORDS) + ("other",)
+_KNOWN_CATEGORIES = frozenset(_CATEGORY_NAMES)
+
+#: Keywords compiled to word-boundary patterns, once, at import.
+#:
+#: These used to be tested with a bare `k in text` substring check, which is
+#: wrong in a way that is easy to miss and hard to spot in the output:
+#:
+#:     "Whether the Fed cuts rates"            -> crypto  ("eth" in "Whether")
+#:     "Will it rain in Chicago on Dec 31?"    -> tech     ("ai" in "rain")
+#:     "Will Ukraine and Russia sign a treaty" -> tech     ("ai" in "Ukraine")
+#:
+#: Multi-word keywords keep their internal spacing; the word boundaries handle
+#: the rest. Longest first, so "super bowl" is tried before "bowl".
+#:
+#: A trailing `s?` keeps plurals working. Word boundaries are stricter than the
+#: substring test they replace, and without this "Oscars" would stop matching
+#: "oscar" -- trading one class of wrong answer for another. Keywords are
+#: stripped first: a couple carry padding ("un ") that only existed to fake a
+#: word boundary the old substring test could not express.
+_CATEGORY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        category,
+        re.compile(
+            "|".join(
+                rf"\b{re.escape(k.strip())}s?\b"
+                for k in sorted(keywords, key=len, reverse=True)
+            ),
+            re.IGNORECASE,
+        ),
+    )
+    for category, keywords in _CATEGORY_KEYWORDS
+]
 
 
 def classify_category(title: str, hint: str | None = None) -> str:
@@ -318,17 +401,21 @@ def classify_category(title: str, hint: str | None = None) -> str:
     A venue-supplied `hint` wins when it is already one of the known values;
     otherwise the title decides. Order matters -- "Bitcoin ETF approval" is
     crypto rather than economics, so crypto is tested first.
+
+    Keywords match on word boundaries. A substring test conflates "eth" with
+    "Whether" and "ai" with "rain", which silently mis-files a large share of
+    the tape and breaks every category filter downstream.
     """
     if hint:
         h = hint.strip().lower().replace(" and ", "_").replace(" ", "_")
         if h in _KNOWN_CATEGORIES:
             return h
-        for known in _KNOWN_CATEGORIES:
+        for known in _CATEGORY_NAMES:
             if known in h:
                 return known
 
-    text = f" {(title or '').lower()} "
-    for category, keywords in _CATEGORY_KEYWORDS:
-        if any(k in text for k in keywords):
+    text = title or ""
+    for category, pattern in _CATEGORY_PATTERNS:
+        if pattern.search(text):
             return category
     return "other"

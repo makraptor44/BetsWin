@@ -14,15 +14,25 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import secrets
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import Body, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Body,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import correlation_arb as ca
 from . import odds as om
@@ -32,13 +42,11 @@ from .correlation_detector import evaluate_pair
 from .fees import configure_from_settings, fee_model_for
 from .models import Arb, ArbKind, EngineStatus, Event
 from .scanner import Scanner
-from .sizing import resize, size_arb
 from .venues import (
     Zone,
     all_venues,
     can_pair,
     describe,
-    venue as venue_info,
     zone_of,
     zones_available_from,
 )
@@ -48,13 +56,21 @@ configure_from_settings(settings)
 scanner: Optional[Scanner] = None
 
 
+#: Strong references to background tasks. asyncio only holds a weak reference
+#: to a running task, so one with no other referent can be collected mid-flight.
+_background: set[asyncio.Task] = set()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global scanner
+    _assert_safe_binding()
     scanner = Scanner()
     if settings.autostart_scanner:
         # Run one cycle immediately so the dashboard is populated on first load.
-        asyncio.create_task(_bootstrap(scanner))
+        task = asyncio.create_task(_bootstrap(scanner))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
     logger.info(f"api ready on {settings.host}:{settings.port} (demo={settings.demo_mode})")
     try:
         yield
@@ -93,6 +109,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_api_key(x_api_key: str = Header(default="")) -> None:
+    """Gate for every endpoint that changes something.
+
+    Nothing here was authenticated: anyone who could reach the port could
+    rewrite the bankroll and every risk threshold through PATCH /api/config,
+    stop the scanner, place bets and settle positions.
+
+    A blank `api_key` leaves the gate open, which is only safe because binding
+    to anything other than loopback without one is refused at startup. Reads
+    stay open either way -- they expose prices the venues publish anyway.
+    """
+    if not settings.auth_required:
+        return
+    expected = settings.api_key
+    supplied = x_api_key or ""
+    # Constant-time: the comparison is on a secret.
+    if not secrets.compare_digest(supplied, expected):
+        raise HTTPException(401, "missing or invalid X-API-Key")
+
+
+def _assert_safe_binding() -> None:
+    """Refuse to serve a mutable, unauthenticated API to the network."""
+    if settings.auth_required or settings.binds_loopback:
+        return
+    raise RuntimeError(
+        f"refusing to bind {settings.host} without an API_KEY: the config, "
+        "scanner-control and placement endpoints change state and would be "
+        "reachable by anyone on the network. Set API_KEY, or bind 127.0.0.1."
+    )
 
 
 def _engine() -> Scanner:
@@ -172,18 +219,46 @@ class ConfigPatch(BaseModel):
     near_miss_slack: Optional[float] = Field(None, ge=0, le=0.25)
 
 
-@app.patch("/api/config", tags=["system"])
+@app.patch("/api/config", tags=["system"], dependencies=[Depends(require_api_key)])
 async def patch_config(patch: ConfigPatch) -> dict[str, Any]:
-    """Live-tune thresholds. Applies to the next scan cycle."""
-    changed: dict[str, Any] = {}
-    for key, value in patch.model_dump(exclude_none=True).items():
-        if key == "operator_jurisdiction":
-            value = str(value).strip().upper()
+    """Live-tune thresholds. Applies to the next scan cycle.
+
+    Fields are validated against each other, not just individually. Every bound
+    here is legal on its own, but a min above a max is a detector that silently
+    returns nothing for ever -- indistinguishable from a broken feed.
+    """
+    updates = patch.model_dump(exclude_none=True)
+    if "operator_jurisdiction" in updates:
+        updates["operator_jurisdiction"] = str(
+            updates["operator_jurisdiction"]
+        ).strip().upper()
+
+    lo = updates.get("min_arb_margin", settings.min_arb_margin)
+    hi = updates.get("max_arb_margin", settings.max_arb_margin)
+    if lo > hi:
+        raise HTTPException(
+            400,
+            f"min_arb_margin ({lo}) cannot exceed max_arb_margin ({hi}): "
+            "no margin could satisfy both and the detector would return "
+            "nothing at all.",
+        )
+
+    suspect = updates.get("suspect_margin", settings.suspect_margin)
+    if suspect > hi:
+        raise HTTPException(
+            400,
+            f"suspect_margin ({suspect}) is above max_arb_margin ({hi}), so "
+            "nothing could ever be flagged as suspect -- it would be dropped "
+            "before it got that far.",
+        )
+
+    # Apply only once every check has passed: a half-applied config is worse
+    # than a rejected one.
+    for key, value in updates.items():
         setattr(settings, key, value)
-        changed[key] = value
-    if changed:
-        logger.info(f"config updated: {changed}")
-    return {"updated": changed, "config": await get_config()}
+    if updates:
+        logger.info(f"config updated: {updates}")
+    return {"updated": updates, "config": await get_config()}
 
 
 # --------------------------------------------------------------------- arbs
@@ -242,6 +317,24 @@ async def list_arbs(
 # --------------------------------------------------------- execution zones
 
 
+@app.get("/api/providers", tags=["system"])
+async def providers() -> dict[str, Any]:
+    """Health and telemetry for every configured data provider.
+
+    A read endpoint: it exposes latency and error counts the venues publish
+    about themselves, nothing an operator owns. `last_error` has already been
+    redacted at the source layer, so a credential passed in a query string
+    cannot surface here.
+    """
+    eng = _engine()
+    rows = eng.provider_health()
+    return {
+        "providers": rows,
+        "online": sum(1 for r in rows if r["health"] in ("healthy", "degraded")),
+        "total": len(rows),
+    }
+
+
 @app.get("/api/venues", tags=["system"])
 async def venues() -> dict[str, Any]:
     """The venue registry and the pairing rule derived from it.
@@ -270,6 +363,10 @@ async def venues() -> dict[str, Any]:
                     "reason": verdict.reason,
                     "zone": verdict.zone.value,
                     "jurisdictions": list(verdict.jurisdictions),
+                    # ("*",) means "broadly available"; it has to be read
+                    # together with this, or a pair that turns a country away
+                    # reads as available everywhere.
+                    "excluded": list(verdict.excluded),
                     "both_live": a in live and b in live,
                 }
             )
@@ -377,6 +474,22 @@ async def get_arb(arb_id: str) -> dict[str, Any]:
     }
 
 
+def _kelly_arb_payload(margin: float, void_rate: float, void_loss: float) -> dict[str, Any]:
+    """Serialise the Kelly arb bound, which may legitimately be unbounded.
+
+    With no void cost the trade carries no risk, Kelly places no bound, and the
+    honest answer is "bankroll is the only constraint" -- not the 0.0 this used
+    to report, which reads as "stake nothing". JSON has no infinity, so it goes
+    over the wire as a null plus an explicit flag the UI can render.
+    """
+    f = om.kelly_arb_fraction(margin, void_rate, void_loss)
+    unbounded = math.isinf(f)
+    return {
+        "kelly_arb_fraction": None if unbounded else round(f, 4),
+        "kelly_arb_unbounded": unbounded,
+    }
+
+
 def _maths_for(arb: Arb) -> dict[str, Any]:
     """The derivation behind the numbers, so the UI can show its working."""
     eff = [l.effective_decimal_odds for l in arb.legs]
@@ -395,9 +508,7 @@ def _maths_for(arb: Arb) -> dict[str, Any]:
         "margin_after_voids": round(
             om.margin_after_voids(arb.net_margin, void_rate, void_loss), 5
         ),
-        "kelly_arb_fraction": round(
-            om.kelly_arb_fraction(arb.net_margin, void_rate, void_loss), 4
-        ),
+        **_kelly_arb_payload(arb.net_margin, void_rate, void_loss),
         "devig_fair_probs": [round(p, 5) for p in om.devig_proportional(raw)],
         "bankroll_cap": round(
             settings.bankroll * settings.max_stake_fraction_per_event, 2
@@ -409,7 +520,7 @@ class ResizeRequest(BaseModel):
     total_stake: float = Field(..., gt=0)
 
 
-@app.post("/api/arbs/{arb_id}/resize", tags=["arbs"])
+@app.post("/api/arbs/{arb_id}/resize", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
     """Recompute equal-profit stakes at a different total. Backs the calculator."""
     arb = _engine().get_arb(arb_id)
@@ -468,6 +579,8 @@ async def resize_arb(arb_id: str, req: ResizeRequest) -> dict[str, Any]:
 class PlaceBetRequest(BaseModel):
     """Execution / confirmation payload when user places a bet."""
 
+    model_config = ConfigDict(extra="forbid")
+
     confirmed: bool = Field(True, description="Explicit confirmation by the user")
     executed_prices: Optional[list[float]] = None
     executed_stakes: Optional[list[float]] = None
@@ -475,11 +588,21 @@ class PlaceBetRequest(BaseModel):
     retire: bool = Field(True, description="Retire from live opportunities after placement")
 
 
-@app.post("/api/arbs/{arb_id}/place", tags=["arbs"])
-@app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"])
+@app.post("/api/arbs/{arb_id}/place", tags=["arbs"], dependencies=[Depends(require_api_key)])
+@app.post("/api/arbs/{arb_id}/log-placement", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def place_bet(arb_id: str, body: PlaceBetRequest = Body(default_factory=PlaceBetRequest)) -> dict[str, Any]:
-    """Record placed bet with explicit confirmation and refresh live opportunities."""
+    """Record a placed bet, and refresh the live opportunity list.
+
+    `confirmed` is checked. It was documented as "Explicit confirmation by the
+    user" and then never read, so the control did nothing at all -- which is
+    worse than not having one, because the UI showed a checkbox that implied a
+    gate that was not there.
+    """
     eng = _engine()
+    if not body.confirmed:
+        raise HTTPException(
+            400, "recording a placement requires explicit confirmation"
+        )
     arb = eng.get_arb(arb_id)
     if arb is None:
         # Fallback: check if already in store
@@ -541,41 +664,86 @@ async def place_bet(arb_id: str, body: PlaceBetRequest = Body(default_factory=Pl
     }
 
 
-class SettleRequest(BaseModel):
-    realised_pnl: Optional[float] = None
-    winning_outcome: Optional[str] = None
-    note: Optional[str] = None
-
-
 class ResolveRequest(BaseModel):
+    """How a position settled.
+
+    `extra="forbid"` is load-bearing. Pydantic drops unknown fields by default,
+    so the dashboard posting `realised_pnl` (a field that only ever existed on a
+    since-deleted SettleRequest) was silently ignored: `custom_pnl` stayed None,
+    the handler fell through to the theoretical worst case, and the endpoint
+    returned ok. A settlement figure is not something to lose quietly -- a
+    mismatched field is now a 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     winning_outcome: Optional[str] = Field(None, description="Winning outcome name or 'VOID'")
-    custom_pnl: Optional[float] = Field(None, description="Custom override for net realised P&L")
+    custom_pnl: Optional[float] = Field(None, description="Realised P&L to book, overriding the derived figure")
     note: Optional[str] = None
 
 
 class SellBackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     confirmed: bool = Field(True, description="Explicit confirmation to unwind")
     custom_prices: Optional[list[float]] = None
     note: Optional[str] = None
 
 
+def _quote_index(events) -> dict[tuple[str, str], Any]:
+    """Every live quote, keyed by (venue, market_id) -- the leg's own identity.
+
+    The previous lookup keyed live events by `Event.id` and then searched that
+    map with a `market_id`, so it never matched anything and the "live price"
+    branch was unreachable dead code.
+    """
+    index: dict[tuple[str, str], Any] = {}
+    for ev in events:
+        for market in ev.markets:
+            for outcome in market.outcomes:
+                for q in outcome.quotes:
+                    index[(q.venue, q.market_id)] = q
+    return index
+
+
+def _complement_index(events) -> dict[tuple[str, str], Any]:
+    """For each quote, the best ask on the OTHER side of the same binary market.
+
+    On a $1 binary contract, selling a YES is the same trade as buying a NO, so
+    the YES bid is exactly `1 - (NO ask)`. `Quote` carries only the ask side, so
+    this identity is how a genuine exit price is recovered from the tape rather
+    than invented.
+    """
+    index: dict[tuple[str, str], Any] = {}
+    for ev in events:
+        for market in ev.markets:
+            if len(market.outcomes) != 2:
+                continue
+            a, b = market.outcomes[0].best(), market.outcomes[1].best()
+            if a is None or b is None:
+                continue
+            index[(a.venue, a.market_id)] = b
+            index[(b.venue, b.market_id)] = a
+    return index
+
+
 @app.get("/api/positions/{row_id}/unwind-quote", tags=["arbs"])
 async def get_unwind_quote(row_id: int) -> dict[str, Any]:
-    """Calculate real-time sell-back / unwind value across venues.
+    """What this position would fetch if it were sold back right now.
 
-    For each leg you hold N contracts bought at entry_price.
-    To unwind, you SELL those contracts at current_bid (best buy offer for them).
+    You hold N contracts per leg. Unwinding means SELLING them, so the price
+    that matters is the bid, not the ask you bought at.
 
-    For binary contracts (YES/NO on $1):
-      - If you hold YES contracts at entry_price=0.45, selling them at current YES bid
-        gives you current_bid × contracts dollars back.
-      - The exit price for a YES leg is the YES bid.
-      - The exit price for a NO leg is the NO bid (= 1 - YES ask, roughly).
+    `Quote` carries only the ask side of the book, so the bid is recovered from
+    the complementary contract: on a $1 binary, selling a YES is the same trade
+    as buying a NO, so the YES bid is `1 - (NO ask)`. That is a real price off
+    the tape.
 
-    When no live data is available we use the complementary contract price logic:
-      Selling YES contracts → bid ≈ 1 - entry_price_of_NO_leg (the complementary leg)
-      This means the total sell proceeds ≈ total entry cost, reflecting no price movement.
-      We then apply spread friction (typically 0.5-2%) on top.
+    When the tape cannot supply one, this returns no price for that leg and
+    says so. It used to invent `entry_price * (1 - 0.005)` instead, which made
+    every unwind report a loss of about half a percent of stake whatever the
+    market had done -- and `sell-back` wrote that invented figure into the
+    ledger as realised P&L.
     """
     eng = _engine()
     row = await asyncio.to_thread(eng.store.arb_by_id, row_id)
@@ -585,54 +753,67 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
     legs = json.loads(row.get("legs_json") or "[]")
     total_stake = float(row.get("total_stake") or 0.0)
     currency = row.get("currency") or "USD"
-    kind = row.get("kind") or "binary_complement"
 
-    # Search live events to find current bids if available
-    live_events = {e.id: e for e in eng.live_events()}
-    unwind_legs = []
+    events = eng.live_events()
+    quotes = _quote_index(events)
+    complements = _complement_index(events)
+
+    unwind_legs: list[dict[str, Any]] = []
     total_net_proceeds = 0.0
+    priced_legs = 0
 
-    # For arb unwind: if we have no live prices, the correct fallback is to use
-    # the COMPLEMENT leg's price as the sell price for each leg.
-    # e.g. bought YES@0.45 + NO@0.52, book=0.97 → guaranteed $1 payout
-    # Current sell: YES bid ≈ (1 - current_NO_ask), NO bid ≈ (1 - current_YES_ask)
-    # Without live data: use entry prices as baseline (0-movement scenario),
-    # then apply a small market spread cost to exit (typically 0.5%).
-    SPREAD_FRICTION = 0.005  # 0.5% bid-ask spread cost to exit — conservative estimate
-
-    for i, leg in enumerate(legs):
-        venue = leg.get("venue")
-        market_id = leg.get("market_id")
+    for leg in legs:
+        venue = leg.get("venue") or ""
+        market_id = leg.get("market_id") or ""
         outcome = leg.get("outcome")
-        side = leg.get("side", "YES").upper()
-        entry_price = float(leg.get("price") or 0.5)
+        side = str(leg.get("side", "YES")).upper()
+        entry_price = float(leg.get("price") or 0.0)
         stake = float(leg.get("stake") or 0.0)
-        contracts = float(leg.get("contracts") or (stake / entry_price if entry_price > 0 else 0))
+        contracts = float(leg.get("contracts") or 0.0)
 
-        # Attempt to look up current live bid for this outcome
-        current_bid = None
-        ev = live_events.get(market_id)
-        if ev:
-            for m in ev.markets:
-                for o in m.outcomes:
-                    if o.name.lower() == outcome.lower():
-                        for q in o.quotes:
-                            if q.venue == venue:
-                                current_bid = q.price
-                                break
+        key = (venue, market_id)
+        current_bid: Optional[float] = None
+        source = "unavailable"
+
+        complement = complements.get(key)
+        if complement is not None:
+            # Selling this contract == buying its complement.
+            bid = 1.0 - complement.effective_price
+            if 0.0 < bid < 1.0:
+                current_bid = bid
+                source = "complement_ask"
+
+        if current_bid is None and key in quotes:
+            # No complement on the tape. The same-side ask is an upper bound on
+            # the bid, never the bid itself, so it is reported as an estimate
+            # rather than passed off as executable.
+            source = "same_side_ask_upper_bound"
 
         if current_bid is None:
-            # No live data: use entry_price as fair value, deduct spread friction only.
-            # This means selling back immediately (no price movement) costs just the
-            # spread: proceeds = entry_price × (1 - SPREAD_FRICTION) × contracts.
-            # The arb profit is still intact; only spread friction is deducted.
-            current_bid = max(0.01, round(entry_price * (1.0 - SPREAD_FRICTION), 4))
+            unwind_legs.append(
+                {
+                    "venue": venue,
+                    "outcome": outcome,
+                    "side": side,
+                    "contracts": contracts,
+                    "entry_price": entry_price,
+                    "current_bid": None,
+                    "price_source": source,
+                    "gross_proceeds": None,
+                    "fee": None,
+                    "net_proceeds": None,
+                    "stake": stake,
+                    "pnl": None,
+                }
+            )
+            continue
 
         fees = fee_model_for(venue)
         gross = round(contracts * current_bid, 2)
         fee = round(fees.total_fee(current_bid, contracts), 2)
         net_proceeds = round(max(0.0, gross - fee), 2)
         total_net_proceeds += net_proceeds
+        priced_legs += 1
 
         unwind_legs.append(
             {
@@ -642,6 +823,7 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
                 "contracts": contracts,
                 "entry_price": entry_price,
                 "current_bid": round(current_bid, 4),
+                "price_source": source,
                 "gross_proceeds": gross,
                 "fee": fee,
                 "net_proceeds": net_proceeds,
@@ -650,34 +832,76 @@ async def get_unwind_quote(row_id: int) -> dict[str, Any]:
             }
         )
 
-    unwind_pnl = round(total_net_proceeds - total_stake, 2)
-    roi_pct = round((unwind_pnl / total_stake) * 100, 2) if total_stake > 0 else 0.0
+    complete = bool(legs) and priced_legs == len(legs)
+    unwind_pnl = round(total_net_proceeds - total_stake, 2) if complete else None
+    roi_pct = (
+        round((unwind_pnl / total_stake) * 100, 2)
+        if complete and total_stake > 0
+        else None
+    )
 
     return {
         "row_id": row_id,
         "title": row.get("title"),
         "total_stake": total_stake,
         "currency": currency,
-        "total_proceeds": round(total_net_proceeds, 2),
+        "total_proceeds": round(total_net_proceeds, 2) if complete else None,
         "unwind_pnl": unwind_pnl,
         "roi_pct": roi_pct,
         "legs": unwind_legs,
-        "live_prices_used": any(
-            l["current_bid"] != round(float(legs[i].get("price", 0.5)) * (1 - SPREAD_FRICTION), 4)
-            for i, l in enumerate(unwind_legs)
-        ),
+        "priced_legs": priced_legs,
+        "leg_count": len(legs),
+        #: False when at least one leg has no live bid. The position cannot be
+        #: valued, let alone settled, until it is True.
+        "quotable": complete,
+        "live_prices_used": complete,
     }
 
 
-
-@app.post("/api/positions/{row_id}/sell-back", tags=["arbs"])
+@app.post("/api/positions/{row_id}/sell-back", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def sell_back_position(
     row_id: int,
     body: SellBackRequest = Body(default_factory=SellBackRequest),
 ) -> dict[str, Any]:
-    """Execute sell-back / unwind orders across venues via API and record in ledger."""
+    """Record an early unwind of a position, at prices sourced from the tape.
+
+    Refuses when any leg has no live bid. A settlement figure written into the
+    ledger is a claim about money that changed hands, so an unpriceable
+    position is a 409 rather than a guess.
+    """
     eng = _engine()
+    if not body.confirmed:
+        raise HTTPException(400, "unwinding a position requires explicit confirmation")
+
     quote = await get_unwind_quote(row_id)
+    if not quote["quotable"] and not body.custom_prices:
+        unpriced = [l["outcome"] for l in quote["legs"] if l["current_bid"] is None]
+        raise HTTPException(
+            409,
+            "no live bid for "
+            + ", ".join(str(o) for o in unpriced)
+            + " -- the position cannot be valued right now. Supply custom_prices "
+            "to record an unwind you executed by hand.",
+        )
+
+    if body.custom_prices:
+        if len(body.custom_prices) != len(quote["legs"]):
+            raise HTTPException(
+                400,
+                f"custom_prices has {len(body.custom_prices)} entries for "
+                f"{len(quote['legs'])} legs",
+            )
+        proceeds = 0.0
+        for leg, price in zip(quote["legs"], body.custom_prices):
+            fees = fee_model_for(leg["venue"])
+            gross = leg["contracts"] * price
+            proceeds += max(0.0, gross - fees.total_fee(price, leg["contracts"]))
+            leg["current_bid"] = round(price, 4)
+            leg["price_source"] = "operator_supplied"
+            leg["net_proceeds"] = round(max(0.0, gross - fees.total_fee(price, leg["contracts"])), 2)
+        quote["total_proceeds"] = round(proceeds, 2)
+        quote["unwind_pnl"] = round(proceeds - quote["total_stake"], 2)
+
     realised_pnl = quote["unwind_pnl"]
 
     # Record SELL placements for each leg
@@ -720,8 +944,8 @@ async def sell_back_position(
     }
 
 
-@app.post("/api/positions/{row_id}/resolve", tags=["arbs"])
-@app.post("/api/positions/{row_id}/settle", tags=["arbs"])
+@app.post("/api/positions/{row_id}/resolve", tags=["arbs"], dependencies=[Depends(require_api_key)])
+@app.post("/api/positions/{row_id}/settle", tags=["arbs"], dependencies=[Depends(require_api_key)])
 async def resolve_position(row_id: int, body: ResolveRequest = Body(default_factory=ResolveRequest)) -> dict[str, Any]:
     """Settle an open position upon market resolution (Hold to Resolution)."""
     eng = _engine()
@@ -793,14 +1017,25 @@ async def get_positions(
         r["placements"] = [dict(p) for p in placements]
         out.append(r)
 
-    total_stake = sum(p.get("total_stake", 0) for p in out if not p.get("settled"))
-    expected_profit = sum(p.get("worst_case_profit", 0) for p in out if not p.get("settled"))
+    # An arbitrage's worst_case_profit is a guaranteed gain; a directional
+    # position's is the loss if the bet is simply wrong. Adding them produces a
+    # number that is neither, so they are reported apart.
+    open_rows = [p for p in out if not p.get("settled")]
+    arb_rows = [p for p in open_rows if p.get("strategy", "arbitrage") != "directional"]
+    dir_rows = [p for p in open_rows if p.get("strategy", "arbitrage") == "directional"]
+
+    total_stake = sum(p.get("total_stake") or 0 for p in open_rows)
+    guaranteed_profit = sum(p.get("worst_case_profit") or 0 for p in arb_rows)
+    directional_at_risk = sum(p.get("total_stake") or 0 for p in dir_rows)
     realised_pnl = sum(p.get("realised_pnl") or 0 for p in out if p.get("settled"))
 
     return {
         "count": len(out),
         "total_active_stake": round(total_stake, 2),
-        "total_expected_profit": round(expected_profit, 2),
+        "total_expected_profit": round(guaranteed_profit, 2),
+        "guaranteed_profit": round(guaranteed_profit, 2),
+        "directional_at_risk": round(directional_at_risk, 2),
+        "directional_count": len(dir_rows),
         "total_realised_pnl": round(realised_pnl, 2),
         "positions": out,
     }
@@ -934,7 +1169,18 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
             "by_kind": by_kind,
             "by_venue": by_venue,
             "by_zone": by_zone,
-            "total_profit_available": round(sum(a.worst_case_profit for a in live), 2),
+            # Guaranteed profit is an arbitrage concept. A directional position
+            # has no guarantee -- its worst case is losing the stake -- so it is
+            # reported as capital at risk rather than folded into the total.
+            # Summing the two is what put "profit available: -$72.68" on the
+            # dashboard, one correlation row at -$156.46 swamping the rest.
+            "total_profit_available": round(
+                sum(a.worst_case_profit for a in live if a.strategy != "directional"), 2
+            ),
+            "directional_at_risk": round(
+                sum(a.total_stake for a in live if a.strategy == "directional"), 2
+            ),
+            "directional_count": sum(1 for a in live if a.strategy == "directional"),
             "total_stake_required": round(sum(a.total_stake for a in live), 2),
             "avg_margin": round(
                 sum(a.net_margin for a in live) / len(live), 5
@@ -944,6 +1190,10 @@ async def analytics(days: int = Query(30, ge=1, le=365)) -> dict[str, Any]:
             ) if live else 0.0,
         },
     }
+
+
+#: Total Monte Carlo runs one sweep may spend, shared across its thresholds.
+_MAX_SWEEP_SIMULATIONS = 3_500
 
 
 class BacktestRequest(BaseModel):
@@ -958,7 +1208,7 @@ class BacktestRequest(BaseModel):
     simulations: int = Field(400, ge=10, le=5000)
 
 
-@app.post("/api/backtest", tags=["analytics"])
+@app.post("/api/backtest", tags=["analytics"], dependencies=[Depends(require_api_key)])
 async def run_backtest(req: BacktestRequest) -> dict[str, Any]:
     """Replay stored opportunities under a void model (Part I s13.3)."""
     eng = _engine()
@@ -967,13 +1217,26 @@ async def run_backtest(req: BacktestRequest) -> dict[str, Any]:
     return result.to_dict()
 
 
-@app.post("/api/backtest/sweep", tags=["analytics"])
+@app.post("/api/backtest/sweep", tags=["analytics"], dependencies=[Depends(require_api_key)])
 async def run_sweep(req: BacktestRequest) -> dict[str, Any]:
-    """Sweep the minimum-margin floor to find where the edge actually peaks."""
+    """Sweep the minimum-margin floor to find where the edge actually peaks.
+
+    The sweep runs `replay` once per threshold, so the work is
+    `len(thresholds) * simulations * rows` -- with the request's own ceiling of
+    5,000 simulations that is 35,000 Monte Carlo runs over the whole stored
+    tape, synchronously, on an unauthenticated endpoint with no cost bound.
+    Each individual replay is capped here so a sweep costs about what one
+    backtest does.
+    """
     eng = _engine()
-    base = BacktestParams(**req.model_dump())
-    rows = await asyncio.to_thread(sweep, eng.store, (0.002, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.03), base)
-    return {"sweep": rows}
+    thresholds = (0.002, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.03)
+    params = req.model_dump()
+    params["simulations"] = max(
+        10, min(params.get("simulations", 400), _MAX_SWEEP_SIMULATIONS // len(thresholds))
+    )
+    base = BacktestParams(**params)
+    rows = await asyncio.to_thread(sweep, eng.store, thresholds, base)
+    return {"sweep": rows, "simulations_per_threshold": base.simulations}
 
 
 @app.get("/api/history", tags=["analytics"])
@@ -1010,7 +1273,7 @@ class StakeCalcRequest(BaseModel):
     round_to: Optional[float] = None
 
 
-@app.post("/api/calc/stakes", tags=["calculators"])
+@app.post("/api/calc/stakes", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_stakes(req: StakeCalcRequest) -> dict[str, Any]:
     ds = req.decimal_odds
     if any(d <= 1.0 for d in ds):
@@ -1045,7 +1308,7 @@ class KellyRequest(BaseModel):
     fraction: float = Field(0.25, gt=0, le=1)
 
 
-@app.post("/api/calc/kelly", tags=["calculators"])
+@app.post("/api/calc/kelly", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_kelly(req: KellyRequest) -> dict[str, Any]:
     """Kelly sizing for value bets (Part I s7.3 / s12)."""
     bankroll = req.bankroll or settings.bankroll
@@ -1067,22 +1330,31 @@ class ConvertRequest(BaseModel):
     from_format: str = Field(..., pattern="^(decimal|american|probability)$")
 
 
-@app.post("/api/calc/convert", tags=["calculators"])
+@app.post("/api/calc/convert", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_convert(req: ConvertRequest) -> dict[str, Any]:
-    """Odds format conversion (Part I s2.1)."""
-    if req.from_format == "decimal":
-        d = req.value
-    elif req.from_format == "american":
-        d = om.american_to_decimal(req.value)
-    else:
-        if not 0 < req.value < 1:
-            raise HTTPException(400, "probability must be between 0 and 1")
-        d = om.prob_to_decimal(req.value)
-    if d <= 1.0:
-        raise HTTPException(400, "decimal odds must be greater than 1.0")
+    """Odds format conversion (Part I s2.1).
+
+    Bad input is the user's mistake, not the server's: every rejection here is a
+    400 with the reason. `value: 0, from_format: "american"` used to divide by
+    zero and return a 500.
+    """
+    try:
+        if req.from_format == "decimal":
+            d = req.value
+        elif req.from_format == "american":
+            d = om.american_to_decimal(req.value)
+        else:
+            if not 0 < req.value < 1:
+                raise HTTPException(400, "probability must be between 0 and 1")
+            d = om.prob_to_decimal(req.value)
+        if d <= 1.0:
+            raise HTTPException(400, "decimal odds must be greater than 1.0")
+        american = round(om.decimal_to_american(d), 2)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return {
         "decimal": round(d, 5),
-        "american": round(om.decimal_to_american(d), 2),
+        "american": american,
         "probability": round(om.decimal_to_prob(d), 5),
         "contract_price": round(om.decimal_to_prob(d), 4),
     }
@@ -1095,7 +1367,7 @@ class VoidRequest(BaseModel):
     turnovers_per_year: float = Field(100.0, gt=0)
 
 
-@app.post("/api/calc/void-adjusted", tags=["calculators"])
+@app.post("/api/calc/void-adjusted", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_void(req: VoidRequest) -> dict[str, Any]:
     """Effective margin and Kelly bound once voids are priced in (Part I s13)."""
     eff = om.margin_after_voids(req.margin, req.void_rate, req.void_loss)
@@ -1103,9 +1375,7 @@ async def calc_void(req: VoidRequest) -> dict[str, Any]:
         "nominal_margin": req.margin,
         "effective_margin": round(eff, 6),
         "edge_retained_pct": round(100.0 * eff / req.margin, 2) if req.margin else 0.0,
-        "kelly_arb_fraction": round(
-            om.kelly_arb_fraction(req.margin, req.void_rate, req.void_loss), 4
-        ),
+        **_kelly_arb_payload(req.margin, req.void_rate, req.void_loss),
         "annualised_simple": round(om.annualised_return(eff, req.turnovers_per_year), 4),
         "annualised_compounded": round(
             om.compounded_return(eff, req.turnovers_per_year), 4
@@ -1126,7 +1396,7 @@ class CorrelationCalcRequest(BaseModel):
     min_edge: float = Field(0.0, ge=0, le=1)
 
 
-@app.post("/api/calc/correlation", tags=["calculators"])
+@app.post("/api/calc/correlation", tags=["calculators"], dependencies=[Depends(require_api_key)])
 async def calc_correlation(req: CorrelationCalcRequest) -> dict[str, Any]:
     """rho_impl, the fair joint price under rho_prior, and the BUY/SELL/HOLD read."""
     try:
@@ -1176,7 +1446,7 @@ async def list_correlation_pairs() -> dict[str, Any]:
     return {"count": len(rows), "pairs": rows}
 
 
-@app.post("/api/correlation/pairs", tags=["correlation"])
+@app.post("/api/correlation/pairs", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def upsert_correlation_pair(req: CorrelationPairRequest) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.upsert_correlation_pair, req.model_dump())
@@ -1184,7 +1454,7 @@ async def upsert_correlation_pair(req: CorrelationPairRequest) -> dict[str, Any]
     return {"ok": True, "pair": pair}
 
 
-@app.delete("/api/correlation/pairs/{key}", tags=["correlation"])
+@app.delete("/api/correlation/pairs/{key}", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def delete_correlation_pair(key: str) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.delete_correlation_pair, key)
@@ -1233,7 +1503,7 @@ async def list_correlation_outcomes(key: str) -> dict[str, Any]:
     return {"count": len(rows), "outcomes": rows, "rho_prior_from_history": rho}
 
 
-@app.post("/api/correlation/pairs/{key}/outcomes", tags=["correlation"])
+@app.post("/api/correlation/pairs/{key}/outcomes", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def add_correlation_outcome(key: str, req: CorrelationOutcomeRequest) -> dict[str, Any]:
     eng = _engine()
     if await asyncio.to_thread(eng.store.get_correlation_pair, key) is None:
@@ -1244,7 +1514,7 @@ async def add_correlation_outcome(key: str, req: CorrelationOutcomeRequest) -> d
     return {"ok": True, "id": row_id}
 
 
-@app.delete("/api/correlation/outcomes/{outcome_id}", tags=["correlation"])
+@app.delete("/api/correlation/outcomes/{outcome_id}", tags=["correlation"], dependencies=[Depends(require_api_key)])
 async def delete_correlation_outcome(outcome_id: int) -> dict[str, Any]:
     eng = _engine()
     await asyncio.to_thread(eng.store.delete_correlation_outcome, outcome_id)
@@ -1254,7 +1524,7 @@ async def delete_correlation_outcome(outcome_id: int) -> dict[str, Any]:
 # ------------------------------------------------------------------ control
 
 
-@app.post("/api/scanner/scan", tags=["system"])
+@app.post("/api/scanner/scan", tags=["system"], dependencies=[Depends(require_api_key)])
 async def force_scan() -> dict[str, Any]:
     eng = _engine()
     found = await eng.scan_once()
@@ -1265,19 +1535,19 @@ async def force_scan() -> dict[str, Any]:
     }
 
 
-@app.post("/api/scanner/start", tags=["system"])
+@app.post("/api/scanner/start", tags=["system"], dependencies=[Depends(require_api_key)])
 async def start_scanner() -> dict[str, Any]:
     await _engine().start()
     return {"ok": True, "running": True}
 
 
-@app.post("/api/scanner/stop", tags=["system"])
+@app.post("/api/scanner/stop", tags=["system"], dependencies=[Depends(require_api_key)])
 async def stop_scanner() -> dict[str, Any]:
     await _engine().stop()
     return {"ok": True, "running": False}
 
 
-@app.post("/api/scanner/reset-breaker", tags=["system"])
+@app.post("/api/scanner/reset-breaker", tags=["system"], dependencies=[Depends(require_api_key)])
 async def reset_breaker() -> dict[str, Any]:
     _engine().breaker.reset()
     return {"ok": True}
@@ -1289,8 +1559,16 @@ async def reset_breaker() -> dict[str, Any]:
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
     """Live push of new opportunities and scan telemetry."""
+    # Check the engine BEFORE accepting. `_engine()` raises HTTPException, which
+    # means nothing in a WebSocket scope -- raising it after `accept()` produced
+    # an unhandled server error instead of a close frame the client could read.
+    if scanner is None:
+        # 1013 "try again later": the server is fine, it is just not ready.
+        await ws.close(code=1013, reason="engine not started")
+        return
+
     await ws.accept()
-    eng = _engine()
+    eng = scanner
     queue = eng.alerts.broadcaster.subscribe()
     try:
         await ws.send_json(

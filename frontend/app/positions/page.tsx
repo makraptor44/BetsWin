@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Card, EmptyState, ErrorState, SectionTitle, Skeleton, Stat, VenueChip, ZoneChip } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, EmptyState, ErrorState, Skeleton, Stat, VenueChip, ZoneChip } from "@/components/ui";
 import { api } from "@/lib/api";
 import {
   KIND_LABEL,
@@ -31,8 +33,10 @@ export default function PositionsPage() {
     try {
       const res = await api.positions();
       setData(res);
-    } catch (err: any) {
-      setError(err?.message || "Failed to load positions ledger.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load positions ledger.",
+      );
     } finally {
       setLoading(false);
     }
@@ -59,19 +63,18 @@ export default function PositionsPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Positions &amp; Placed Bets</h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm mt-0.5 text-muted-foreground">
             Manage active trades: hold until event resolution or sell back early at live market bids.
           </p>
         </div>
-        <button className="btn btn-sm" onClick={load} disabled={loading}>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
           {loading ? "Refreshing…" : "↻ Refresh Ledger"}
-        </button>
+        </Button>
       </header>
 
       {toast && (
         <div
-          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all"
-          style={{ background: "var(--positive)", color: "#fff" }}
+          className="p-3.5 rounded-lg text-xs font-medium flex items-center justify-between shadow-md transition-all text-white bg-positive"
         >
           <div className="flex items-center gap-2">
             <span className="text-sm">✓</span>
@@ -119,7 +122,7 @@ export default function PositionsPage() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex items-center gap-2 border-b pb-2" style={{ borderColor: "var(--border)" }}>
+          <div className="flex items-center gap-2 border-b pb-2 border-border">
             <button
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 tab === "all" ? "btn-primary" : "btn"
@@ -165,42 +168,42 @@ export default function PositionsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                        <span className="chip chip-accent">{KIND_LABEL[pos.kind] || pos.kind}</span>
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-brand-soft text-brand">{KIND_LABEL[pos.kind] || pos.kind}</span>
                         {pos.venues.map((v) => (
                           <VenueChip key={v} venue={v} />
                         ))}
                         <ZoneChip zone={pos.zone} short />
                         {pos.settled ? (
-                          <span className="chip chip-positive">
-                            ✓ Settled ({(pos as any).settlement_type === "sell_back_early" ? "Sold Back" : "Resolution"})
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive">
+                            ✓ Settled ({pos.settlement_type === "sell_back_early" ? "Sold Back" : "Resolution"})
                           </span>
                         ) : (
-                          <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-brand-soft text-brand">
                             ● Active Open
                           </span>
                         )}
                       </div>
                       <h3 className="text-base font-semibold">{pos.title}</h3>
-                      <div className="text-xs mt-1" style={{ color: "var(--text-faint)" }}>
+                      <div className="text-xs mt-1 text-faint">
                         Placed: {new Date(pos.detected_at).toLocaleString()} · ID #{pos.id}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3 text-right">
                       <div>
-                        <div className="text-xs" style={{ color: "var(--text-faint)" }}>
+                        <div className="text-xs text-faint">
                           Total Stake
                         </div>
-                        <div className="mono font-semibold text-sm">
+                        <div className="tabular font-semibold text-sm">
                           {money(pos.total_stake, pos.currency)}
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs" style={{ color: "var(--text-faint)" }}>
+                        <div className="text-xs text-faint">
                           {pos.settled ? "Realised P&L" : "Expected Profit"}
                         </div>
                         <div
-                          className={`mono font-semibold text-sm ${
+                          className={`tabular font-semibold text-sm ${
                             (pos.settled ? pos.realised_pnl || 0 : pos.worst_case_profit) >= 0
                               ? "num-positive"
                               : "text-danger"
@@ -215,31 +218,21 @@ export default function PositionsPage() {
                       {/* Action Buttons for Open Active Trades */}
                       {!pos.settled && (
                         <div className="flex items-center gap-2 ml-2">
-                          <button
-                            className="btn btn-sm"
-                            style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
-                            onClick={() => setUnwindingItem(pos)}
-                            title="Sell all contracts back now at current live market bids"
-                          >
+                          <Button size="sm" variant="outline" className="border-brand text-brand" onClick={() => setUnwindingItem(pos)} title="Sell all contracts back now at current live market bids" >
                             ⚡ Sell Back Early
-                          </button>
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => setResolvingItem(pos)}
-                            title="Settle this position when the event has finished"
-                          >
+                          </Button>
+                          <Button size="sm" onClick={() => setResolvingItem(pos)} title="Settle this position when the event has finished" >
                             ✓ Hold to Resolution
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Legs breakdown */}
-                  <div className="rounded-lg overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                  <div className="rounded-lg overflow-hidden border border-border">
                     <div
-                      className="grid grid-cols-12 px-3 py-2 text-[11px] font-medium border-b"
-                      style={{ background: "var(--bg-sunken)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+                      className="grid grid-cols-12 px-3 py-2 text-[11px] font-medium border-b bg-muted border-border text-muted-foreground"
                     >
                       <div className="col-span-3">Venue / Leg</div>
                       <div className="col-span-3">Outcome</div>
@@ -248,22 +241,25 @@ export default function PositionsPage() {
                       <div className="col-span-2 text-right">Status</div>
                     </div>
 
-                    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-                      {pos.legs.map((leg, i) => (
-                        <div key={i} className="grid grid-cols-12 px-3 py-2 text-xs items-center">
+                    <div className="divide-y border-border">
+                      {pos.legs.map((leg) => (
+                        <div
+                          key={`${leg.venue}:${leg.market_id}:${leg.outcome}`}
+                          className="grid grid-cols-12 px-3 py-2 text-xs items-center"
+                        >
                           <div className="col-span-3 flex items-center gap-1.5">
-                            <span className="chip text-[10px] font-semibold">{leg.side}</span>
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground text-[10px]">{leg.side}</span>
                             <span className="font-medium">{leg.venue}</span>
                           </div>
                           <div className="col-span-3 truncate font-medium">{leg.outcome}</div>
-                          <div className="col-span-2 text-right mono">
+                          <div className="col-span-2 text-right tabular">
                             {leg.price.toFixed(4)} ({leg.decimal_odds.toFixed(2)}x)
                           </div>
-                          <div className="col-span-2 text-right mono font-semibold">
+                          <div className="col-span-2 text-right tabular font-semibold">
                             {money(leg.stake, pos.currency)} ({num(leg.contracts, 0)}c)
                           </div>
                           <div className="col-span-2 text-right">
-                            <span className="text-[11px]" style={{ color: "var(--positive)" }}>
+                            <span className="text-[11px] text-positive">
                               ✓ Placed
                             </span>
                           </div>
@@ -362,8 +358,10 @@ function HoldToResolutionModal({
         custom_pnl: customPnl ? parseFloat(customPnl) : undefined,
       });
       onSettled(res.message);
-    } catch (err: any) {
-      setError(err?.message || "Failed to settle position.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to settle position.",
+      );
       setBusy(false);
     }
   };
@@ -375,29 +373,27 @@ function HoldToResolutionModal({
       aria-modal="true"
     >
       <div
-        className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+        className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
         onClick={() => !busy && onClose()}
       />
       <div
-        className="relative w-full max-w-lg rounded-xl p-6 flex flex-col gap-4 shadow-2xl"
-        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+        className="relative w-full max-w-lg rounded-xl p-6 flex flex-col gap-4 shadow-2xl border border-border bg-background"
       >
         <div className="flex items-start justify-between">
           <div>
-            <span className="chip chip-positive text-xs">Hold to Resolution</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive text-xs">Hold to Resolution</span>
             <h3 className="text-base font-semibold mt-1">Settle: {position.title}</h3>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs text-muted-foreground">
               The event has concluded. Select which outcome won to calculate exact payout.
             </p>
           </div>
-          <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+          <Button size="sm" variant="outline" onClick={onClose} disabled={busy}>
             ✕
-          </button>
+          </Button>
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="label">Select Official Resolution Result</div>
+          <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Select Official Resolution Result</div>
           {outcomes.map((oc) => {
             const { gross, net } = calculatePayoutFor(oc);
             const isSelected = selectedOutcome === oc;
@@ -412,11 +408,11 @@ function HoldToResolutionModal({
               >
                 <div>
                   <div className="text-sm font-medium text-white">{oc} Won</div>
-                  <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  <div className="text-xs text-muted-foreground">
                     Gross Return: {money(gross, position.currency)}
                   </div>
                 </div>
-                <div className="mono font-semibold text-sm num-positive">
+                <div className="tabular font-semibold text-sm text-positive">
                   {signedMoney(net, position.currency)}
                 </div>
               </button>
@@ -430,44 +426,31 @@ function HoldToResolutionModal({
             }`}
             onClick={() => handleSelectOutcome("VOID")}
           >
-            <span style={{ color: "var(--text-muted)" }}>Event Voided / Refunded</span>
-            <span className="mono font-medium">Refund Total Stake ($0.00 P&amp;L)</span>
+            <span className="text-muted-foreground">Event Voided / Refunded</span>
+            <span className="tabular font-medium">Refund Total Stake ($0.00 P&amp;L)</span>
           </button>
         </div>
 
         <div>
-          <label htmlFor="res-pnl" className="label block mb-1">
+          <label htmlFor="res-pnl" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint mb-1">
             Realised P&amp;L Override ({position.currency})
           </label>
-          <input
-            id="res-pnl"
-            type="number"
-            step="0.01"
-            className="input w-full mono font-semibold text-sm"
-            value={customPnl}
-            onChange={(e) => setCustomPnl(e.target.value)}
-            placeholder="0.00"
-            disabled={busy}
-          />
+          <Input id="res-pnl" type="number" step="0.01" className="w-full tabular font-semibold text-sm" value={customPnl} onChange={(e) => setCustomPnl(e.target.value)} placeholder="0.00" disabled={busy} />
         </div>
 
         {error && (
-          <div className="p-2 rounded text-xs" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+          <div className="p-2 rounded text-xs bg-danger-soft text-danger">
             {error}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-          <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <Button size="sm" variant="outline" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={handleResolve}
-            disabled={busy || (!selectedOutcome && !customPnl)}
-          >
+          </Button>
+          <Button size="sm" onClick={handleResolve} disabled={busy || (!selectedOutcome && !customPnl)} >
             {busy ? "Settling…" : "Confirm Resolution"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -497,8 +480,14 @@ function SellBackEarlyModal({
       try {
         const q = await api.unwindQuote(position.id);
         if (mounted) setQuote(q);
-      } catch (err: any) {
-        if (mounted) setError(err?.message || "Failed to fetch live unwind quote.");
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Failed to fetch live unwind quote.",
+          );
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -521,8 +510,12 @@ function SellBackEarlyModal({
         note: note.trim() || undefined,
       });
       onSettled(res.message);
-    } catch (err: any) {
-      setError(err?.message || "Failed to execute sell back orders.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to execute sell back orders.",
+      );
       setBusy(false);
     }
   };
@@ -534,27 +527,25 @@ function SellBackEarlyModal({
       aria-modal="true"
     >
       <div
-        className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+        className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
         onClick={() => !busy && onClose()}
       />
       <div
-        className="relative w-full max-w-xl rounded-xl p-6 flex flex-col gap-4 shadow-2xl"
-        style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+        className="relative w-full max-w-xl rounded-xl p-6 flex flex-col gap-4 shadow-2xl border border-border bg-background"
       >
         <div className="flex items-start justify-between">
           <div>
-            <span className="chip text-xs" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground text-xs bg-brand-soft text-brand">
               ⚡ Sell Back Early (Unwind via API)
             </span>
             <h3 className="text-base font-semibold mt-1">Unwind Position: {position.title}</h3>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs text-muted-foreground">
               Close out both legs right now across venues at current live order book bids.
             </p>
           </div>
-          <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+          <Button size="sm" variant="outline" onClick={onClose} disabled={busy}>
             ✕
-          </button>
+          </Button>
         </div>
 
         {loading && <Skeleton rows={4} />}
@@ -564,22 +555,22 @@ function SellBackEarlyModal({
           <>
             {/* Live Pricing Summary */}
             <div className="grid grid-cols-3 gap-2.5">
-              <div className="card p-3 text-center">
-                <div className="label">Initial Stake</div>
-                <div className="mono text-sm font-semibold mt-0.5">
+              <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Initial Stake</div>
+                <div className="tabular text-sm font-semibold mt-0.5">
                   {money(quote.total_stake, quote.currency)}
                 </div>
               </div>
-              <div className="card p-3 text-center">
-                <div className="label">Estimated Net Proceeds</div>
-                <div className="mono text-sm font-semibold mt-0.5">
+              <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Estimated Net Proceeds</div>
+                <div className="tabular text-sm font-semibold mt-0.5">
                   {money(quote.total_proceeds, quote.currency)}
                 </div>
               </div>
-              <div className="card p-3 text-center">
-                <div className="label">Unwind P&amp;L</div>
+              <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Unwind P&amp;L</div>
                 <div
-                  className={`mono text-sm font-semibold mt-0.5 ${
+                  className={`tabular text-sm font-semibold mt-0.5 ${
                     quote.unwind_pnl >= 0 ? "num-positive" : "text-danger"
                   }`}
                 >
@@ -589,10 +580,9 @@ function SellBackEarlyModal({
             </div>
 
             {/* Leg Sell Breakdown */}
-            <div className="rounded-lg overflow-hidden border text-xs" style={{ borderColor: "var(--border)" }}>
+            <div className="rounded-lg overflow-hidden border text-xs border-border">
               <div
-                className="grid grid-cols-12 px-3 py-2 font-medium border-b"
-                style={{ background: "var(--bg-sunken)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+                className="grid grid-cols-12 px-3 py-2 font-medium border-b bg-muted border-border text-muted-foreground"
               >
                 <div className="col-span-4">Leg / Venue</div>
                 <div className="col-span-3 text-right">Entry → Exit Bid</div>
@@ -600,21 +590,24 @@ function SellBackEarlyModal({
                 <div className="col-span-2 text-right">Leg P&amp;L</div>
               </div>
 
-              <div className="divide-y" style={{ borderColor: "var(--border)" }}>
-                {quote.legs.map((l, i) => (
-                  <div key={i} className="grid grid-cols-12 px-3 py-2 items-center">
+              <div className="divide-y border-border">
+                {quote.legs.map((l) => (
+                  <div
+                    key={`${l.venue}:${l.outcome}`}
+                    className="grid grid-cols-12 px-3 py-2 items-center"
+                  >
                     <div className="col-span-4 truncate font-medium">
-                      <span className="chip text-[10px] mr-1">{l.venue}</span>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground text-[10px] mr-1">{l.venue}</span>
                       {l.outcome}
                     </div>
-                    <div className="col-span-3 text-right mono" style={{ color: "var(--text-muted)" }}>
+                    <div className="col-span-3 text-right tabular text-muted-foreground">
                       {l.entry_price.toFixed(3)} → <span className="font-semibold text-white">{l.current_bid.toFixed(3)}</span>
                     </div>
-                    <div className="col-span-3 text-right mono font-semibold">
+                    <div className="col-span-3 text-right tabular font-semibold">
                       {money(l.net_proceeds, quote.currency)}
                     </div>
                     <div
-                      className={`col-span-2 text-right mono font-semibold ${
+                      className={`col-span-2 text-right tabular font-semibold ${
                         l.pnl >= 0 ? "num-positive" : "text-danger"
                       }`}
                     >
@@ -627,26 +620,18 @@ function SellBackEarlyModal({
 
             {/* Optional Note */}
             <div>
-              <label htmlFor="unwind-note" className="label block mb-1">
+              <label htmlFor="unwind-note" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint mb-1">
                 Reference / Strategy Note (Optional)
               </label>
-              <input
-                id="unwind-note"
-                type="text"
-                placeholder="e.g. Mean-reversion target reached, closed spread early"
-                className="input w-full text-xs"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={busy}
-              />
+              <Input id="unwind-note" type="text" placeholder="e.g. Mean-reversion target reached, closed spread early" className="w-full text-xs" value={note} onChange={(e) => setNote(e.target.value)} disabled={busy} />
             </div>
 
             {/* Enforced Confirmation Box */}
             <div
               className="p-3 rounded-lg border flex items-start gap-2.5 cursor-pointer select-none text-xs"
               style={{
-                background: confirmed ? "var(--accent-soft)" : "var(--bg-sunken)",
-                borderColor: confirmed ? "var(--accent)" : "var(--border)",
+                background: confirmed ? "var(--brand-soft)" : "var(--muted)",
+                borderColor: confirmed ? "var(--brand)" : "var(--border)",
               }}
               onClick={() => !busy && setConfirmed(!confirmed)}
             >
@@ -662,24 +647,19 @@ function SellBackEarlyModal({
                 <span className="font-semibold text-white block">
                   I authorize executing sell-back market orders across venues.
                 </span>
-                <span style={{ color: "var(--text-muted)" }}>
+                <span className="text-muted-foreground">
                   This will liquidate all open contracts at best available bids, record the P&amp;L in your ledger, and free your bankroll.
                 </span>
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-              <button className="btn btn-sm" onClick={onClose} disabled={busy}>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button size="sm" variant="outline" onClick={onClose} disabled={busy}>
                 Cancel
-              </button>
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleSellBack}
-                disabled={busy || !confirmed}
-                style={{ opacity: confirmed && !busy ? 1 : 0.5 }}
-              >
+              </Button>
+              <Button size="sm" onClick={handleSellBack} disabled={busy || !confirmed} className={confirmed && !busy ? undefined : "opacity-50"} >
                 {busy ? "Selling Back…" : "Confirm Sell Back via API ⚡"}
-              </button>
+              </Button>
             </div>
           </>
         )}

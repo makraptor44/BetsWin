@@ -2,6 +2,7 @@
  "arb": {
   "id": "f1515ab72b13049f",
   "kind": "cross_venue",
+  "strategy": "arbitrage",
   "title": "Fed cuts rates at the December 2026 meeting?  ==  Will the Federal Reserve cut rates at the December 2026 meeting?",
   "category": "economics",
   "venues": [
@@ -45,8 +46,8 @@
     "size_available": 9139.2,
     "url": "https://example.invalid/kalshi/KXFED-26DEC:N",
     "event_title": "Fed cuts rates at the December 2026 meeting?",
-    "payout": 558.7333333333333,
-    "net_payout": 549.4033333333333
+    "payout": 537.9999999534273,
+    "net_payout": 537.9999999534273
    }
   ],
   "zone": "us_prediction",
@@ -74,15 +75,21 @@
   ],
   "notes": [
    "Margin of 7.6% is above the 5% suspicion threshold - verify both legs describe the same outcome before staking.",
-   "Legs sit on different venues; confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
-   "Markets were paired by title similarity (99/100), not by a shared identifier."
+   "Legs sit with different counterparties (kalshi, polymarket); confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
+   "Markets were paired by title similarity (99/100), not by a shared identifier.",
+   "Broadly available, but not from US -- at least one venue turns those away."
   ],
-  "detected_at": "2026-08-29T13:14:26.263599Z",
-  "close_time": "2026-10-13T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153583Z",
+  "detected_at": "2026-08-31T09:33:48.366468Z",
+  "close_time": "2026-10-15T09:33:51.462883Z",
+  "last_seen": "2026-08-31T09:33:53.108046Z",
+  "last_updated_at": "2026-08-31T09:33:48.366469Z",
+  "expires_at": "2026-08-31T09:42:31.462996Z",
+  "invalidated_at": null,
   "is_suspect": true,
   "roi_pct": 7.602152043040861,
-  "hours_to_close": 1079.9990866122223
+  "seconds_to_expiry": 518.339133,
+  "status": "live",
+  "hours_to_close": 1079.9995386144444
  },
  "payout_matrix": [
   {
@@ -116,6 +123,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.06851,
   "kelly_arb_fraction": 3.0036,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.50658,
    0.49342

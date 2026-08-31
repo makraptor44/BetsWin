@@ -15,6 +15,14 @@ import { api } from "@/lib/api";
 import { pct } from "@/lib/format";
 import type { VenuePair, VenueSummary } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 const STRUCTURE_LABEL: Record<string, string> = {
   contract: "Binary contract",
@@ -56,10 +64,9 @@ export default function VenuesPage() {
           hint="A cross-venue arbitrage is only real if one person can place both legs. Venues are grouped into zones that share a currency, a settlement convention, and an account footprint a single operator can plausibly hold — and pairing runs inside a zone, never across one."
         />
         <div
-          className="text-xs leading-relaxed"
-          style={{ color: "var(--text-muted)" }}
+          className="text-xs leading-relaxed text-muted-foreground"
         >
-          <p style={{ margin: "0 0 8px" }}>
+          <p className="mb-2">
             The alternative is worse than it looks. Pairing a sterling exchange
             against a dollar contract market produces immaculate arithmetic and
             an untakeable trade: it needs accounts in two jurisdictions, and the
@@ -67,7 +74,7 @@ export default function VenuesPage() {
             erased by a 1% move in the exchange rate. The zone rule removes
             both problems by construction rather than by warning about them.
           </p>
-          <p style={{ margin: 0 }}>
+          <p className="m-0">
             It costs opportunities. That is the trade: fewer candidates, all of
             them placeable.
           </p>
@@ -104,15 +111,14 @@ export default function VenuesPage() {
 
       {!data.enforce_zone_pairing && (
         <div
-          className="card p-3 flex items-start gap-2.5"
-          style={{ borderColor: "var(--danger)", background: "var(--danger-soft)" }}
+          className="rounded-lg border border-border bg-card shadow-sm p-3 flex items-start gap-2.5 border-danger bg-danger-soft"
           role="alert"
         >
-          <span style={{ color: "var(--danger)" }} aria-hidden>
+          <span className="text-danger" aria-hidden>
             ⚠
           </span>
-          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-            <strong style={{ color: "var(--danger)" }}>
+          <div className="text-xs text-muted-foreground">
+            <strong className="text-danger">
               Zone pairing is disabled.
             </strong>{" "}
             Cross-venue detection will compare venues in different jurisdictions
@@ -129,38 +135,37 @@ export default function VenuesPage() {
               <h2 className="text-[15px] font-semibold tracking-tight">
                 {zone.label}
               </h2>
-              <span className="chip">{zone.currency}</span>
+              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">{zone.currency}</span>
               {venues.some((v) => v.live) && (
-                <span className="chip chip-positive">Live</span>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive">Live</span>
               )}
             </div>
             <p
-              className="text-xs leading-relaxed"
-              style={{ color: "var(--text-muted)" }}
+              className="text-xs leading-relaxed text-muted-foreground"
             >
               {zone.rationale}
             </p>
           </div>
 
           <div className="scroll-x">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Venue</th>
-                  <th>Structure</th>
-                  <th>Regulator</th>
-                  <th style={{ textAlign: "right" }}>Commission</th>
-                  <th>Available from</th>
-                  <th>Data</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full border-collapse text-[13px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Venue</TableHead>
+                  <TableHead>Structure</TableHead>
+                  <TableHead>Regulator</TableHead>
+                  <TableHead className="text-right">Commission</TableHead>
+                  <TableHead>Available from</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {venues.map((v) => (
                   <VenueRow key={v.name} venue={v} />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
       ))}
@@ -173,20 +178,20 @@ export default function VenuesPage() {
           />
         </div>
         <div className="scroll-x">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Pair</th>
-                <th>Verdict</th>
-                <th>Reason</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="w-full border-collapse text-[13px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Pair</TableHead>
+                <TableHead>Verdict</TableHead>
+                <TableHead>Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {[...allowedPairs, ...blockedPairs].map((p) => (
                 <PairRow key={`${p.a}-${p.b}`} pair={p} />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Card>
 
@@ -197,11 +202,10 @@ export default function VenuesPage() {
             hint="Venue pairs the rule declined to compare during the most recent cycle. This is how you tell the guard fired rather than the matcher having found nothing."
           />
           <ul
-            className="text-xs flex flex-col gap-1.5"
-            style={{ color: "var(--text-muted)", margin: 0, paddingLeft: 16 }}
+            className="text-xs flex flex-col gap-1.5 text-muted-foreground m-0 pl-[16px]"
           >
-            {data.rejected_this_scan.map((r, i) => (
-              <li key={i}>{r}</li>
+            {data.rejected_this_scan.map((r) => (
+              <li key={r}>{r}</li>
             ))}
           </ul>
         </Card>
@@ -219,8 +223,8 @@ function VenueRow({ venue: v }: { venue: VenueSummary }) {
       : v.jurisdictions.join(", ");
 
   return (
-    <tr>
-      <td>
+    <TableRow>
+      <TableCell>
         <div className="flex items-center gap-2">
           <VenueChip venue={v.name} />
           {v.url && (
@@ -230,76 +234,74 @@ function VenueRow({ venue: v }: { venue: VenueSummary }) {
           )}
         </div>
         <div
-          className="text-xs mt-1 leading-relaxed"
-          style={{ color: "var(--text-faint)", maxWidth: 380 }}
+          className="text-xs mt-1 leading-relaxed text-faint max-w-[380px]"
         >
           {v.notes}
         </div>
-      </td>
-      <td className="text-xs">{STRUCTURE_LABEL[v.structure] ?? v.structure}</td>
-      <td className="text-xs" style={{ color: "var(--text-muted)", maxWidth: 200 }}>
+      </TableCell>
+      <TableCell className="text-xs">{STRUCTURE_LABEL[v.structure] ?? v.structure}</TableCell>
+      <TableCell className="text-xs text-muted-foreground max-w-[200px]">
         {v.regulator || "—"}
-      </td>
-      <td className="mono" style={{ textAlign: "right" }}>
+      </TableCell>
+      <TableCell className="tabular text-right">
         {v.commission > 0 ? pct(v.commission, 1) : "—"}
         {v.commission > 0 && (
-          <div className="text-[10px]" style={{ color: "var(--text-faint)" }}>
+          <div className="text-[10px] text-faint">
             on winnings
           </div>
         )}
-      </td>
-      <td className="text-xs" style={{ color: "var(--text-muted)", maxWidth: 220 }}>
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground max-w-[220px]">
         {available}
-      </td>
-      <td>
-        <span className={`chip ${v.public_data ? "" : "chip-caution"}`}>
+      </TableCell>
+      <TableCell>
+        <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground ${v.public_data ? "" : "chip-caution"}`}>
           {v.public_data ? "Public" : "Needs credentials"}
         </span>
-      </td>
-      <td>
+      </TableCell>
+      <TableCell>
         {v.live ? (
-          <span className="chip chip-positive">Connected</span>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive">Connected</span>
         ) : (
-          <span className="chip">Not configured</span>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">Not configured</span>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 function PairRow({ pair: p }: { pair: VenuePair }) {
   return (
-    <tr style={{ opacity: p.allowed ? 1 : 0.72 }}>
-      <td>
+    <TableRow className={p.allowed ? undefined : "opacity-72"}>
+      <TableCell>
         <div className="flex items-center gap-1.5 flex-wrap">
           <VenueChip venue={p.a} />
-          <span style={{ color: "var(--text-faint)" }}>×</span>
+          <span className="text-faint">×</span>
           <VenueChip venue={p.b} />
         </div>
-      </td>
-      <td>
+      </TableCell>
+      <TableCell>
         {p.allowed ? (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="chip chip-positive">Paired</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive">Paired</span>
             <ZoneChip zone={p.zone} short />
-            {p.both_live && <span className="chip">both live</span>}
+            {p.both_live && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">both live</span>}
           </div>
         ) : (
-          <span className="chip chip-danger">Blocked</span>
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-danger-soft text-danger">Blocked</span>
         )}
-      </td>
-      <td
-        className="text-xs leading-relaxed"
-        style={{ color: "var(--text-muted)", maxWidth: 620 }}
+      </TableCell>
+      <TableCell
+        className="text-xs leading-relaxed text-muted-foreground max-w-[620px]"
       >
         {p.reason}
         {p.allowed && p.jurisdictions.length > 0 && !p.jurisdictions.includes("*") && (
-          <span style={{ color: "var(--text-faint)" }}>
+          <span className="text-faint">
             {" "}
             Placeable from {p.jurisdictions.join(", ")}.
           </span>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

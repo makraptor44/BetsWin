@@ -12,10 +12,15 @@ from __future__ import annotations
 import math
 from typing import Iterable, Sequence
 
-# A price of exactly 0 or 1 is unusable; clamp to the tightest tick either venue
-# supports (Polymarket 0.001, Kalshi 0.01).
-MIN_PRICE = 1e-4
-MAX_PRICE = 1.0 - 1e-4
+# A price of exactly 0 or 1 is unusable: it implies certainty and sends d = 1/p
+# to infinity. Clamp to the tightest tick any venue supports, which is
+# Polymarket's 0.001 (Kalshi's is 0.01, a whole cent).
+#
+# The clamp used to be 1e-4 while this comment claimed 0.001 -- an order of
+# magnitude apart, and the looser value admits prices no venue can actually
+# quote. The comment was right and the constant was wrong.
+MIN_PRICE = 1e-3
+MAX_PRICE = 1.0 - 1e-3
 
 
 # --------------------------------------------------------------------- format
@@ -39,14 +44,30 @@ def decimal_to_prob(d: float) -> float:
 
 
 def american_to_decimal(a: float) -> float:
-    """American odds -> decimal. Part I s2.1."""
+    """American odds -> decimal. Part I s2.1.
+
+    American odds are undefined between -100 and +100: the format expresses
+    "stake 100 to win a" or "stake |a| to win 100", and neither reading admits a
+    magnitude below 100. Zero is the degenerate case that used to divide by zero.
+    """
+    if abs(a) < 100.0:
+        raise ValueError(
+            f"American odds must be +100 or longer, or -100 or shorter; got {a}"
+        )
     if a > 0:
         return 1.0 + a / 100.0
     return 1.0 + 100.0 / abs(a)
 
 
 def decimal_to_american(d: float) -> float:
-    """Decimal odds -> American. Part I s2.1."""
+    """Decimal odds -> American. Part I s2.1.
+
+    Decimal odds of exactly 1.00 are a bet that returns the stake and nothing
+    else; they have no American representation, and computing one divided by
+    zero.
+    """
+    if d <= 1.0:
+        raise ValueError(f"decimal odds must be greater than 1.0; got {d}")
     if d >= 2.0:
         return (d - 1.0) * 100.0
     return -100.0 / (d - 1.0)
@@ -124,12 +145,12 @@ def worst_case_profit(stakes: Sequence[float], decimal_odds: Sequence[float]) ->
     if not stakes:
         return 0.0
     total = sum(stakes)
-    return min(s * d for s, d in zip(stakes, decimal_odds)) - total
+    return min(s * d for s, d in zip(stakes, decimal_odds, strict=True)) - total
 
 
 def payouts(stakes: Sequence[float], decimal_odds: Sequence[float]) -> list[float]:
     """Per-outcome payout. Payout on leg i is s_i * d_i (Part I s3.1)."""
-    return [s * d for s, d in zip(stakes, decimal_odds)]
+    return [s * d for s, d in zip(stakes, decimal_odds, strict=True)]
 
 
 def profit_by_outcome(stakes: Sequence[float], decimal_odds: Sequence[float]) -> list[float]:
@@ -149,7 +170,7 @@ def skewed_stakes(
     leg i settles at the quoted price, then renormalise. Under-staking a doubtful
     leg trades some hedge completeness for higher conditional return.
     """
-    weights = [q * decimal_to_prob(d) for d, q in zip(decimal_odds, settle_probs)]
+    weights = [q * decimal_to_prob(d) for d, q in zip(decimal_odds, settle_probs, strict=True)]
     tw = sum(weights)
     if tw <= 0:
         return [0.0] * len(decimal_odds)
@@ -203,7 +224,11 @@ def devig_power(decimal_odds: Sequence[float], tol: float = 1e-10) -> list[float
     prediction markets where prices cluster near 0 and 1.
     """
     raw = [decimal_to_prob(d) for d in decimal_odds]
-    if not raw or min(raw) <= 0:
+    # Any d <= 1 clamps to a probability of exactly 1.0, and 1**k is 1 for every
+    # k -- the sum can then never fall to 1, so the bisection walks to its upper
+    # bound and returns a silently meaningless answer. Proportional de-vigging
+    # degrades honestly on the same input.
+    if not raw or min(raw) <= 0 or max(raw) >= 1.0:
         return devig_proportional(decimal_odds)
     lo, hi = 0.5, 3.0
     k = 1.0
@@ -234,9 +259,24 @@ def lay_stake_to_hedge(
 ) -> float:
     """Lay stake that fully hedges a back bet. Part I s6.2.
 
-        s_l = s_b * d_b / (d_l - c*(d_l - 1))
+        s_l = s_b * d_b / (d_l - c)
+
+    The denominator is `d_l - c`, not `d_l - c*(d_l - 1)`. Commission on an
+    exchange is charged on the NET WINNINGS of the bet that wins, and when a lay
+    wins the winnings are the backer's stake s_l -- not the liability, and not a
+    function of the lay price. Equating the two states:
+
+        back wins:  s_b*(d_b - 1) - s_l*(d_l - 1)
+        lay wins:   -s_b + s_l*(1 - c)
+
+        =>  s_b*d_b = s_l*(d_l - c)   =>   s_l = s_b*d_b / (d_l - c)
+
+    This is the same derivation `back_lay_is_arb` below already rests on, so the
+    two agree. The previous denominator left the position unhedged: backing 100
+    at 2.10 and laying at 2.05 on 2% commission returned a lay stake of 103.4993,
+    paying +1.3258 if the back won and +1.4293 if the lay won.
     """
-    denom = d_lay - commission * (d_lay - 1.0)
+    denom = d_lay - commission
     if denom <= 0:
         return 0.0
     return back_stake * d_back / denom
@@ -273,11 +313,21 @@ def kelly_arb_fraction(margin: float, void_rate: float, void_loss: float) -> flo
 
     Typically returns >1 for realistic inputs, which is the formal statement that
     bankroll, not risk aversion, is the binding constraint for an arber.
+
+    Two boundary cases have to be told apart, because collapsing both to 0.0
+    said "stake nothing" for the one input where the trade carries no risk at
+    all:
+
+    * `void_loss == 0` with a positive margin -- nothing can go wrong, so Kelly
+      places no bound and the answer is +infinity. Callers that have to render
+      or serialise it should special-case `math.isinf`.
+    * `margin <= 0` -- there is no edge to stake on, so the answer really is 0.
     """
-    denom = margin * void_loss
-    if denom <= 0:
+    if margin <= 0:
         return 0.0
-    return margin_after_voids(margin, void_rate, void_loss) / denom
+    if void_loss <= 0:
+        return math.inf
+    return margin_after_voids(margin, void_rate, void_loss) / (margin * void_loss)
 
 
 def annualised_return(margin: float, turnovers_per_year: float) -> float:

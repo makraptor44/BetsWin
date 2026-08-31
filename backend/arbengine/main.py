@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 
 from loguru import logger
@@ -66,6 +67,11 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.demo:
+        # Set the environment variable, not just the in-process object.
+        # `uvicorn.run(..., reload=True)` re-imports the app in a fresh
+        # subprocess, where a mutation of this process's settings never
+        # happened -- so `--demo --reload` silently ran against live venues.
+        os.environ["DEMO_MODE"] = "true"
         settings.demo_mode = True
     _configure_logging()
     configure_from_settings(settings)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 import {
@@ -8,11 +8,12 @@ import {
   money,
   num,
   pct,
-  usd,
 } from "@/lib/format";
 import type { Arb, ArbLeg } from "@/lib/types";
 
-import { FlagChip, VenueChip, ZoneChip } from "./ui";
+import { VenueChip, ZoneChip } from "./ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface PlaceBetModalProps {
   arb: Arb;
@@ -36,13 +37,59 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
     arb.legs.map((l) => l.stake.toString())
   );
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape" && !busy) {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      // Focus trap. The dialog declares role="dialog" aria-modal="true", which
+      // promises the rest of the page is inert -- but Tab walked straight out
+      // of it into the page behind, so a keyboard user could operate the
+      // controls the overlay was covering.
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, busy]);
+
+  // Move focus into the dialog on open, and put it back where it came from on
+  // close, so the keyboard does not lose its place.
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current
+      ?.querySelector<HTMLElement>("button, input, [tabindex]")
+      ?.focus();
+    return () => previous?.focus?.();
+  }, []);
+
+  // Clear the success timer on unmount: it called onSuccess a second after the
+  // request returned, and firing that against an unmounted tree is a state
+  // update on nothing.
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
 
   const handlePlace = async () => {
     if (!confirmed) {
@@ -66,11 +113,15 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
       });
 
       setSuccess(true);
-      setTimeout(() => {
+      successTimer.current = setTimeout(() => {
         onSuccess(res.message);
       }, 1000);
-    } catch (err: any) {
-      setError(err?.message || "Failed to place bet. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to place bet. Please try again.",
+      );
       setBusy(false);
     }
   };
@@ -83,26 +134,21 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
       aria-labelledby="modal-title"
     >
       <div
-        className="absolute inset-0 transition-opacity"
-        style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(2px)" }}
+        className="absolute inset-0 bg-black/65 backdrop-blur-[2px] transition-opacity"
         onClick={() => !busy && onClose()}
       />
 
       <div
-        className="relative w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        style={{
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-        }}
+        ref={dialogRef}
+        className="relative w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-border bg-background"
       >
         {/* Header */}
         <div
-          className="px-6 py-4 border-b flex items-start justify-between gap-4"
-          style={{ background: "var(--bg-elevated)", borderColor: "var(--border)" }}
+          className="px-6 py-4 border-b flex items-start justify-between gap-4 bg-card border-border"
         >
           <div>
             <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-              <span className="chip chip-accent">{KIND_LABEL[arb.kind]}</span>
+              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-brand-soft text-brand">{KIND_LABEL[arb.kind]}</span>
               {arb.venues.map((v) => (
                 <VenueChip key={v} venue={v} />
               ))}
@@ -112,33 +158,26 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
               Confirm Bet Placement: {arb.title}
             </h2>
           </div>
-          <button
-            className="btn btn-sm shrink-0"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Close"
-          >
+          <Button size="sm" variant="outline" className="shrink-0" onClick={onClose} disabled={busy} aria-label="Close" >
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto flex flex-col gap-5">
           {success ? (
             <div
-              className="p-6 rounded-xl text-center flex flex-col items-center gap-3"
-              style={{ background: "var(--positive-soft)", border: "1px solid var(--positive)" }}
+              className="p-6 rounded-xl text-center flex flex-col items-center gap-3 bg-positive-soft border border-positive"
             >
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-                style={{ background: "var(--positive)", color: "#fff" }}
+                className="w-12 h-12 rounded-full flex items-center justify-center text-2xl text-white bg-positive"
               >
                 ✓
               </div>
-              <h3 className="text-base font-semibold" style={{ color: "var(--positive)" }}>
+              <h3 className="text-base font-semibold text-positive">
                 Bet Placed &amp; Recorded!
               </h3>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              <p className="text-xs text-muted-foreground">
                 The opportunity has been logged in your Positions ledger. Refreshing live opportunities now…
               </p>
             </div>
@@ -146,21 +185,21 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
             <>
               {/* Summary Stats */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="card p-3 text-center">
-                  <div className="label">Total Stake</div>
-                  <div className="mono text-base font-semibold mt-1">
+                <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                  <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Total Stake</div>
+                  <div className="tabular text-base font-semibold mt-1">
                     {money(arb.total_stake, arb.currency)}
                   </div>
                 </div>
-                <div className="card p-3 text-center">
-                  <div className="label">Guaranteed Profit</div>
-                  <div className="mono text-base font-semibold num-positive mt-1">
+                <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                  <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Guaranteed Profit</div>
+                  <div className="tabular text-base font-semibold text-positive mt-1">
                     {money(arb.worst_case_profit, arb.currency)}
                   </div>
                 </div>
-                <div className="card p-3 text-center">
-                  <div className="label">Net Margin</div>
-                  <div className="mono text-base font-semibold mt-1">
+                <div className="rounded-lg border border-border bg-card shadow-sm p-3 text-center">
+                  <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Net Margin</div>
+                  <div className="tabular text-base font-semibold mt-1">
                     {pct(arb.net_margin)}
                   </div>
                 </div>
@@ -169,11 +208,10 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
               {/* Legs Review */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="label">Order Legs ({arb.legs.length})</div>
+                  <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint">Order Legs ({arb.legs.length})</div>
                   <button
                     type="button"
-                    className="text-xs hover:underline"
-                    style={{ color: "var(--accent)" }}
+                    className="text-xs hover:underline text-brand"
                     onClick={() => setShowOverrides((o) => !o)}
                   >
                     {showOverrides ? "Hide price adjustments" : "Adjust executed prices/stakes"}
@@ -181,18 +219,16 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
                 </div>
 
                 <div className="flex flex-col gap-2.5">
+                  {/* `idx` addresses the positional override arrays; the
+                      key is the leg's own identity. */}
                   {arb.legs.map((leg: ArbLeg, idx: number) => (
                     <div
-                      key={idx}
-                      className="p-3 rounded-lg border flex flex-col gap-2"
-                      style={{
-                        background: "var(--bg-sunken)",
-                        borderColor: "var(--border)",
-                      }}
+                      key={`${leg.venue}:${leg.market_id}:${leg.outcome}`}
+                      className="p-3 rounded-lg border flex flex-col gap-2 bg-muted border-border"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="chip text-xs font-semibold uppercase">
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground text-xs uppercase">
                             {leg.side}
                           </span>
                           <span className="text-sm font-medium truncate">
@@ -215,48 +251,28 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-                        <div className="mono" style={{ color: "var(--text-muted)" }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t border-border">
+                        <div className="tabular text-muted-foreground">
                           Target Price: <span className="font-semibold text-white">{leg.price.toFixed(4)}</span> ({leg.decimal_odds.toFixed(2)}x)
                         </div>
-                        <div className="mono" style={{ color: "var(--text-muted)" }}>
+                        <div className="tabular text-muted-foreground">
                           Stake: <span className="font-semibold text-white">{money(leg.stake, arb.currency)}</span> · {num(leg.contracts, 0)} contracts
                         </div>
                       </div>
 
                       {showOverrides && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 mt-1 border-t" style={{ borderColor: "var(--border)" }}>
+                        <div className="grid grid-cols-2 gap-2 pt-2 mt-1 border-t border-border">
                           <div>
-                            <label className="text-[11px] block mb-1" style={{ color: "var(--text-faint)" }}>
+                            <label className="text-[11px] block mb-1 text-faint">
                               Actual Executed Price
                             </label>
-                            <input
-                              type="number"
-                              step="0.0001"
-                              className="input text-xs w-full"
-                              value={customPrices[idx] || ""}
-                              onChange={(e) => {
-                                const copy = [...customPrices];
-                                copy[idx] = e.target.value;
-                                setCustomPrices(copy);
-                              }}
-                            />
+                            <Input type="number" step="0.0001" className="text-xs w-full" value={customPrices[idx] || ""} onChange={(e) => { const copy = [...customPrices]; copy[idx] = e.target.value; setCustomPrices(copy); }} />
                           </div>
                           <div>
-                            <label className="text-[11px] block mb-1" style={{ color: "var(--text-faint)" }}>
+                            <label className="text-[11px] block mb-1 text-faint">
                               Actual Executed Stake
                             </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              className="input text-xs w-full"
-                              value={customStakes[idx] || ""}
-                              onChange={(e) => {
-                                const copy = [...customStakes];
-                                copy[idx] = e.target.value;
-                                setCustomStakes(copy);
-                              }}
-                            />
+                            <Input type="number" step="0.01" className="text-xs w-full" value={customStakes[idx] || ""} onChange={(e) => { const copy = [...customStakes]; copy[idx] = e.target.value; setCustomStakes(copy); }} />
                           </div>
                         </div>
                       )}
@@ -267,26 +283,18 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
 
               {/* Optional Note */}
               <div>
-                <label htmlFor="placement-note" className="label block mb-1">
+                <label htmlFor="placement-note" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint mb-1">
                   Reference Note (Optional)
                 </label>
-                <input
-                  id="placement-note"
-                  type="text"
-                  placeholder="e.g. Kalshi order #9021, Smarkets session confirmation"
-                  className="input w-full text-xs"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  disabled={busy}
-                />
+                <Input id="placement-note" type="text" placeholder="e.g. Kalshi order #9021, Smarkets session confirmation" className="w-full text-xs" value={note} onChange={(e) => setNote(e.target.value)} disabled={busy} />
               </div>
 
               {/* Mandatory Confirmation Box */}
               <div
                 className="p-3.5 rounded-lg border flex items-start gap-3 cursor-pointer select-none"
                 style={{
-                  background: confirmed ? "var(--accent-soft)" : "var(--bg-sunken)",
-                  borderColor: confirmed ? "var(--accent)" : "var(--border)",
+                  background: confirmed ? "var(--brand-soft)" : "var(--muted)",
+                  borderColor: confirmed ? "var(--brand)" : "var(--border)",
                 }}
                 onClick={() => !busy && setConfirmed(!confirmed)}
               >
@@ -302,7 +310,7 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
                   <span className="font-semibold text-white block">
                     I confirm that I have reviewed and verified all {arb.legs.length} legs.
                   </span>
-                  <span style={{ color: "var(--text-muted)" }}>
+                  <span className="text-muted-foreground">
                     I understand that placing this trade will record the position in my ledger and refresh the active opportunities list.
                   </span>
                 </label>
@@ -310,8 +318,7 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
 
               {error && (
                 <div
-                  className="p-3 rounded-lg text-xs"
-                  style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+                  className="p-3 rounded-lg text-xs bg-danger-soft text-danger"
                 >
                   {error}
                 </div>
@@ -323,30 +330,15 @@ export function PlaceBetModal({ arb, onClose, onSuccess }: PlaceBetModalProps) {
         {/* Footer Actions */}
         {!success && (
           <div
-            className="px-6 py-4 border-t flex items-center justify-between gap-3"
-            style={{ background: "var(--bg-elevated)", borderColor: "var(--border)" }}
+            className="px-6 py-4 border-t flex items-center justify-between gap-3 bg-card border-border"
           >
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={onClose}
-              disabled={busy}
-            >
+            <Button size="sm" variant="outline" type="button" onClick={onClose} disabled={busy} >
               Cancel
-            </button>
+            </Button>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                onClick={handlePlace}
-                disabled={busy || !confirmed}
-                style={{
-                  opacity: confirmed && !busy ? 1 : 0.5,
-                  minWidth: 140,
-                }}
-              >
+              <Button size="sm" type="button" onClick={handlePlace} disabled={busy || !confirmed} style={{ opacity: confirmed && !busy ? 1 : 0.5, minWidth: 140, }} >
                 {busy ? "Placing..." : "Confirm & Place"}
-              </button>
+              </Button>
             </div>
           </div>
         )}

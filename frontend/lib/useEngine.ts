@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, STATIC_DEMO, api } from "./api";
-import type { Arb, EngineStatus, NearMiss, ScanStats } from "./types";
+import type { Analytics, Arb, EngineStatus, NearMiss, ScanStats } from "./types";
 
 type ConnectionState = "connecting" | "live" | "polling" | "offline" | "snapshot";
 
@@ -40,18 +40,37 @@ const RECONNECT_BASE_MS = 1_500;
 const RECONNECT_MAX_MS = 30_000;
 const ACTIVITY_LIMIT = 40;
 
+/**
+ * Where the live socket lives.
+ *
+ * Order of preference:
+ *   1. NEXT_PUBLIC_WS_URL, if the deployment states one.
+ *   2. NEXT_PUBLIC_API_URL's origin, which is the same backend the rewrite
+ *      proxies /api to -- so the socket follows the API wherever it moved.
+ *   3. The page's own origin.
+ *
+ * This used to hard-code `port === "3000"` -> `:8000`. Both start.sh and
+ * start.ps1 deliberately move to a free port when those are taken, so the
+ * socket pointed at nothing and the UI silently fell back to polling -- and
+ * under `next start` NEXT_PUBLIC_WS_URL is baked in at build time, so it could
+ * not correct it either.
+ */
 function wsUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_WS_URL;
   if (explicit) return explicit;
   if (typeof window === "undefined") return "";
-  // The dev rewrite proxies /api but not the socket, so target the backend
-  // directly on its own port when running against localhost.
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host =
-    window.location.port === "3000"
-      ? `${window.location.hostname}:8000`
-      : window.location.host;
-  return `${proto}//${host}/ws`;
+
+  const toWs = (origin: string) => origin.replace(/^http/, "ws") + "/ws";
+
+  const api = process.env.NEXT_PUBLIC_API_URL;
+  if (api) {
+    try {
+      return toWs(new URL(api).origin);
+    } catch {
+      /* malformed: fall through to the page's own origin */
+    }
+  }
+  return toWs(window.location.origin);
 }
 
 function activityFrom(stats: ScanStats): ActivityEntry {
@@ -64,6 +83,27 @@ function activityFrom(stats: ScanStats): ActivityEntry {
     tightestGapBps: stats.tightest_gap_bps ?? null,
     durationSeconds: stats.duration_seconds ?? 0,
     errors: stats.errors?.length ?? 0,
+  };
+}
+
+/**
+ * The analytics endpoint reports a narrower row than the live socket does: no
+ * finish time, no near-miss count, no gap. Adapting it explicitly keeps those
+ * absences visible instead of casting a partial object to `ScanStats` and
+ * letting the missing fields read as zero somewhere downstream.
+ */
+function activityFromScanRow(
+  row: Analytics["recent_scans"][number],
+): ActivityEntry {
+  return {
+    at: new Date(row.started_at).getTime() || Date.now(),
+    events: row.events_scanned,
+    arbs: row.arbs_found,
+    newArbs: row.new_arbs,
+    nearMisses: 0,
+    tightestGapBps: null,
+    durationSeconds: row.duration ?? 0,
+    errors: 0,
   };
 }
 
@@ -105,14 +145,22 @@ export function useEngine(): EngineState {
   // any shared state.
   const genRef = useRef(0);
 
-  const pushActivity = useCallback((stats: ScanStats | null | undefined) => {
-    if (!stats) return;
-    const entry = activityFrom(stats);
+  const pushEntry = useCallback((entry: ActivityEntry) => {
     setActivity((prev) => {
-      if (prev.length > 0 && prev[0].at === entry.at) return prev;
+      // Keyed on the timestamp: the same scan arrives over the socket and again
+      // on the next poll, and a feed that lists it twice reads as two cycles.
+      if (prev.some((e) => e.at === entry.at)) return prev;
       return [entry, ...prev].slice(0, ACTIVITY_LIMIT);
     });
   }, []);
+
+  const pushActivity = useCallback(
+    (stats: ScanStats | null | undefined) => {
+      if (!stats) return;
+      pushEntry(activityFrom(stats));
+    },
+    [pushEntry],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -124,6 +172,23 @@ export function useEngine(): EngineState {
       setArbs(arbRes.arbs);
       setStatus(statusRes);
       setNearMisses(missRes.near_misses);
+
+      // The static demo has no socket and never scans again, so the activity
+      // log would hold the single scan `status` happens to carry -- one lonely
+      // point, no trend, and a feed that looks broken rather than idle. The
+      // fixtures do contain the engine's real scan history, so replay it.
+      if (STATIC_DEMO) {
+        try {
+          const { recent_scans } = await api.analytics(30);
+          // Oldest first, because `pushEntry` prepends.
+          for (const row of [...recent_scans].reverse()) {
+            pushEntry(activityFromScanRow(row));
+          }
+        } catch {
+          // Analytics is not essential to this page; the scan carried by
+          // `status` below still renders on its own.
+        }
+      }
       pushActivity(statusRes.last_scan);
       setLastUpdate(Date.now());
       setLastFrame(Date.now());
@@ -141,7 +206,7 @@ export function useEngine(): EngineState {
       setError(message);
       setConnection("offline");
     }
-  }, [pushActivity]);
+  }, [pushActivity, pushEntry]);
 
   const scanNow = useCallback(async () => {
     setScanning(true);
@@ -285,7 +350,19 @@ export function useAsync<T>(
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const fnRef = useRef(fn);
-  fnRef.current = fn;
+
+  // Assigned in an effect, not during render. Writing to a ref while rendering
+  // is a side effect in the render phase, which React is explicitly allowed to
+  // discard or run twice.
+  useEffect(() => {
+    fnRef.current = fn;
+  });
+
+  // The caller's array is serialised into ONE dependency rather than spread
+  // into the list. Spreading made the dependency list variable-length, and
+  // React throws "The final argument passed to useEffect changed size between
+  // renders" the moment any caller passes a list whose length can change.
+  const depKey = JSON.stringify(deps);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,8 +388,7 @@ export function useAsync<T>(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, nonce]);
+  }, [depKey, nonce]);
 
   return { data, loading, error, reload: () => setNonce((n) => n + 1) };
 }

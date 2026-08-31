@@ -3,14 +3,25 @@
 import {
   KIND_LABEL,
   money,
-  num,
   pct,
   placeableLabel,
-  untilLabel,
 } from "@/lib/format";
-import type { Arb } from "@/lib/types";
+import type { CSSProperties } from "react";
 
-import { ConfidenceBar, FlagChip, VenueChip, ZoneChip } from "./ui";
+import type { Arb } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+import { Countdown } from "./Countdown";
+import { ConfidenceBar, FlagChip, VenueChip, ZoneChip, activatable } from "./ui";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export function ArbTable({
   arbs,
@@ -25,84 +36,90 @@ export function ArbTable({
 }) {
   return (
     <div className="scroll-x">
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Opportunity</th>
-            <th>Type</th>
-            <th>Venues</th>
-            <th>Placeable from</th>
-            <th style={{ textAlign: "right" }}>Net margin</th>
-            <th style={{ textAlign: "right" }}>Stake</th>
-            <th style={{ textAlign: "right" }}>Profit</th>
-            <th style={{ textAlign: "right" }}>Max size</th>
-            <th>Confidence</th>
-            <th>Risks</th>
-            <th style={{ textAlign: "right" }}>Closes</th>
-            {onPlace && <th style={{ textAlign: "center" }}>Action</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {arbs.map((a) => (
-            <tr
+      {/* `sticky-head` keeps the column names in view: this table runs to
+          hundreds of rows and a numeric column with no header is unreadable. */}
+      <Table className="w-full border-collapse text-[12.5px]">
+        <TableHeader className="sticky-head">
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Opportunity</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Venues</TableHead>
+            <TableHead>Placeable from</TableHead>
+            <TableHead className="text-right">Net margin</TableHead>
+            <TableHead className="text-right">Stake</TableHead>
+            <TableHead className="text-right">Profit</TableHead>
+            <TableHead className="text-right">Max size</TableHead>
+            <TableHead>Confidence</TableHead>
+            <TableHead>Risks</TableHead>
+            <TableHead className="text-right">Closes</TableHead>
+            {onPlace && <TableHead className="text-center">Action</TableHead>}
+          </TableRow>
+        </TableHeader>
+        {/* `stagger` reads --i off each row, so the cascade is one CSS rule
+            rather than a delay computed per row in JS. Only the first screenful
+            is staggered -- rows below the fold have finished animating long
+            before anyone scrolls to them, and delaying them further just makes
+            a long table feel slow to settle. */}
+        <TableBody className="stagger">
+          {arbs.map((a, i) => (
+            <TableRow
               key={a.id}
-              className="clickable"
-              onClick={() => onSelect(a)}
-              style={
-                selectedId === a.id
-                  ? { background: "var(--accent-soft)" }
-                  : undefined
-              }
+              style={{ "--i": i } as CSSProperties}
+              className={cn(
+                "row-action",
+                selectedId === a.id && "bg-brand-soft",
+              )}
+              aria-current={selectedId === a.id ? "true" : undefined}
+              {...activatable(() => onSelect(a))}
             >
-              <td style={{ maxWidth: 360 }}>
-                <div className="font-medium truncate" title={a.title}>
+              <TableCell className="max-w-[360px]">
+                <div className="truncate font-medium text-foreground" title={a.title}>
                   {a.title}
                 </div>
                 <div
-                  className="text-xs truncate mt-0.5"
-                  style={{ color: "var(--text-faint)" }}
+                  className="text-xs truncate mt-0.5 text-faint"
                 >
                   {a.legs
                     .map((l) => `${l.outcome} @ ${l.price.toFixed(3)}`)
                     .join("  ·  ")}
                 </div>
-              </td>
-              <td>
-                <span className="chip">{KIND_LABEL[a.kind]}</span>
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
+                <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">{KIND_LABEL[a.kind]}</span>
+              </TableCell>
+              <TableCell>
                 <div className="flex gap-1 flex-wrap">
                   {a.venues.map((v) => (
                     <VenueChip key={v} venue={v} />
                   ))}
                 </div>
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
                 <div className="flex flex-col gap-0.5">
                   <ZoneChip zone={a.zone} short />
-                  <span className="text-xs" style={{ color: "var(--text-faint)" }}>
+                  <span className="text-xs text-faint">
                     {placeableLabel(a.placeable_from)}
                   </span>
                 </div>
-              </td>
-              <td className="mono" style={{ textAlign: "right", fontWeight: 600 }}>
+              </TableCell>
+              <TableCell className="num text-right font-semibold">
                 {pct(a.net_margin)}
                 {a.margin > a.net_margin + 0.0005 && (
                   <div
-                    className="text-[10px] font-normal"
-                    style={{ color: "var(--text-faint)" }}
+                    className="text-[10px] font-normal text-faint"
                     title="Gross margin before venue fees and slippage"
                   >
                     {pct(a.margin)} gross
                   </div>
                 )}
-              </td>
-              <td className="mono" style={{ textAlign: "right" }}>
+              </TableCell>
+              <TableCell className="num text-right">
                 {money(a.total_stake, a.currency, 0)}
-              </td>
-              <td
-                className={`mono ${a.worst_case_profit >= 0 ? "num-positive" : "num-negative"}`}
-                style={{ textAlign: "right", fontWeight: 600 }}
+              </TableCell>
+              <TableCell
+                className={`num text-right font-semibold ${
+                  a.worst_case_profit >= 0 ? "text-positive" : "text-danger"
+                }`}
                 title={
                   a.strategy === "directional"
                     ? "Worst case: the full stake, lost if the bet is wrong -- not a guaranteed profit"
@@ -110,42 +127,39 @@ export function ArbTable({
                 }
               >
                 {money(a.worst_case_profit, a.currency)}
-              </td>
-              <td
-                className="mono"
-                style={{ textAlign: "right", color: "var(--text-muted)" }}
+              </TableCell>
+              <TableCell
+                className="num text-right text-muted-foreground"
                 title="Total stake the visible order-book depth can absorb"
               >
                 {money(a.max_stake_available, a.currency, 0)}
-              </td>
-              <td>
+              </TableCell>
+              <TableCell>
                 <ConfidenceBar value={a.confidence} />
-              </td>
-              <td style={{ maxWidth: 170 }}>
+              </TableCell>
+              <TableCell className="max-w-[170px]">
                 <div className="flex gap-1 flex-wrap">
                   {a.flags.slice(0, 2).map((f) => (
                     <FlagChip key={f} flag={f} />
                   ))}
                   {a.flags.length > 2 && (
-                    <span className="chip">+{a.flags.length - 2}</span>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">+{a.flags.length - 2}</span>
                   )}
                   {a.flags.length === 0 && (
-                    <span className="chip chip-positive">Clean</span>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground bg-positive-soft text-positive">Clean</span>
                   )}
                 </div>
-              </td>
-              <td
-                className="mono"
-                style={{ textAlign: "right", color: "var(--text-muted)" }}
+              </TableCell>
+              <TableCell
+                className="num text-right text-muted-foreground"
               >
-                {untilLabel(a.close_time)}
-              </td>
+                <Countdown iso={a.close_time} showIcon />
+              </TableCell>
               {onPlace && (
-                <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
-                    className="btn btn-sm btn-primary"
-                    style={{ whiteSpace: "nowrap", padding: "4px 10px" }}
+                    className="whitespace-nowrap px-[10px] py-[4px]"
                     onClick={(e) => {
                       e.stopPropagation();
                       onPlace(a);
@@ -153,12 +167,12 @@ export function ArbTable({
                   >
                     Place Bet
                   </button>
-                </td>
+                </TableCell>
               )}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -178,45 +192,46 @@ export function ArbCards({
       {arbs.map((a) => (
         <div
           key={a.id}
-          className="card card-hover p-3.5 text-left w-full cursor-pointer"
-          onClick={() => onSelect(a)}
+          className="row-action w-full rounded-lg border border-border bg-card p-3.5 text-left shadow-sm"
+          {...activatable(() => onSelect(a))}
         >
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="font-medium text-[13px] leading-snug">{a.title}</div>
             <div
-              className="mono text-base font-semibold shrink-0"
-              style={{ color: "var(--text)" }}
+              className="tabular text-base font-semibold shrink-0 text-foreground"
             >
               {pct(a.net_margin)}
             </div>
           </div>
           <div className="flex flex-wrap gap-1 mb-2.5">
-            <span className="chip">{KIND_LABEL[a.kind]}</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground">{KIND_LABEL[a.kind]}</span>
             {a.venues.map((v) => (
               <VenueChip key={v} venue={v} />
             ))}
             <ZoneChip zone={a.zone} short />
           </div>
           <div className="flex flex-col gap-1 mb-2.5">
-            {a.legs.map((l, i) => (
-              <div key={i} className="flex justify-between text-xs">
-                <span style={{ color: "var(--text-muted)" }} className="truncate pr-2">
+            {a.legs.map((l) => (
+              <div
+                key={`${l.venue}:${l.market_id}:${l.outcome}`}
+                className="flex justify-between text-xs"
+              >
+                <span className="truncate pr-2 text-muted-foreground">
                   {l.outcome}
                 </span>
-                <span className="mono shrink-0">
+                <span className="tabular shrink-0">
                   {l.price.toFixed(3)} · {money(l.stake, a.currency)}
                 </span>
               </div>
             ))}
           </div>
           <div
-            className="flex items-center justify-between pt-2.5"
-            style={{ borderTop: "1px solid var(--border)" }}
+            className="flex items-center justify-between pt-2.5 border-t border-border"
           >
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <span className="text-xs text-muted-foreground">
               {money(a.total_stake, a.currency, 0)} →{" "}
               <span
-                className={`mono font-semibold ${
+                className={`tabular font-semibold ${
                   a.worst_case_profit >= 0 ? "num-positive" : "num-negative"
                 }`}
               >
@@ -226,16 +241,9 @@ export function ArbCards({
             <div className="flex items-center gap-2">
               <ConfidenceBar value={a.confidence} />
               {onPlace && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPlace(a);
-                  }}
-                >
+                <Button size="sm" type="button" onClick={(e) => { e.stopPropagation(); onPlace(a); }} >
                   Place
-                </button>
+                </Button>
               )}
             </div>
           </div>

@@ -9,6 +9,19 @@
  */
 
 import { useId } from "react";
+import {
+  Area,
+  Bar,
+  BarChart as RBarChart,
+  CartesianGrid,
+  Line,
+  LineChart as RLineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export interface Point {
   label: string;
@@ -16,14 +29,47 @@ export interface Point {
 }
 
 const AXIS = "var(--border)";
-const MUTED = "var(--text-faint)";
+
+/**
+ * One tooltip for every chart here.
+ *
+ * Recharts' default is a white card with its own typography, which on a themed
+ * dark dashboard looks like a foreign object. This one is built from the same
+ * surface tokens as everything else, so it inherits light and dark for free.
+ */
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  valueFormat,
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number | string }>;
+  label?: string | number;
+  valueFormat: (v: number) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  const raw = payload[0]?.value;
+  const value = typeof raw === "number" ? valueFormat(raw) : String(raw ?? "");
+  return (
+    <div
+      className="rounded-md border border-border-strong bg-popover px-2.5 py-1.5 text-[11px]"
+      style={{ boxShadow: "var(--shadow-overlay)" }}
+    >
+      <div className="num font-medium text-foreground">{value}</div>
+      {label !== undefined && label !== "" && (
+        <div className="mt-0.5 text-faint">{String(label)}</div>
+      )}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------- bar chart */
 
 export function BarChart({
   data,
   height = 160,
-  color = "var(--accent)",
+  color = "var(--brand)",
   valueFormat = (v: number) => v.toFixed(0),
   emptyMessage = "No data yet",
 }: {
@@ -35,41 +81,43 @@ export function BarChart({
 }) {
   if (!data.length) return <ChartEmpty message={emptyMessage} height={height} />;
 
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const barW = 100 / data.length;
-
   return (
-    <div style={{ width: "100%" }}>
-      <svg
-        viewBox={`0 0 100 ${height}`}
-        preserveAspectRatio="none"
-        style={{ width: "100%", height, display: "block" }}
-        role="img"
-        aria-label={`Bar chart: ${data.map((d) => `${d.label} ${valueFormat(d.value)}`).join(", ")}`}
-      >
-        {data.map((d, i) => {
-          const h = (d.value / max) * (height - 20);
-          return (
-            <rect
-              key={d.label + i}
-              x={i * barW + barW * 0.18}
-              y={height - h}
-              width={barW * 0.64}
-              height={Math.max(h, d.value > 0 ? 1.5 : 0)}
-              fill={color}
-              rx="1"
-            >
-              <title>{`${d.label}: ${valueFormat(d.value)}`}</title>
-            </rect>
-          );
-        })}
-        <line x1="0" y1={height} x2="100" y2={height} stroke={AXIS} strokeWidth="0.5" />
-      </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
-        <span>{data[0].label}</span>
-        {data.length > 2 && <span>{data[Math.floor(data.length / 2)].label}</span>}
-        <span>{data[data.length - 1].label}</span>
-      </div>
+    <div className="w-full">
+      <ResponsiveContainer width="100%" height={height}>
+        <RBarChart data={data} margin={{ top: 6, right: 4, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={AXIS} strokeDasharray="2 4" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 10, fill: "var(--faint)" }}
+            axisLine={{ stroke: AXIS }}
+            tickLine={false}
+            interval="preserveStartEnd"
+            minTickGap={24}
+          />
+          <YAxis
+            tickFormatter={valueFormat}
+            width={40}
+            tick={{ fontSize: 10, fill: "var(--faint)" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            cursor={{ fill: "var(--brand-soft)" }}
+            content={<ChartTooltip valueFormat={valueFormat} />}
+          />
+          {/* Capped, because Recharts divides the full width between however many
+              bars there are: a window with a single day in it produced one bar
+              spanning the entire chart, which reads as a rendering fault rather
+              than as one day of data. */}
+          <Bar
+            dataKey="value"
+            fill={color}
+            radius={[2, 2, 0, 0]}
+            maxBarSize={44}
+            animationDuration={480}
+          />
+        </RBarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -79,7 +127,7 @@ export function BarChart({
 export function LineChart({
   data,
   height = 180,
-  color = "var(--accent)",
+  color = "var(--brand)",
   fill = true,
   valueFormat = (v: number) => v.toFixed(2),
   zeroLine = false,
@@ -96,13 +144,12 @@ export function LineChart({
   const gradId = useId().replace(/:/g, "");
   if (data.length < 2) return <ChartEmpty message={emptyMessage} height={height} />;
 
+  // The domain is padded so the line does not graze the frame, but the padding
+  // is never shown on the axis: a count series must not appear to reach -58
+  // because the plot area needed headroom.
   const values = data.map((d) => d.value);
-  // The real extremes are what the caption reports; the padded values below
-  // only shape the plot area. Showing the padding would claim, for instance,
-  // that a count series reached -58.
   const dataMin = Math.min(...values);
   const dataMax = Math.max(...values);
-
   let min = zeroLine ? Math.min(dataMin, 0) : dataMin;
   let max = zeroLine ? Math.max(dataMax, 0) : dataMax;
   if (max === min) {
@@ -110,73 +157,59 @@ export function LineChart({
     min -= 1;
   }
   const pad = (max - min) * 0.08;
-  min -= pad;
-  max += pad;
-
-  const W = 100;
-  const H = height;
-  const x = (i: number) => (i / (data.length - 1)) * W;
-  const y = (v: number) => H - ((v - min) / (max - min)) * H;
-
-  const path = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(2)},${y(d.value).toFixed(2)}`).join(" ");
-  const area = `${path} L${W},${H} L0,${H} Z`;
-  const zeroY = y(0);
 
   return (
-    <div style={{ width: "100%" }}>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        style={{ width: "100%", height, display: "block", overflow: "visible" }}
-        role="img"
-        aria-label={`Line chart from ${valueFormat(data[0].value)} to ${valueFormat(data[data.length - 1].value)}`}
-      >
+    <ResponsiveContainer width="100%" height={height}>
+      <RLineChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
+            <stop offset="0%" stopColor={color} stopOpacity={0.24} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        {zeroLine && zeroY >= 0 && zeroY <= H && (
-          <line
-            x1="0"
-            y1={zeroY}
-            x2={W}
-            y2={zeroY}
-            stroke={AXIS}
-            strokeWidth="0.5"
-            strokeDasharray="2 2"
+        <CartesianGrid stroke={AXIS} strokeDasharray="2 4" vertical={false} />
+        <XAxis dataKey="label" hide />
+        <YAxis
+          domain={[min - pad, max + pad]}
+          tickFormatter={valueFormat}
+          width={52}
+          tick={{ fontSize: 10, fill: "var(--faint)" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        {zeroLine && <ReferenceLine y={0} stroke={AXIS} strokeWidth={1} />}
+        <Tooltip
+          cursor={{ stroke: AXIS, strokeWidth: 1 }}
+          content={<ChartTooltip valueFormat={valueFormat} />}
+        />
+        {fill && (
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="none"
+            fill={`url(#${gradId})`}
+            isAnimationActive={false}
           />
         )}
-        {fill && <path d={area} fill={`url(#${gradId})`} />}
-        <path
-          d={path}
-          fill="none"
+        <Line
+          type="monotone"
+          dataKey="value"
           stroke={color}
-          strokeWidth="1.4"
-          vectorEffect="non-scaling-stroke"
-          strokeLinejoin="round"
-          strokeLinecap="round"
+          strokeWidth={1.8}
+          dot={false}
+          activeDot={{ r: 3.5, strokeWidth: 0 }}
+          animationDuration={520}
         />
-      </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
-        <span>{data[0].label}</span>
-        <span className="mono">
-          {valueFormat(dataMin)} … {valueFormat(dataMax)}
-        </span>
-        <span>{data[data.length - 1].label}</span>
-      </div>
-    </div>
+      </RLineChart>
+    </ResponsiveContainer>
   );
 }
-
-/* -------------------------------------------------------------- sparkline */
 
 export function Sparkline({
   values,
   width = 90,
   height = 22,
-  color = "var(--accent)",
+  color = "var(--brand)",
 }: {
   values: number[];
   width?: number;
@@ -191,7 +224,7 @@ export function Sparkline({
     .map((v, i) => `${(i / (values.length - 1)) * width},${height - ((v - min) / span) * height}`)
     .join(" ");
   return (
-    <svg width={width} height={height} style={{ display: "block" }} aria-hidden>
+    <svg className="block" width={width} height={height} aria-hidden>
       <polyline
         points={pts}
         fill="none"
@@ -222,7 +255,7 @@ export function Histogram({
   const barW = 100 / buckets.length;
 
   return (
-    <div style={{ width: "100%" }}>
+    <div className="w-full">
       <svg
         viewBox={`0 0 100 ${height}`}
         preserveAspectRatio="none"
@@ -234,10 +267,10 @@ export function Histogram({
           const h = (b.count / max) * (height - 16);
           // Colour by risk, not by size: the fat tail is the suspicious end.
           const color =
-            b.from >= 0.05 ? "var(--danger)" : b.from >= 0.02 ? "var(--caution)" : "var(--accent)";
+            b.from >= 0.05 ? "var(--danger)" : b.from >= 0.02 ? "var(--caution)" : "var(--brand)";
           return (
             <rect
-              key={i}
+              key={b.from}
               x={i * barW + barW * 0.14}
               y={height - h}
               width={barW * 0.72}
@@ -251,7 +284,7 @@ export function Histogram({
         })}
         <line x1="0" y1={height} x2="100" y2={height} stroke={AXIS} strokeWidth="0.5" />
       </svg>
-      <div className="flex justify-between mt-1.5 text-[10px]" style={{ color: MUTED }}>
+      <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
         <span>{(buckets[0].from * 100).toFixed(1)}%</span>
         <span>margin</span>
         <span>{(buckets[buckets.length - 1].to * 100).toFixed(1)}%+</span>
@@ -274,8 +307,8 @@ export function ProportionBar({
   return (
     <div>
       <div
-        className="flex rounded-full overflow-hidden"
-        style={{ height, background: "var(--bg-sunken)" }}
+        className="flex rounded-full overflow-hidden bg-muted"
+        style={{ height }}
       >
         {segments.map((s) => (
           <div
@@ -289,11 +322,10 @@ export function ProportionBar({
         {segments.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5 text-xs">
             <span
-              className="rounded-full shrink-0"
-              style={{ width: 7, height: 7, background: s.color }}
+              className="rounded-full shrink-0 w-[7px] h-[7px]" style={{ background: s.color }}
             />
-            <span style={{ color: "var(--text-muted)" }}>{s.label}</span>
-            <span className="mono" style={{ color: "var(--text)" }}>
+            <span className="text-muted-foreground">{s.label}</span>
+            <span className="tabular text-foreground">
               {s.value}
             </span>
           </span>
@@ -306,8 +338,8 @@ export function ProportionBar({
 function ChartEmpty({ message, height }: { message: string; height: number }) {
   return (
     <div
-      className="flex items-center justify-center text-xs rounded"
-      style={{ height, color: "var(--text-faint)", background: "var(--bg-sunken)" }}
+      className="flex items-center justify-center text-xs rounded text-faint bg-muted"
+      style={{ height }}
     >
       {message}
     </div>

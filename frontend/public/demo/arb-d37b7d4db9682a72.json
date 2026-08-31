@@ -2,6 +2,7 @@
  "arb": {
   "id": "d37b7d4db9682a72",
   "kind": "dutch_yes",
+  "strategy": "arbitrage",
   "title": "Arsenal vs Brighton - Full-time result - buy every outcome",
   "category": "sports",
   "venues": [
@@ -25,8 +26,8 @@
     "size_available": 13056.0,
     "url": "https://example.invalid/smarkets/demo-sm-3way-0:Y",
     "event_title": "Arsenal vs Brighton - Full-time result",
-    "payout": 509.8640776699029,
-    "net_payout": 507.31707766990286
+    "payout": 504.91839611650477,
+    "net_payout": 504.91839611650477
    },
    {
     "venue": "smarkets",
@@ -44,8 +45,8 @@
     "size_available": 13056.0,
     "url": "https://example.invalid/smarkets/demo-sm-3way-1:Y",
     "event_title": "Arsenal vs Brighton - Full-time result",
-    "payout": 512.5490196078431,
-    "net_payout": 510.6016196078431
+    "payout": 504.9120392156862,
+    "net_payout": 504.9120392156862
    },
    {
     "venue": "smarkets",
@@ -63,8 +64,8 @@
     "size_available": 13056.0,
     "url": "https://example.invalid/smarkets/demo-sm-3way-2:Y",
     "event_title": "Arsenal vs Brighton - Full-time result",
-    "payout": 513.0288461538461,
-    "net_payout": 511.3385461538461
+    "payout": 504.90246923076927,
+    "net_payout": 504.90246923076927
    }
   ],
   "zone": "uk_exchange",
@@ -99,12 +100,17 @@
   "notes": [
    "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
   ],
-  "detected_at": "2026-08-29T13:14:26.261844Z",
-  "close_time": "2026-09-01T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153684Z",
+  "detected_at": "2026-08-31T09:33:48.365354Z",
+  "close_time": "2026-09-03T09:33:51.462883Z",
+  "last_seen": "2026-08-31T09:33:53.108046Z",
+  "last_updated_at": "2026-08-31T09:33:48.365356Z",
+  "expires_at": "2026-08-31T09:42:22.463472Z",
+  "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": 0.9820196403928079,
-  "hours_to_close": 71.99908488972223
+  "seconds_to_expiry": 509.333709,
+  "status": "live",
+  "hours_to_close": 71.99953697638888
  },
  "payout_matrix": [
   {
@@ -147,6 +153,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.00365,
   "kelly_arb_fraction": 1.2356,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.52658,
    0.26074,

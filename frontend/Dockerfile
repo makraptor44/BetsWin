@@ -7,7 +7,14 @@ FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
+
+# NEXT_PUBLIC_* is inlined into the bundle by `next build`, so it has to be
+# present HERE. Supplying it as a runtime environment variable on the container
+# has no effect: the value was already baked in (or defaulted) at build time.
+ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+ARG NEXT_PUBLIC_WS_URL=
+ARG NEXT_PUBLIC_API_KEY=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL     NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL     NEXT_PUBLIC_API_KEY=$NEXT_PUBLIC_API_KEY     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 FROM node:22-slim AS runner

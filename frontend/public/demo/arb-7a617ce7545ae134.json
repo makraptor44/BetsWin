@@ -2,6 +2,7 @@
  "arb": {
   "id": "7a617ce7545ae134",
   "kind": "cross_venue",
+  "strategy": "arbitrage",
   "title": "Labour to win the next UK general election  ==  Will Labour win the next UK general election?",
   "category": "politics",
   "venues": [
@@ -26,8 +27,8 @@
     "size_available": 15232.0,
     "url": "https://example.invalid/smarkets/demo-sm-labour:Y",
     "event_title": "Labour to win the next UK general election",
-    "payout": 512.6538461538461,
-    "net_payout": 510.0946461538461
+    "payout": 507.7323692307692,
+    "net_payout": 507.7323692307692
    },
    {
     "venue": "betfair",
@@ -45,8 +46,8 @@
     "size_available": 19584.0,
     "url": "https://example.invalid/betfair/demo-bf-labour:N",
     "event_title": "Labour to win the next UK general election",
-    "payout": 522.1700223713647,
-    "net_payout": 515.7162223713647
+    "payout": 507.7320212527964,
+    "net_payout": 507.7320212527964
    }
   ],
   "zone": "uk_exchange",
@@ -79,16 +80,21 @@
   ],
   "notes": [
    "Fees and slippage consume 55% of the gross edge (3.41% -> 1.55%).",
-   "Legs sit on different venues; confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
+   "Legs sit with different counterparties (betfair, smarkets); confirm the resolution criteria and settlement dates agree before treating this as risk-free.",
    "Markets were paired by title similarity (100/100), not by a shared identifier.",
    "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
   ],
-  "detected_at": "2026-08-29T13:14:26.263016Z",
-  "close_time": "2027-06-25T13:14:32.874740Z",
-  "last_seen": "2026-08-29T13:14:36.153671Z",
+  "detected_at": "2026-08-31T09:33:48.366019Z",
+  "close_time": "2027-06-27T09:33:51.462883Z",
+  "last_seen": "2026-08-31T09:33:53.108046Z",
+  "last_updated_at": "2026-08-31T09:33:48.366021Z",
+  "expires_at": "2026-08-31T09:42:37.463386Z",
+  "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": 1.5480309606192124,
-  "hours_to_close": 7199.999085212778
+  "seconds_to_expiry": 524.335287,
+  "status": "live",
+  "hours_to_close": 7199.999537438889
  },
  "payout_matrix": [
   {
@@ -122,6 +128,7 @@
   "void_loss": 0.3,
   "margin_after_voids": 0.00918,
   "kelly_arb_fraction": 1.9751,
+  "kelly_arb_unbounded": false,
   "devig_fair_probs": [
    0.53775,
    0.46225

@@ -75,12 +75,27 @@ async function fixture<T>(name: string): Promise<T> {
   return data;
 }
 
+/**
+ * Shared secret for the endpoints that change something.
+ *
+ * NEXT_PUBLIC_* is inlined into the browser bundle, so this is not a secret
+ * from anyone using the dashboard -- it is not meant to be. The security
+ * boundary is the engine's loopback bind; this key is what lets you move it off
+ * loopback on a trusted network without leaving the config and scanner-control
+ * endpoints open to it.
+ */
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+        ...(init?.headers ?? {}),
+      },
       cache: "no-store",
     });
   } catch {
@@ -147,6 +162,16 @@ function filterArbs(all: Arb[], f: ArbFilters): Arb[] {
   if (f.min_margin) out = out.filter((a) => a.net_margin >= f.min_margin!);
   if (f.min_confidence)
     out = out.filter((a) => a.confidence >= f.min_confidence!);
+  if (f.max_hours_to_close !== undefined) {
+    // The live backend honours this; the demo used to render the control and
+    // then ignore it, so the same filter behaved differently in each mode.
+    out = out.filter(
+      (a) =>
+        a.hours_to_close !== null &&
+        a.hours_to_close !== undefined &&
+        a.hours_to_close <= f.max_hours_to_close!,
+    );
+  }
   if (f.search) {
     const q = f.search.toLowerCase();
     out = out.filter((a) => a.title.toLowerCase().includes(q));
@@ -244,10 +269,12 @@ export const api = {
   logPlacement: (id: string, note?: string) =>
     STATIC_DEMO
       ? demoUnavailable("Logging a placement")
-      : post<{ ok: boolean; arb_row_id: number; legs_logged: number }>(
-          `/api/arbs/${id}/log-placement`,
-          { note },
-        ),
+      : // The endpoint returns `legs_placed`; this said `legs_logged`, so the
+        // typed field was always undefined.
+        post<PlaceBetResult>(`/api/arbs/${id}/log-placement`, {
+          confirmed: true,
+          note,
+        }),
 
   placeBet: (id: string, payload: PlaceBetPayload = { confirmed: true, retire: true }) =>
     STATIC_DEMO
@@ -276,13 +303,17 @@ export const api = {
       const q = String(params.search).toLowerCase();
       rows = rows.filter((m) => m.title.toLowerCase().includes(q));
     }
-    const sort = String(params.sort ?? "volume");
     const keys: Record<string, (m: MarketRow) => number | string> = {
       volume: (m) => -m.volume_usd,
       liquidity: (m) => -m.liquidity_usd,
       book: (m) => m.best_book ?? 99,
       close: (m) => m.close_time ?? "9999",
     };
+    // The backend constrains this with a regex on the query parameter; the
+    // demo shim did not, so any unexpected value threw
+    // "keys[sort] is not a function" out of the comparator.
+    const requested = String(params.sort ?? "volume");
+    const sort = requested in keys ? requested : "volume";
     rows = [...rows].sort((a, b) => {
       const ka = keys[sort](a);
       const kb = keys[sort](b);
@@ -302,6 +333,7 @@ export const api = {
       net_margin: Number(r.net_margin),
       total_stake: Number(r.total_stake),
       venues: (r.venues as string[]) ?? [],
+      detected_at: String(r.detected_at ?? ""),
     }));
     const result = runBacktest(rows, {
       minMargin: Number(body.min_margin ?? 0.005),
@@ -348,13 +380,19 @@ export const api = {
       ? demoUnavailable("Resolving position")
       : post<ResolveResult>(`/api/positions/${rowId}/resolve`, payload),
 
+  /**
+   * Book a known realised P&L against a position.
+   *
+   * The field is `custom_pnl`: that is what /settle declares. This used to post
+   * `realised_pnl`, which the endpoint quietly discarded before booking the
+   * theoretical worst case instead and returning ok.
+   */
   settlePosition: (rowId: number, realisedPnl: number) =>
     STATIC_DEMO
       ? demoUnavailable("Settling a position")
-      : post<{ ok: boolean; row_id: number; realised_pnl: number }>(
-          `/api/positions/${rowId}/settle`,
-          { realised_pnl: realisedPnl },
-        ),
+      : post<ResolveResult>(`/api/positions/${rowId}/settle`, {
+          custom_pnl: realisedPnl,
+        }),
 
   scanNow: () =>
     STATIC_DEMO

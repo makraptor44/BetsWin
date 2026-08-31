@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { Card, Field, SectionTitle } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, Field, SectionTitle,
+  NativeSelect,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { num, pct, usd } from "@/lib/format";
 import type {
@@ -11,13 +15,21 @@ import type {
   StakeCalcResult,
   VoidResult,
 } from "@/lib/types";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function CalculatorsPage() {
   return (
     <div className="flex flex-col gap-5">
       <header>
         <h1 className="text-lg font-semibold tracking-tight">Calculators</h1>
-        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+        <p className="text-sm mt-0.5 text-muted-foreground">
           The same arithmetic the engine runs, available on any prices you like.
           Useful for checking an opportunity by hand before staking.
         </p>
@@ -79,72 +91,54 @@ function StakeCalculator() {
       />
 
       <div className="flex flex-col gap-2 mb-3">
+        {/*
+          Index is the right key here: these are positional slots
+          (outcome 1, outcome 2...) whose VALUES change as you type.
+          Keying by value would remount the input on every keystroke and
+          take the caret with it.
+        */}
         {odds.map((o, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={`outcome-${i}`} className="flex items-center gap-2">
             <span
-              className="text-xs shrink-0"
-              style={{ color: "var(--text-faint)", width: 62 }}
+              className="text-xs shrink-0 text-faint w-[62px]"
             >
               Outcome {i + 1}
             </span>
-            <input
-              className="input mono"
-              type="number"
-              step="0.01"
-              min="1.01"
-              value={o}
-              onChange={(e) => setAt(i, e.target.value)}
-              aria-label={`Decimal odds for outcome ${i + 1}`}
-            />
+            <Input className="tabular" type="number" step="0.01" min="1.01" value={o} onChange={(e) => setAt(i, e.target.value)} aria-label={`Decimal odds for outcome ${i + 1}`} />
             {result && (
               <span
-                className="mono text-xs shrink-0"
-                style={{ width: 92, textAlign: "right" }}
+                className="tabular text-xs shrink-0 text-right w-[92px]"
               >
                 {usd(result.stakes[i] ?? 0)}
               </span>
             )}
             {odds.length > 2 && (
-              <button
-                className="btn btn-sm shrink-0"
-                onClick={() => setOdds((p) => p.filter((_, j) => j !== i))}
-                aria-label={`Remove outcome ${i + 1}`}
-              >
+              <Button size="sm" variant="outline" className="shrink-0" onClick={() => setOdds((p) => p.filter((_, j) => j !== i))} aria-label={`Remove outcome ${i + 1}`} >
                 ✕
-              </button>
+              </Button>
             )}
           </div>
         ))}
         <div className="flex gap-2">
-          <button
-            className="btn btn-sm"
-            onClick={() => setOdds((p) => [...p, "3.00"])}
-          >
+          <Button size="sm" variant="outline" onClick={() => setOdds((p) => [...p, "3.00"])} >
             + Outcome
-          </button>
+          </Button>
         </div>
       </div>
 
       <Field label="Total stake ($)">
-        <input
-          className="input mono"
-          type="number"
-          min="1"
-          value={stake}
-          onChange={(e) => setStake(Number(e.target.value) || 0)}
-        />
+        <Input className="tabular" type="number" min="1" value={stake} onChange={(e) => setStake(Number(e.target.value) || 0)} />
       </Field>
 
       {err && (
-        <p className="text-xs mt-3" style={{ color: "var(--danger)" }}>
+        <p className="text-xs mt-3 text-danger">
           {err}
         </p>
       )}
 
       {result && (
         <div
-          className="mt-4 pt-3"
-          style={{ borderTop: "1px solid var(--border)" }}
+          className="mt-4 pt-3 border-t border-border"
         >
           <div
             className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
@@ -156,7 +150,7 @@ function StakeCalculator() {
           >
             <span
               style={{
-                color: result.is_arbitrage ? "var(--positive)" : "var(--text-muted)",
+                color: result.is_arbitrage ? "var(--positive)" : "var(--muted-foreground)",
               }}
               aria-hidden
             >
@@ -183,46 +177,45 @@ function StakeCalculator() {
           </div>
 
           <div className="scroll-x mt-3">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Outcome</th>
-                  <th style={{ textAlign: "right" }}>Stake</th>
-                  <th style={{ textAlign: "right" }}>Payout</th>
-                  <th style={{ textAlign: "right" }}>Profit</th>
-                  <th style={{ textAlign: "right" }}>Fair prob</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full border-collapse text-[13px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Outcome</TableHead>
+                  <TableHead className="text-right">Stake</TableHead>
+                  <TableHead className="text-right">Payout</TableHead>
+                  <TableHead className="text-right">Profit</TableHead>
+                  <TableHead className="text-right">Fair prob</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* Positional: row i is outcome i's stake. */}
                 {result.stakes.map((s, i) => (
-                  <tr key={i}>
-                    <td>#{i + 1} @ {odds[i]}</td>
-                    <td className="mono" style={{ textAlign: "right" }}>
+                  <TableRow key={`stake-${i}`}>
+                    <TableCell>#{i + 1} @ {odds[i]}</TableCell>
+                    <TableCell className="tabular text-right">
                       {usd(s)}
-                    </td>
-                    <td className="mono" style={{ textAlign: "right" }}>
+                    </TableCell>
+                    <TableCell className="tabular text-right">
                       {usd(result.payouts[i] ?? 0)}
-                    </td>
-                    <td
-                      className={`mono ${
+                    </TableCell>
+                    <TableCell
+                      className={`tabular ${
                         (result.profit_by_outcome[i] ?? 0) >= 0
-                          ? "num-positive"
-                          : "num-negative"
-                      }`}
-                      style={{ textAlign: "right" }}
+                          ? "text-positive"
+                          : "text-danger"
+                      }text-right`}
                     >
                       {usd(result.profit_by_outcome[i] ?? 0)}
-                    </td>
-                    <td
-                      className="mono"
-                      style={{ textAlign: "right", color: "var(--text-muted)" }}
+                    </TableCell>
+                    <TableCell
+                      className="tabular text-right text-muted-foreground"
                     >
                       {pct(result.fair_probs[i] ?? 0, 1)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -266,66 +259,35 @@ function VoidCalculator() {
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <Field label="Nominal margin %">
-          <input
-            className="input mono"
-            type="number"
-            step="0.1"
-            min="0.01"
-            value={margin}
-            onChange={(e) => setMargin(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="0.1" min="0.01" value={margin} onChange={(e) => setMargin(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Void rate %">
-          <input
-            className="input mono"
-            type="number"
-            step="0.5"
-            min="0"
-            max="99"
-            value={voidRate}
-            onChange={(e) => setVoidRate(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="0.5" min="0" max="99" value={voidRate} onChange={(e) => setVoidRate(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Loss on void %" hint="of the stake">
-          <input
-            className="input mono"
-            type="number"
-            step="5"
-            min="0"
-            max="100"
-            value={voidLoss}
-            onChange={(e) => setVoidLoss(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="5" min="0" max="100" value={voidLoss} onChange={(e) => setVoidLoss(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Turnovers / year">
-          <input
-            className="input mono"
-            type="number"
-            step="10"
-            min="1"
-            value={turnovers}
-            onChange={(e) => setTurnovers(Number(e.target.value) || 1)}
-          />
+          <Input className="tabular" type="number" step="10" min="1" value={turnovers} onChange={(e) => setTurnovers(Number(e.target.value) || 1)} />
         </Field>
       </div>
 
       {result && (
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+        <div className="border-t border-border pt-[12px]">
           <div className="mb-3">
             <div className="flex justify-between items-baseline mb-1.5">
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              <span className="text-xs text-muted-foreground">
                 Edge retained after voids
               </span>
               <span
-                className="mono text-sm font-semibold"
+                className="tabular text-sm font-semibold"
                 style={{ color: `var(--${tone})` }}
               >
                 {retained.toFixed(0)}%
               </span>
             </div>
             <div
-              className="h-2 rounded-full overflow-hidden"
-              style={{ background: "var(--neutral-soft)" }}
+              className="h-2 rounded-full overflow-hidden bg-neutral-soft"
             >
               <div
                 className="h-full rounded-full"
@@ -346,7 +308,11 @@ function VoidCalculator() {
             />
             <Row
               label="Kelly fraction"
-              value={`${result.kelly_arb_fraction.toFixed(2)}×`}
+              value={
+                result.kelly_arb_unbounded
+                  ? "unbounded"
+                  : `${result.kelly_arb_fraction!.toFixed(2)}×`
+              }
             />
             <Row
               label="Annualised (simple)"
@@ -356,20 +322,29 @@ function VoidCalculator() {
 
           {result.effective_margin <= 0 && (
             <p
-              className="text-xs mt-3 p-2.5 rounded-lg"
-              style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
+              className="text-xs mt-3 p-2.5 rounded-lg bg-danger-soft text-danger"
             >
               At this void rate the strategy loses money. The expected value has
               to be positive <em>after</em> voids, not before them.
             </p>
           )}
-          {result.kelly_arb_fraction > 1 && result.effective_margin > 0 && (
-            <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
-              Kelly says stake more than the whole bankroll, which you cannot do.
-              Bankroll, not risk aversion, is the binding constraint here — so
-              per-venue concentration limits are what actually govern sizing.
+          {result.kelly_arb_unbounded && result.effective_margin > 0 && (
+            <p className="text-xs mt-3 text-muted-foreground">
+              With no cost to a voided leg there is nothing to lose, so Kelly
+              places no bound at all. Bankroll and per-venue concentration
+              limits are the only things governing size here.
             </p>
           )}
+          {!result.kelly_arb_unbounded &&
+            result.kelly_arb_fraction! > 1 &&
+            result.effective_margin > 0 && (
+              <p className="text-xs mt-3 text-muted-foreground">
+                Kelly says stake more than the whole bankroll, which you cannot
+                do. Bankroll, not risk aversion, is the binding constraint here
+                — so per-venue concentration limits are what actually govern
+                sizing.
+              </p>
+            )}
         </div>
       )}
     </Card>
@@ -408,41 +383,18 @@ function KellyCalculator() {
 
       <div className="grid grid-cols-3 gap-3 mb-4">
         <Field label="True prob %">
-          <input
-            className="input mono"
-            type="number"
-            step="1"
-            min="1"
-            max="99"
-            value={prob}
-            onChange={(e) => setProb(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="1" min="1" max="99" value={prob} onChange={(e) => setProb(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Decimal odds">
-          <input
-            className="input mono"
-            type="number"
-            step="0.05"
-            min="1.01"
-            value={odds}
-            onChange={(e) => setOdds(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="0.05" min="1.01" value={odds} onChange={(e) => setOdds(Number(e.target.value) || 0)} />
         </Field>
         <Field label="Kelly %" hint="fractional">
-          <input
-            className="input mono"
-            type="number"
-            step="5"
-            min="1"
-            max="100"
-            value={fraction}
-            onChange={(e) => setFraction(Number(e.target.value) || 0)}
-          />
+          <Input className="tabular" type="number" step="5" min="1" max="100" value={fraction} onChange={(e) => setFraction(Number(e.target.value) || 0)} />
         </Field>
       </div>
 
       {result && (
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+        <div className="border-t border-border pt-[12px]">
           <div
             className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
             style={{
@@ -453,7 +405,7 @@ function KellyCalculator() {
           >
             <span
               style={{
-                color: result.is_value_bet ? "var(--positive)" : "var(--text-muted)",
+                color: result.is_value_bet ? "var(--positive)" : "var(--muted-foreground)",
               }}
               aria-hidden
             >
@@ -479,7 +431,7 @@ function KellyCalculator() {
               tone="positive"
             />
           </div>
-          <p className="text-xs mt-3" style={{ color: "var(--text-faint)" }}>
+          <p className="text-xs mt-3 text-faint">
             Fractional Kelly trades a little growth for much less drawdown.
             Probability estimates are noisy, and over-estimating edge past the
             Kelly point makes growth collapse rather than merely slow.
@@ -529,29 +481,16 @@ function OddsConverter() {
       />
 
       <div className="flex gap-2 mb-4">
-        <input
-          className="input mono"
-          type="number"
-          step="any"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          aria-label="Value to convert"
-        />
-        <select
-          className="input"
-          style={{ width: 148 }}
-          value={format}
-          onChange={(e) => setFormat(e.target.value)}
-          aria-label="Input format"
-        >
+        <Input className="tabular" type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Value to convert" />
+        <NativeSelect className="w-[148px]" value={format} onChange={(e) => setFormat(e.target.value)} aria-label="Input format" >
           <option value="decimal">Decimal</option>
           <option value="american">American</option>
           <option value="probability">Probability</option>
-        </select>
+        </NativeSelect>
       </div>
 
       {err && (
-        <p className="text-xs" style={{ color: "var(--danger)" }}>
+        <p className="text-xs text-danger">
           {err}
         </p>
       )}
@@ -572,13 +511,12 @@ function OddsConverter() {
           ].map((f) => (
             <div
               key={f.label}
-              className="rounded-lg px-3 py-2.5"
-              style={{ background: "var(--bg-sunken)" }}
+              className="rounded-lg px-3 py-2.5 bg-muted"
             >
-              <div className="label" style={{ marginBottom: 2 }}>
+              <div className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint mb-[2px]">
                 {f.label}
               </div>
-              <div className="mono text-base font-semibold">{f.value}</div>
+              <div className="tabular text-base font-semibold">{f.value}</div>
             </div>
           ))}
         </div>
@@ -598,10 +536,10 @@ function Row({
 }) {
   return (
     <>
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span
-        className="mono"
-        style={{ textAlign: "right", color: tone ? `var(--${tone})` : "var(--text)" }}
+        className="tabular"
+        style={{ textAlign: "right", color: tone ? `var(--${tone})` : "var(--foreground)" }}
       >
         {value}
       </span>

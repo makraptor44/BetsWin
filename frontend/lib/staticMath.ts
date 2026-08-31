@@ -59,11 +59,18 @@ export function kellyFraction(p: number, d: number): number {
 export const marginAfterVoids = (m: number, v: number, l: number) =>
   (1 - v) * m - v * l;
 
-/** f* = ((1-v)*m - v*L) / (m*L) (Part I s13.4). */
+/**
+ * f* = ((1-v)*m - v*L) / (m*L) (Part I s13.4).
+ *
+ * Mirrors `odds.kelly_arb_fraction`, boundary cases included. With no void
+ * cost the trade carries no risk and Kelly places no bound, so the answer is
+ * Infinity -- not 0, which reads as "stake nothing" for the one input where
+ * the trade is riskless. No edge at all really is 0.
+ */
 export function kellyArbFraction(m: number, v: number, l: number): number {
-  const denom = m * l;
-  if (denom <= 0) return 0;
-  return marginAfterVoids(m, v, l) / denom;
+  if (m <= 0) return 0;
+  if (l <= 0) return Infinity;
+  return marginAfterVoids(m, v, l) / (m * l);
 }
 
 const roundTo = (v: number, step: number) =>
@@ -127,6 +134,14 @@ export function calcConvert(value: number, from: string): ConvertResult {
   if (from === "decimal") {
     d = value;
   } else if (from === "american") {
+    // American odds are undefined between -100 and +100. Without this guard
+    // Math.abs(0) yields Infinity rather than throwing, so the demo returned
+    // {decimal: Infinity} where the Python path raised. Same rule both sides.
+    if (Math.abs(value) < 100) {
+      throw new Error(
+        "American odds must be +100 or longer, or -100 or shorter",
+      );
+    }
     d = value > 0 ? 1 + value / 100 : 1 + 100 / Math.abs(value);
   } else {
     if (!(value > 0 && value < 1)) throw new Error("probability must be 0-1");
@@ -142,6 +157,20 @@ export function calcConvert(value: number, from: string): ConvertResult {
   };
 }
 
+/** JSON has no Infinity, so an unbounded Kelly bound travels as null + a flag. */
+function kellyArbPayload(
+  m: number,
+  v: number,
+  l: number,
+): Pick<VoidResult, "kelly_arb_fraction" | "kelly_arb_unbounded"> {
+  const f = kellyArbFraction(m, v, l);
+  const unbounded = !Number.isFinite(f);
+  return {
+    kelly_arb_fraction: unbounded ? null : Math.round(f * 10000) / 10000,
+    kelly_arb_unbounded: unbounded,
+  };
+}
+
 export function calcVoid(
   margin: number,
   voidRate: number,
@@ -153,7 +182,7 @@ export function calcVoid(
     nominal_margin: margin,
     effective_margin: Math.round(eff * 1000000) / 1000000,
     edge_retained_pct: margin ? r2((100 * eff) / margin) : 0,
-    kelly_arb_fraction: Math.round(kellyArbFraction(margin, voidRate, voidLoss) * 10000) / 10000,
+    ...kellyArbPayload(margin, voidRate, voidLoss),
     annualised_simple: Math.round(eff * turnovers * 10000) / 10000,
     annualised_compounded:
       Math.round((Math.pow(1 + eff, turnovers) - 1) * 10000) / 10000,
@@ -215,7 +244,13 @@ export function resizeLegs(
  * stake instead of paying the margin. Seeded so the demo is reproducible.
  */
 export function runBacktest(
-  rows: Array<{ kind: string; net_margin: number; total_stake: number; venues: string[] }>,
+  rows: Array<{
+    kind: string;
+    net_margin: number;
+    total_stake: number;
+    venues: string[];
+    detected_at: string;
+  }>,
   opts: {
     minMargin: number;
     maxMargin: number;
@@ -224,7 +259,9 @@ export function runBacktest(
     simulations: number;
   },
 ) {
-  const kindRates: Record<string, number> = {
+  // Mirrors BacktestParams.venue_void_rates: keyed by kind AND by venue, worst
+  // one wins. Cross-venue legs carry the most rulebook risk (Part I s9.2).
+  const voidRateFor: Record<string, number> = {
     cross_venue: 0.05,
     sportsbook: 0.03,
   };
@@ -237,8 +274,13 @@ export function runBacktest(
   const stakes = filtered.map((r) => r.total_stake);
   const profits = filtered.map((r) => r.total_stake * r.net_margin);
   const voidRates = filtered.map((r) => {
-    let rate = kindRates[r.kind] ?? opts.voidRate;
-    for (const v of r.venues) rate = Math.max(rate, opts.voidRate);
+    let rate = voidRateFor[r.kind] ?? opts.voidRate;
+    // This loop used to ignore `v` and re-take max against the same global
+    // rate every time, so per-venue rates were silently dropped and the demo
+    // backtest disagreed with the engine's.
+    for (const v of r.venues) {
+      rate = Math.max(rate, voidRateFor[v] ?? opts.voidRate);
+    }
     if (r.venues.length > 1) rate = 1 - (1 - rate) ** 2;
     return Math.min(rate, 0.9);
   });
@@ -253,15 +295,26 @@ export function runBacktest(
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  const totals: number[] = [];
+  // Each simulation keeps the void mask that produced it, so the equity curve
+  // can replay one real run. Mirrors `backtest.replay`, which uses a bitset --
+  // JavaScript bitwise operators are 32-bit, so this uses a boolean array
+  // rather than silently truncating a tape longer than 32 opportunities.
+  const runs: { total: number; mask: boolean[] }[] = [];
   for (let s = 0; s < opts.simulations; s++) {
     let run = 0;
+    const mask: boolean[] = [];
     for (let i = 0; i < filtered.length; i++) {
-      run += rand() < voidRates[i] ? -opts.voidLoss * stakes[i] : profits[i];
+      const voided = rand() < voidRates[i];
+      mask.push(voided);
+      run += voided ? -opts.voidLoss * stakes[i] : profits[i];
     }
-    totals.push(run);
+    runs.push({ total: run, mask });
   }
-  totals.sort((a, b) => a - b);
+  runs.sort((a, b) => a.total - b.total);
+  const totals = runs.map((r) => r.total);
+  // Lower median, matching `backtest.replay`: an actual simulation rather than
+  // the average of two, so the curve ends on a total something reached.
+  const medianIndex = (runs.length - 1) >> 1;
 
   const turnover = stakes.reduce((s, x) => s + x, 0);
   const naive = profits.reduce((s, x) => s + x, 0);
@@ -270,12 +323,19 @@ export function runBacktest(
     filtered.reduce((s, r) => s + r.net_margin, 0) / filtered.length;
   const avgVoid = voidRates.reduce((s, x) => s + x, 0) / voidRates.length;
 
-  // A single simulated path, for the equity curve.
-  seed = 42;
+  // The median simulation, replayed in detection order.
+  //
+  // This used to re-seed and replay a single draw, which is simulation one, not
+  // the median -- the exact bug the Python side had already fixed, left behind
+  // because the shared-vector suite covers the odds conversions and not this.
+  // The row shape matches `backtest.replay` too: a real timestamp rather than
+  // an array index, and the `voided` flag the chart needs to mark a void.
+  const medianMask = runs[medianIndex].mask;
   let equity = 0;
   const curve = filtered.map((r, i) => {
-    equity += rand() < voidRates[i] ? -opts.voidLoss * stakes[i] : profits[i];
-    return { at: String(i), equity: r2(equity), kind: r.kind };
+    const voided = medianMask[i];
+    equity += voided ? -opts.voidLoss * stakes[i] : profits[i];
+    return { at: r.detected_at, equity: r2(equity), kind: r.kind, voided };
   });
 
   const notes: string[] = [];
@@ -300,7 +360,7 @@ export function runBacktest(
     naive_yield: naiveYield,
     expected_profit: r2(mean),
     expected_yield: expYield,
-    median_profit: r2(totals[Math.floor(totals.length / 2)]),
+    median_profit: r2(totals[medianIndex]),
     p5_profit: r2(totals[Math.floor(0.05 * (totals.length - 1))]),
     p95_profit: r2(totals[Math.floor(0.95 * (totals.length - 1))]),
     stdev_profit: 0,

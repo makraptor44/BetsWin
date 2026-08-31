@@ -84,9 +84,47 @@ export interface Arb {
   detected_at: string;
   close_time: string | null;
   last_seen: string;
+  /** When the prices last MOVED, as opposed to when we last looked. */
+  last_updated_at: string;
+  /**
+   * When this stops being assertable. Derived by the engine from the market
+   * close and the age of the stalest quote behind it -- never assigned, so the
+   * countdown drawn against it is counting down to something real.
+   */
+  expires_at: string | null;
+  invalidated_at: string | null;
   is_suspect: boolean;
   roi_pct: number;
   hours_to_close: number | null;
+  seconds_to_expiry: number | null;
+  status: ArbStatus;
+}
+
+export type ArbStatus = "live" | "expiring" | "expired" | "invalidated";
+
+export interface ProviderRow {
+  name: string;
+  label: string;
+  enabled: boolean;
+  health: "healthy" | "degraded" | "rate_limited" | "offline";
+  requests: number;
+  failures: number;
+  consecutive_failures: number;
+  error_rate: number;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  last_success: string | null;
+  last_failure: string | null;
+  last_error: string | null;
+  rate_limited_until: string | null;
+  quota_remaining: number | null;
+  events_last_scan: number;
+}
+
+export interface ProvidersResponse {
+  providers: ProviderRow[];
+  online: number;
+  total: number;
 }
 
 export interface NearMiss {
@@ -268,7 +306,10 @@ export interface ArbMaths {
   void_rate: number;
   void_loss: number;
   margin_after_voids: number;
-  kelly_arb_fraction: number;
+  /** Null when Kelly places no bound -- see `kelly_arb_unbounded`. */
+  kelly_arb_fraction: number | null;
+  /** True when there is no void cost, so bankroll is the only constraint. */
+  kelly_arb_unbounded: boolean;
   devig_fair_probs: number[];
   bankroll_cap: number;
 }
@@ -342,7 +383,11 @@ export interface Analytics {
     by_kind: Record<string, number>;
     by_venue: Record<string, number>;
     by_zone: Record<string, number>;
+    /** Arbitrage only. Directional positions are reported separately below. */
     total_profit_available: number;
+    /** Stake exposed on directional positions, which carry no guarantee. */
+    directional_at_risk: number;
+    directional_count: number;
     total_stake_required: number;
     avg_margin: number;
     avg_confidence: number;
@@ -378,7 +423,14 @@ export interface BacktestResult {
     expected_profit: number;
     void_rate: number;
   }>;
-  equity_curve: Array<{ at: string; equity: number; kind: string }>;
+  /** The median path across simulations, not a single draw. */
+  equity_curve: Array<{
+    at: string;
+    equity: number;
+    kind: string;
+    /** True where the median run had this leg voided. */
+    voided?: boolean;
+  }>;
   notes: string[];
 }
 
@@ -413,7 +465,10 @@ export interface VoidResult {
   nominal_margin: number;
   effective_margin: number;
   edge_retained_pct: number;
-  kelly_arb_fraction: number;
+  /** Null when Kelly places no bound -- see `kelly_arb_unbounded`. */
+  kelly_arb_fraction: number | null;
+  /** True when there is no void cost, so bankroll is the only constraint. */
+  kelly_arb_unbounded: boolean;
   annualised_simple: number;
   annualised_compounded: number;
 }
@@ -480,6 +535,8 @@ export interface PositionPlacement {
 }
 
 export interface PositionItem {
+  /** "arbitrage" or "directional" -- see Arb.strategy. */
+  strategy?: "arbitrage" | "directional";
   id: number;
   arb_key: string;
   kind: ArbKind;
@@ -505,13 +562,22 @@ export interface PositionItem {
   placed: number;
   settled: number;
   realised_pnl: number | null;
+  /** "hold_to_resolution" or "sell_back_early". Null until settled. */
+  settlement_type: string | null;
+  settled_at: string | null;
   placements?: PositionPlacement[];
 }
 
 export interface PositionsResponse {
   count: number;
   total_active_stake: number;
+  /** Arbitrage only; same value as `guaranteed_profit`. */
   total_expected_profit: number;
+  /** Locked profit across open arbitrage positions. */
+  guaranteed_profit: number;
+  /** Stake exposed on open directional positions, which carry no guarantee. */
+  directional_at_risk: number;
+  directional_count: number;
   total_realised_pnl: number;
   positions: PositionItem[];
 }

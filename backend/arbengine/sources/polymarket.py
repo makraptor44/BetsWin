@@ -28,6 +28,7 @@ from ..config import settings
 from ..fees import fee_model_for
 from ..models import DepthLevel, Event, Market, Outcome, Quote, Side
 from ..normalise import classify_category
+from ..sizing import MAX_PRICE_SLACK
 from .base import Source
 
 _MAX_BOOK_BATCH = 60
@@ -357,15 +358,24 @@ class PolymarketSource(Source):
                         continue
                     levels = tuple(book["asks"])
                     best = levels[0].price
-                    total = sum(l.size for l in levels)
+                    # Only depth within a couple of ticks of the best offer is
+                    # size you could actually take: a Polymarket book has
+                    # resting asks all the way out to 0.999, and summing the
+                    # whole stack advertised hundreds of thousands of contracts
+                    # of "available" size on a trade whose edge dies after two
+                    # ticks. The sizer's own ceiling protected the stake, but
+                    # this number is shown in the UI and used as the fallback
+                    # when the book is not re-fetched.
+                    ceiling = best * (1.0 + MAX_PRICE_SLACK)
+                    takeable = sum(l.size for l in levels if l.price <= ceiling)
                     quotes.append(
                         q.model_copy(
                             update={
                                 "price": best,
                                 "effective_price": self._fees.effective_price(
-                                    best, max(total, 1.0)
+                                    best, max(takeable, 1.0)
                                 ),
-                                "size_available": total,
+                                "size_available": takeable,
                                 "depth": levels,
                             }
                         )

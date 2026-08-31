@@ -1,0 +1,251 @@
+{
+  "_readme": [
+    "Shared test vectors for the odds arithmetic.",
+    "",
+    "The same formulas exist twice: backend/arbengine/odds.py, and a TypeScript",
+    "port in frontend/lib/staticMath.ts that keeps the calculators interactive on",
+    "the static demo. Two implementations of one formula drift, and they had:",
+    "calcConvert(0, 'american') returned {decimal: Infinity} in TypeScript where",
+    "Python raised, and the demo backtest silently dropped per-venue void rates.",
+    "",
+    "Both suites assert against this file, so a divergence fails a test instead of",
+    "reaching a user. Python: backend/tests/test_shared_vectors.py.",
+    "TypeScript: frontend/lib/__tests__/sharedVectors.test.ts."
+  ],
+  "decimal_to_prob": [
+    {
+      "d": 2.0,
+      "expected": 0.5
+    },
+    {
+      "d": 4.0,
+      "expected": 0.25
+    },
+    {
+      "d": 1.25,
+      "expected": 0.8
+    },
+    {
+      "d": 1.0,
+      "expected": 1.0
+    },
+    {
+      "d": 10.0,
+      "expected": 0.1
+    }
+  ],
+  "book": [
+    {
+      "odds": [
+        1.9,
+        1.9
+      ],
+      "expected": 1.0526315789473684
+    },
+    {
+      "odds": [
+        2.1,
+        2.1
+      ],
+      "expected": 0.9523809523809523
+    },
+    {
+      "odds": [
+        1.95,
+        2.15
+      ],
+      "expected": 0.9779367918902804
+    }
+  ],
+  "arb_margin": [
+    {
+      "b": 0.9778115501519757,
+      "expected": 0.02269194902082683
+    },
+    {
+      "b": 1.0526315789473684,
+      "expected": -0.04999999999999993
+    },
+    {
+      "b": 0.95,
+      "expected": 0.05263157894736836
+    }
+  ],
+  "equal_profit_stakes": [
+    {
+      "odds": [
+        1.95,
+        2.15
+      ],
+      "total": 1000.0,
+      "expected": [
+        524.3902439024391,
+        475.6097560975609
+      ]
+    },
+    {
+      "odds": [
+        2.0,
+        2.0
+      ],
+      "total": 100.0,
+      "expected": [
+        50.0,
+        50.0
+      ]
+    }
+  ],
+  "devig_proportional": [
+    {
+      "odds": [
+        1.9,
+        2.1
+      ],
+      "expected": [
+        0.525,
+        0.475
+      ]
+    },
+    {
+      "odds": [
+        1.5,
+        3.0
+      ],
+      "expected": [
+        0.6666666666666666,
+        0.3333333333333333
+      ]
+    }
+  ],
+  "kelly_fraction": [
+    {
+      "p": 0.55,
+      "d": 2.0,
+      "expected": 0.10000000000000009
+    },
+    {
+      "p": 0.6,
+      "d": 2.0,
+      "expected": 0.19999999999999996
+    },
+    {
+      "p": 0.5,
+      "d": 2.0,
+      "expected": 0.0
+    },
+    {
+      "p": 0.4,
+      "d": 2.0,
+      "expected": 0.0
+    },
+    {
+      "p": 0.55,
+      "d": 1.0,
+      "expected": 0.0
+    }
+  ],
+  "margin_after_voids": [
+    {
+      "m": 0.02,
+      "v": 0.03,
+      "l": 0.3,
+      "expected": 0.010400000000000001
+    },
+    {
+      "m": 0.02,
+      "v": 0.2,
+      "l": 0.3,
+      "expected": -0.044
+    }
+  ],
+  "kelly_arb_fraction": [
+    {
+      "m": 0.02,
+      "v": 0.03,
+      "l": 0.3,
+      "expected": 1.7333333333333336
+    },
+    {
+      "m": 0.0,
+      "v": 0.03,
+      "l": 0.3,
+      "expected": 0.0
+    },
+    {
+      "m": -0.01,
+      "v": 0.03,
+      "l": 0.3,
+      "expected": 0.0
+    },
+    {
+      "m": 0.02,
+      "v": 0.0,
+      "l": 0.0,
+      "expected": null,
+      "unbounded": true
+    }
+  ],
+  "american_to_decimal": [
+    {
+      "a": 100,
+      "expected": 2.0
+    },
+    {
+      "a": -200,
+      "expected": 1.5
+    },
+    {
+      "a": -100,
+      "expected": 2.0
+    },
+    {
+      "a": 250,
+      "expected": 3.5
+    }
+  ],
+  "american_to_decimal_rejects": [
+    0,
+    1,
+    -1,
+    50,
+    -99,
+    99.9
+  ],
+  "decimal_to_american": [
+    {
+      "d": 2.0,
+      "expected": 100.0
+    },
+    {
+      "d": 1.5,
+      "expected": -200.0
+    },
+    {
+      "d": 3.5,
+      "expected": 250.0
+    }
+  ],
+  "decimal_to_american_rejects": [
+    1.0,
+    0.5,
+    0.0,
+    -2.0
+  ],
+  "round_down_to_step": [
+    {
+      "value": 10.567,
+      "step": 0.01,
+      "expected": 10.56
+    },
+    {
+      "value": 10.0,
+      "step": 0.01,
+      "expected": 10.0
+    },
+    {
+      "value": 7.99,
+      "step": 1.0,
+      "expected": 7.0
+    }
+  ]
+}

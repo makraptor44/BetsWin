@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional, Sequence
 
@@ -28,7 +29,7 @@ from .alerts import AlertManager
 from .config import settings
 from .correlation_detector import scan_correlation_pairs
 from .detector import candidate_events, scan
-from .models import Arb, ArbKind, EngineStatus, Event, NearMiss, ScanStats, utcnow
+from .models import Arb, EngineStatus, Event, NearMiss, ScanStats, utcnow
 from .sources import (
     BetfairSource,
     KalshiSource,
@@ -89,6 +90,27 @@ class CircuitBreaker:
         self.reason = None
 
 
+#: How many retired opportunities to keep in memory for the activity stream.
+_RETIRED_KEEP = 200
+
+
+def _prices_moved(before: Arb, after: Arb) -> bool:
+    """Did any leg re-price, or the edge change materially?
+
+    Compared on the effective prices rather than the margin alone: two legs can
+    both move and leave the margin almost unchanged, and that is still news --
+    the book you were going to hit is not the book that is there now.
+    """
+    if abs(before.net_margin - after.net_margin) > 1e-6:
+        return True
+    old_legs = {(l.venue, l.market_id, l.outcome): l.effective_price for l in before.legs}
+    for leg in after.legs:
+        prior = old_legs.get((leg.venue, leg.market_id, leg.outcome))
+        if prior is None or abs(prior - leg.effective_price) > 1e-6:
+            return True
+    return len(before.legs) != len(after.legs)
+
+
 class Scanner:
     """Polls every enabled venue, detects, sizes, persists and alerts."""
 
@@ -110,6 +132,8 @@ class Scanner:
         self._live: dict[str, Arb] = {}
         self._polled: set[str] = set()
         self._events: list[Event] = []
+        #: Recently retired, newest last -- the activity stream reads this.
+        self._retired: list[Arb] = []
         self._near_misses: list[NearMiss] = []
         self._cross_zone_rejected: list[str] = []
         self._task: Optional[asyncio.Task] = None
@@ -210,6 +234,54 @@ class Scanner:
     def retire_arb(self, arb_id: str) -> Optional[Arb]:
         """Remove an opportunity from live memory once placed."""
         return self._live.pop(arb_id, None)
+
+    def provider_health(self) -> list[dict[str, object]]:
+        """Operational readout for every configured provider.
+
+        Separate from `status().sources`, which stays a plain name-to-bool map
+        because a dozen callers and the stored scan tape depend on that shape.
+        """
+        rows: list[dict[str, object]] = []
+        for src in self.sources:
+            st = src.stats
+            rows.append(
+                {
+                    "name": src.name,
+                    "label": src.label,
+                    "enabled": getattr(src, "enabled", True),
+                    "health": src.health.value,
+                    "requests": st.requests,
+                    "failures": st.failures,
+                    "consecutive_failures": st.consecutive_failures,
+                    "error_rate": round(st.error_rate, 4),
+                    "latency_p50_ms": (
+                        round(st.latency_p50_ms, 1)
+                        if st.latency_p50_ms is not None
+                        else None
+                    ),
+                    "latency_p95_ms": (
+                        round(st.latency_p95_ms, 1)
+                        if st.latency_p95_ms is not None
+                        else None
+                    ),
+                    "last_success": (
+                        st.last_success.isoformat() if st.last_success else None
+                    ),
+                    "last_failure": (
+                        st.last_failure.isoformat() if st.last_failure else None
+                    ),
+                    "last_error": st.last_error,
+                    "rate_limited_until": (
+                        st.rate_limited_until.isoformat()
+                        if st.rate_limited_until
+                        else None
+                    ),
+                    # Quota is provider-specific; only The Odds API reports it.
+                    "quota_remaining": getattr(src, "quota_remaining", None),
+                    "events_last_scan": src.last_fetch_count,
+                }
+            )
+        return rows
 
     def status(self) -> EngineStatus:
         return EngineStatus(
@@ -328,29 +400,65 @@ class Scanner:
         self._near_misses = result.near_misses
         self._cross_zone_rejected = result.cross_zone_rejected
 
-        fresh: list[Arb] = []
+        # The breaker is a halt, not a filter. `record` returns the sticky
+        # `tripped` flag, so breaking out of this loop on it meant that once it
+        # had fired, EVERY later cycle bailed on its first opportunity and
+        # silently dropped the rest -- for as long as the process ran, with the
+        # scan loop still turning as though nothing were wrong. Feed the whole
+        # batch, then decide once.
+        enforce_breaker = not settings.demo_mode
         for arb in found:
-            if self.breaker.record(arb) and settings.demo_mode is False:
-                stats.breaker_tripped = True
-                break
+            self.breaker.record(arb)
+
+        if enforce_breaker and self.breaker.tripped:
+            stats.breaker_tripped = True
+            stats.errors.append(f"circuit breaker: {self.breaker.reason}")
+            # Publish nothing and retire nothing: the tape is not trustworthy,
+            # and a half-applied update is worse than a stale one.
+            await self._halt_on_breaker(stats, t0)
+            return []
+
+        fresh: list[Arb] = []
+        now = utcnow()
+        for arb in found:
             existing = self._live.get(arb.id)
             if existing is not None:
+                # `last_seen` says when we last observed it; `last_updated_at`
+                # says when it last MOVED. Bumping both on every scan makes an
+                # opportunity that has not changed in ten minutes report as
+                # updated a second ago, which is the one thing a trader reads
+                # the field for.
+                moved = _prices_moved(existing, arb)
                 arb = arb.model_copy(
-                    update={"detected_at": existing.detected_at, "last_seen": utcnow()}
+                    update={
+                        "detected_at": existing.detected_at,
+                        "last_seen": now,
+                        "last_updated_at": now if moved else existing.last_updated_at,
+                    }
                 )
+                if moved:
+                    stats.updated_arbs += 1
             self._live[arb.id] = arb
             if self._is_new(arb):
                 fresh.append(arb)
 
-        # Retire opportunities that no longer price as arbs.
+        # Retire what is no longer live -- but only what we actually looked at,
+        # and record why it went.
         #
-        # Only a venue that answered this cycle may retire anything resting on
-        # it. A failed fetch yields an empty event list, so an absent leg means
-        # either the edge closed or nobody was home, and those are not the same
-        # event: the first is the market correcting, the second is us going
-        # blind. Retiring on both reports an outage as a correction, and the
-        # dashboard cannot tell them apart. Anything that could not be
-        # re-priced is held, unconfirmed, until it goes stale.
+        # Two independent rules, and they compose in this order.
+        #
+        # FIRST, may this be retired at all? A failed fetch yields an empty
+        # event list, so an absent leg means either the edge closed or nobody
+        # was home, and those are not the same event: the first is the market
+        # correcting, the second is us going blind. Only a venue that answered
+        # this cycle may retire anything resting on it. Anything that could not
+        # be re-priced is held, unconfirmed, until it goes stale.
+        #
+        # SECOND, if it is going, why? An opportunity we re-priced and found
+        # gone says the market corrected. One dropped because its quotes aged
+        # past the point we would stake on them says our scan interval is
+        # slower than the book. Collapsing those loses the only signal that
+        # separates an efficient market from a slow poller.
         current_ids = {a.id for a in found}
         stale_before = utcnow() - timedelta(seconds=settings.stale_arb_seconds)
         unconfirmed = 0
@@ -358,10 +466,26 @@ class Scanner:
             if key in current_ids:
                 continue
             repriced = all(leg.venue in self._polled for leg in arb.legs)
-            if repriced or arb.last_seen < stale_before:
-                self._live.pop(key, None)
-            else:
+            went_stale = arb.last_seen < stale_before
+            if not (repriced or went_stale):
                 unconfirmed += 1
+                continue
+
+            self._live.pop(key, None)
+            remaining = arb.seconds_to_expiry
+            # Not re-priced means we never saw it go -- it aged out of what we
+            # can assert, which is expiry, not invalidation. Only an
+            # opportunity we actually looked at again can be said to have been
+            # corrected away.
+            if not repriced or (remaining is not None and remaining <= 0):
+                stats.expired_arbs += 1
+                self._retired.append(arb.model_copy(update={"last_seen": now}))
+            else:
+                stats.invalidated_arbs += 1
+                self._retired.append(arb.model_copy(update={"invalidated_at": now}))
+        # Bounded: this feeds a UI activity stream, not an audit log. The store
+        # keeps the durable history.
+        del self._retired[:-_RETIRED_KEEP]
 
         for arb in fresh:
             try:
@@ -428,6 +552,35 @@ class Scanner:
         )
         return fresh
 
+    async def _halt_on_breaker(self, stats: ScanStats, t0: float) -> None:
+        """Stop scanning and say so, loudly.
+
+        Part II s16.4 calls for halting and paging a human. The breaker used to
+        set a flag and let the loop keep running, which is the one response that
+        combines "we know the feed is wrong" with "carry on regardless".
+        """
+        stats.finished_at = utcnow()
+        stats.duration_seconds = round(time.monotonic() - t0, 3)
+        self.last_scan = stats
+        self._running = False
+
+        logger.critical(
+            "scanner halted by the circuit breaker -- "
+            f"{self.breaker.reason} "
+            "Investigate the feed, then POST /api/scanner/reset-breaker and "
+            "/api/scanner/start."
+        )
+        await self.alerts.publish(
+            {
+                "type": "breaker",
+                "data": {
+                    "reason": self.breaker.reason,
+                    "stats": stats.model_dump(mode="json"),
+                    "status": self.status().model_dump(mode="json"),
+                },
+            }
+        )
+
     async def _record_prices(self, events: Sequence[Event]) -> None:
         """Snapshot best prices so slow venues can be identified later."""
         rows: list[tuple[str, str, str, float]] = []
@@ -458,6 +611,11 @@ class Scanner:
                 raise
             except Exception as exc:  # noqa: BLE001 - the loop must survive anything
                 logger.exception(f"scan cycle failed: {exc}")
+
+            # `scan_once` clears this when the breaker halts the engine; leave
+            # immediately rather than sleeping out a full interval first.
+            if not self._running:
+                break
 
             cycles += 1
             if cycles % 40 == 0:

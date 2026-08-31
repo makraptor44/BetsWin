@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import {
+  activatable,
   Card,
   EmptyState,
   ErrorState,
@@ -10,11 +11,22 @@ import {
   Stat,
   VenueChip,
   ZoneChip,
+  NativeSelect,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { ZONE_LABEL, compactNum, num, untilLabel, usdCompact } from "@/lib/format";
+import { ZONE_LABEL, compactNum, num, usdCompact } from "@/lib/format";
 import type { MarketRow, ZoneKey } from "@/lib/types";
 import { useAsync } from "@/lib/useEngine";
+import { Countdown } from "@/components/Countdown";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Sort = "volume" | "liquidity" | "book" | "close";
 
@@ -41,7 +53,9 @@ export default function MarketsPage() {
     [venue, zone, category, search, sort, onlyME],
   );
 
-  const rows = data?.markets ?? [];
+  // Memoised so the summary below actually caches: a fresh [] literal each
+  // render invalidated it every time.
+  const rows = useMemo(() => data?.markets ?? [], [data]);
 
   const summary = useMemo(() => {
     if (!rows.length) return null;
@@ -65,7 +79,7 @@ export default function MarketsPage() {
     <div className="flex flex-col gap-5">
       <header>
         <h1 className="text-lg font-semibold tracking-tight">Markets</h1>
-        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+        <p className="text-sm mt-0.5 text-muted-foreground">
           The normalised tape the detectors actually see. &ldquo;Book&rdquo; is the
           sum of implied probabilities across a market&apos;s outcomes — below
           1.0000 is an arbitrage, and how far above it sits is the venue&apos;s
@@ -92,102 +106,74 @@ export default function MarketsPage() {
 
       <Card padded={false}>
         <div
-          className="p-3 flex flex-wrap items-end gap-2.5 border-b"
-          style={{ borderColor: "var(--border)" }}
+          className="p-3 flex flex-wrap items-end gap-2.5 border-b border-border"
         >
-          <div style={{ flex: "1 1 220px", minWidth: 180 }}>
-            <label className="label" htmlFor="msearch">
+          <div className="min-w-[180px] flex-[1_1_220px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="msearch">
               Search
             </label>
-            <input
-              id="msearch"
-              className="input"
-              placeholder="Market title…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Input id="msearch" placeholder="Market title…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           {(data?.zones?.length ?? 0) > 1 && (
-            <div style={{ width: 176 }}>
-              <label className="label" htmlFor="mzone">
+            <div className="w-[176px]">
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="mzone">
                 Execution zone
               </label>
-              <select
-                id="mzone"
-                className="input"
-                value={zone}
-                onChange={(e) => setZone(e.target.value as ZoneKey | "all")}
-              >
+              <NativeSelect id="mzone" value={zone} onChange={(e) => setZone(e.target.value as ZoneKey | "all")} >
                 <option value="all">All zones</option>
                 {(data?.zones ?? []).map((z) => (
                   <option key={z} value={z}>
                     {ZONE_LABEL[z] ?? z}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           )}
-          <div style={{ width: 150 }}>
-            <label className="label" htmlFor="mvenue">
+          <div className="w-[150px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="mvenue">
               Venue
             </label>
-            <select
-              id="mvenue"
-              className="input"
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-            >
+            <NativeSelect id="mvenue" value={venue} onChange={(e) => setVenue(e.target.value)} >
               <option value="all">All venues</option>
               {(data?.venues ?? []).map((v) => (
                 <option key={v} value={v}>
                   {v}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
-          <div style={{ width: 160 }}>
-            <label className="label" htmlFor="mcat">
+          <div className="w-[160px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="mcat">
               Category
             </label>
-            <select
-              id="mcat"
-              className="input"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
+            <NativeSelect id="mcat" value={category} onChange={(e) => setCategory(e.target.value)} >
               <option value="all">All categories</option>
               {(data?.categories ?? []).map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
-          <div style={{ width: 168 }}>
-            <label className="label" htmlFor="msort">
+          <div className="w-[168px]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint" htmlFor="msort">
               Sort by
             </label>
-            <select
-              id="msort"
-              className="input"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-            >
+            <NativeSelect id="msort" value={sort} onChange={(e) => setSort(e.target.value as Sort)} >
               <option value="volume">Volume</option>
               <option value="liquidity">Liquidity</option>
               <option value="book">Tightest book</option>
               <option value="close">Closing soonest</option>
-            </select>
+            </NativeSelect>
           </div>
           <label
-            className="flex items-center gap-2 text-xs cursor-pointer pb-2"
-            style={{ color: "var(--text-muted)" }}
+            className="flex items-center gap-2 text-xs cursor-pointer pb-2 text-muted-foreground"
           >
             <input
               type="checkbox"
               checked={onlyME}
               onChange={(e) => setOnlyME(e.target.checked)}
-              style={{ accentColor: "var(--accent)" }}
+              className="accent-brand"
             />
             Multi-outcome only
           </label>
@@ -210,21 +196,21 @@ export default function MarketsPage() {
 
         {!loading && rows.length > 0 && (
           <div className="scroll-x">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Market</th>
-                  <th>Venue</th>
-                  <th>Category</th>
-                  <th style={{ textAlign: "right" }}>Outcomes</th>
-                  <th style={{ textAlign: "right" }}>Book</th>
-                  <th style={{ textAlign: "right" }}>Overround</th>
-                  <th style={{ textAlign: "right" }}>Volume</th>
-                  <th style={{ textAlign: "right" }}>Liquidity</th>
-                  <th style={{ textAlign: "right" }}>Closes</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="w-full border-collapse text-[13px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Market</TableHead>
+                  <TableHead>Venue</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Outcomes</TableHead>
+                  <TableHead className="text-right">Book</TableHead>
+                  <TableHead className="text-right">Overround</TableHead>
+                  <TableHead className="text-right">Volume</TableHead>
+                  <TableHead className="text-right">Liquidity</TableHead>
+                  <TableHead className="text-right">Closes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.map((m) => (
                   <MarketRowView
                     key={m.id}
@@ -235,8 +221,8 @@ export default function MarketsPage() {
                     }
                   />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </Card>
@@ -256,11 +242,14 @@ function MarketRowView({
   const isArb = m.best_book !== null && m.best_book < 1;
   return (
     <>
-      <tr className="clickable" onClick={onToggle}>
-        <td style={{ maxWidth: 400 }}>
+      <TableRow
+        className="row-action"
+        aria-expanded={expanded}
+        {...activatable(onToggle)}
+      >
+        <TableCell className="max-w-[400px]">
           <div className="flex items-center gap-1.5">
-            <span
-              style={{ color: "var(--text-faint)", fontSize: 10 }}
+            <span className="text-faint text-[10px]"
               aria-hidden
             >
               {expanded ? "▼" : "▶"}
@@ -269,54 +258,53 @@ function MarketRowView({
               {m.title}
             </span>
             {m.mutually_exclusive && (
-              <span className="chip shrink-0" title="Outcomes are mutually exclusive and exhaustive">
+              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold bg-neutral-soft text-muted-foreground shrink-0" title="Outcomes are mutually exclusive and exhaustive">
                 ME
               </span>
             )}
           </div>
-        </td>
-        <td>
+        </TableCell>
+        <TableCell>
           <div className="flex items-center gap-1.5 flex-wrap">
             <VenueChip venue={m.venue} />
             <ZoneChip zone={m.zone} short />
           </div>
-        </td>
-        <td style={{ color: "var(--text-muted)" }}>{m.category}</td>
-        <td className="mono" style={{ textAlign: "right" }}>
+        </TableCell>
+        <TableCell className="text-muted-foreground">{m.category}</TableCell>
+        <TableCell className="tabular text-right">
           {m.market_count}
-        </td>
-        <td
-          className="mono"
+        </TableCell>
+        <TableCell
+          className="tabular"
           style={{
             textAlign: "right",
             fontWeight: isArb ? 600 : 400,
-            color: isArb ? "var(--positive)" : "var(--text)",
+            color: isArb ? "var(--positive)" : "var(--foreground)",
           }}
         >
           {m.best_book !== null ? m.best_book.toFixed(4) : "—"}
-        </td>
-        <td
-          className="mono"
-          style={{ textAlign: "right", color: "var(--text-muted)" }}
+        </TableCell>
+        <TableCell
+          className="tabular text-right text-muted-foreground"
         >
           {m.overround_pct !== null ? `${m.overround_pct.toFixed(2)}%` : "—"}
-        </td>
-        <td className="mono" style={{ textAlign: "right" }}>
+        </TableCell>
+        <TableCell className="tabular text-right">
           {usdCompact(m.volume_usd)}
-        </td>
-        <td className="mono" style={{ textAlign: "right", color: "var(--text-muted)" }}>
+        </TableCell>
+        <TableCell className="tabular text-right text-muted-foreground">
           {usdCompact(m.liquidity_usd)}
-        </td>
-        <td className="mono" style={{ textAlign: "right", color: "var(--text-muted)" }}>
-          {untilLabel(m.close_time)}
-        </td>
-      </tr>
+        </TableCell>
+        <TableCell className="tabular text-right text-muted-foreground">
+          <Countdown iso={m.close_time} />
+        </TableCell>
+      </TableRow>
       {expanded && (
-        <tr>
-          <td colSpan={9} style={{ background: "var(--bg-sunken)", padding: 0 }}>
+        <TableRow>
+          <TableCell className="bg-muted p-0" colSpan={9}>
             <div className="p-3.5">
               <div className="flex items-center justify-between mb-2.5">
-                <span className="label" style={{ margin: 0 }}>
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.055em] text-faint m-0">
                   Best price on each outcome
                 </span>
                 {m.url && (
@@ -330,26 +318,25 @@ function MarketRowView({
                   </a>
                 )}
               </div>
-              <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
-                {m.outcomes.map((o, i) => (
+              <div className="grid gap-1.5 grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
+                {m.outcomes.map((o) => (
                   <div
-                    key={i}
-                    className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg"
-                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
+                    key={o.name}
+                    className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg border border-border bg-card"
                   >
                     <div className="min-w-0">
                       <div className="text-xs font-medium truncate" title={o.name}>
                         {o.name}
                       </div>
-                      <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+                      <div className="text-[11px] text-faint">
                         {o.side} · {compactNum(o.size_available)} available
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }} className="shrink-0">
-                      <div className="mono text-xs font-semibold">
+                    <div className="shrink-0 text-right">
+                      <div className="tabular text-xs font-semibold">
                         {o.price.toFixed(4)}
                       </div>
-                      <div className="text-[11px] mono" style={{ color: "var(--text-faint)" }}>
+                      <div className="text-[11px] tabular text-faint">
                         {o.implied_pct.toFixed(1)}% · {num(o.decimal_odds, 2)}
                       </div>
                     </div>
@@ -357,8 +344,8 @@ function MarketRowView({
                 ))}
               </div>
             </div>
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );

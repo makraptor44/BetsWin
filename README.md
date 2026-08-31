@@ -288,20 +288,15 @@ Every command below is defined in the repository. Run engine commands from
 | `npm run dev` | Development server on port 3000. |
 | `npm run build` | Production build. |
 | `npm run start` | Serve a production build on port 3000. |
-| `npm run typecheck` | `tsc --noEmit`. This is what CI runs. |
+| `npm run lint` | ESLint over the app. |
+| `npm run lint:fix` | The same, applying fixable rules. |
+| `npm run test` | Vitest unit tests. |
+| `npm run typecheck` | `tsc --noEmit`. |
 | `npm run build:demo` | Static export against the JSON fixtures. |
 | `npm run preview:demo` | Serve the static export from `out/`. |
 
-> **Two caveats, both verified against this commit.**
->
-> `npm run build:demo` sets its environment variable using shell syntax
-> (`NEXT_PUBLIC_STATIC_DEMO=true next build`), which **fails on Windows** because
-> npm invokes `cmd.exe`. Use a POSIX shell such as Git Bash or WSL, or set the
-> variable yourself before calling `npx next build`.
->
-> `npm run lint` **does not currently work**. It calls `next lint`, which was
-> removed in Next.js 16, and no ESLint configuration or dependency is present.
-> Type checking via `npm run typecheck` does work, and is what CI enforces.
+> `build:demo` goes through `cross-env`, so it works on Windows as well as on
+> a POSIX shell.
 
 ---
 
@@ -358,7 +353,7 @@ backend/
     sources/        base.py · polymarket.py · kalshi.py · smarkets.py ·
                     betfair.py · odds_api.py
   scripts/          Demo fixture generation
-  tests/            191 tests, including the PDFs' worked examples
+  tests/            473 tests, including the PDFs' worked examples
   Dockerfile        Python 3.12 image
   .env.example      Annotated configuration reference
 
@@ -592,7 +587,7 @@ main groups:
 
 | Group | Endpoints |
 |---|---|
-| System | `/api/health`, `/api/status`, `/api/config`, `/api/venues` |
+| System | `/api/health`, `/api/status`, `/api/config`, `/api/venues`, `/api/providers` |
 | Opportunities | `/api/arbs`, `/api/arbs/{id}`, `/api/arbs/{id}/resize`, `/api/near-misses` |
 | Placements | `/api/arbs/{id}/place`, `/api/arbs/{id}/log-placement` |
 | Positions | `/api/positions`, `/api/positions/{id}/unwind-quote`, `/api/positions/{id}/sell-back`, `/api/positions/{id}/settle` |
@@ -611,19 +606,22 @@ main groups:
 cd backend && python -m pytest tests/ -q
 ```
 
-191 tests, covering the odds mathematics against the worked examples in the PDFs,
+473 tests, covering the odds mathematics against the worked examples in the PDFs,
 the detectors, sizing and order-book walking, venue pairing, the circuit breaker,
 scanner retirement, correlation arbitrage, and placement/settlement flows.
 
-Frontend type checking:
+Frontend:
 
 ```bash
-cd frontend && npm run typecheck
+cd frontend && npm run typecheck && npm run lint && npm test
 ```
 
-CI runs the Python suite, the type check, and the static demo build on every
-push to `main`. See the caveats in the [command reference](#command-reference)
-regarding `npm run lint`.
+The Vitest suite asserts the TypeScript odds port in `frontend/lib/staticMath.ts`
+against the same vectors the Python suite uses, so the two implementations
+cannot drift apart unnoticed.
+
+CI runs all of the above plus the static demo build on every push to this
+branch and to `main`.
 
 ---
 
@@ -640,14 +638,27 @@ the backtest Monte Carlo) are ported to TypeScript in
 the demo rather than being frozen screenshots. Those ports are formula-for-formula
 copies of `backend/arbengine/odds.py`.
 
+Pages serves one site per repository, so branches would otherwise take turns
+overwriting each other's demo. The workflow assembles the site instead: a
+`gh-pages` branch accumulates one subdirectory per branch, and each run
+rewrites only its own before deploying the whole tree.
+
+| Branch | URL |
+|---|---|
+| `main` | https://makraptor44.github.io/BetsWin/ |
+| `ANTHONYS-BRANCH` | https://makraptor44.github.io/BetsWin/anthony/ |
+
+A ribbon at the top of each demo page names the branch, commit and build time,
+since two static exports are otherwise indistinguishable.
+
 To enable it once: **Settings → Pages → Source: GitHub Actions**.
 
 ---
 
 ## Contributing
 
-`.github/workflows/attribution.yml` rejects AI co-author trailers on the default
-branch. GitHub reads a `Co-Authored-By` trailer and credits that address as a
+`.github/workflows/attribution.yml` rejects AI co-author trailers, on pushes to
+the default branch and on pull requests targeting it. GitHub reads a `Co-Authored-By` trailer and credits that address as a
 repository contributor, and the credit outlives the commit — force-pushing it
 away leaves the sidebar entry standing. Several coding tools append such trailers
 by default; if yours does, turn it off before committing.

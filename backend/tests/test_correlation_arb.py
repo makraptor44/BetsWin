@@ -146,3 +146,66 @@ class TestEvaluateSignal:
         p_joint_market = ca.joint_probability(p_a, p_b, 0.3)
         sig = ca.evaluate(p_a, p_b, p_joint_market, rho_prior)
         assert sig.edge_pct == pytest.approx(100.0 * sig.edge / sig.p_joint_market)
+
+
+class TestSolveBracketEndpoints:
+    """The solver must return a rho the forward model reproduces.
+
+    At the extremes it returned the sentinel +-1.0 rather than the bracket
+    endpoint it actually searched. That is on the far side of the
+    `_RHO_EDGE_EPS` cutoff inside `bivariate_normal_cdf`, where the integral is
+    skipped for the comonotonic bound -- so feeding the answer back into
+    `joint_probability` did not give back the price it was solved from.
+    """
+
+    def test_upper_bound_round_trips(self):
+        p_a, p_b = 0.40, 0.50
+        # The Frechet upper bound: no copula can price the joint above min(p_a, p_b),
+        # so the solve is pinned against the top of the bracket.
+        p_joint = min(p_a, p_b)
+        rho = ca.implied_correlation(p_a, p_b, p_joint)
+        assert abs(rho) <= 1.0
+        assert ca.joint_probability(p_a, p_b, rho) == pytest.approx(p_joint, abs=1e-6)
+
+    def test_lower_bound_round_trips(self):
+        p_a, p_b = 0.40, 0.50
+        p_joint = max(1e-6, p_a + p_b - 1.0)
+        rho = ca.implied_correlation(p_a, p_b, p_joint)
+        assert abs(rho) <= 1.0
+        assert ca.joint_probability(p_a, p_b, rho) == pytest.approx(p_joint, abs=1e-6)
+
+
+class TestAdaptiveQuadrature:
+    """The step count varies with rho; the accuracy must not.
+
+    `_simpson_steps` trades a fixed 2,000-step rule for one that samples in
+    proportion to how steep the integrand actually is. That is only safe if the
+    result still resolves to well inside the tolerance `implied_correlation`
+    bisects to, across the whole range -- so pin it against a reference fine
+    enough that its own error is negligible.
+    """
+
+    #: An order of magnitude inside `implied_correlation`'s 1e-8 tolerance, so
+    #: quadrature error cannot move the correlation the solver lands on.
+    TOLERANCE = 1e-9
+
+    @pytest.mark.parametrize(
+        "rho", [-0.99, -0.9, -0.7, -0.3, 0.0, 0.3, 0.7, 0.9, 0.95, 0.99]
+    )
+    def test_matches_a_much_finer_reference(self, rho):
+        for x in (-2.5, -1.0, 0.0, 1.0, 2.5):
+            for y in (-2.5, -1.0, 0.0, 1.0, 2.5):
+                adaptive = ca.bivariate_normal_cdf(x, y, rho)
+                reference = ca.bivariate_normal_cdf(x, y, rho, 6000)
+                assert adaptive == pytest.approx(reference, abs=self.TOLERANCE), (
+                    f"rho={rho} x={x} y={y} used {ca._simpson_steps(rho)} steps"
+                )
+
+    def test_step_count_rises_towards_the_extremes(self):
+        """The whole point: cheap in the middle, fine at the edges."""
+        assert ca._simpson_steps(0.0) < ca._simpson_steps(0.9)
+        assert ca._simpson_steps(0.9) < ca._simpson_steps(0.99)
+        assert ca._simpson_steps(0.0) == ca._simpson_steps(-0.0)
+        # Never below the floor, never above the old fixed default.
+        assert ca._simpson_steps(0.0) >= ca._BASE_STEPS
+        assert ca._simpson_steps(0.999999) <= ca._MAX_STEPS

@@ -26,12 +26,11 @@ from __future__ import annotations
 import hashlib
 import itertools
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Iterable, Iterator, Optional, Sequence
+from datetime import datetime, timedelta
+from typing import Iterator, Optional, Sequence
 
 from loguru import logger
 
-from . import odds as om
 from .config import settings
 from .models import (
     Arb,
@@ -41,12 +40,18 @@ from .models import (
     NearMiss,
     Quote,
     RiskFlag,
-    Side,
     utcnow,
 )
 from .normalise import MatchResult, match_titles
 from .sizing import SizedArb, size_arb
-from .venues import PairVerdict, can_pair, legs_are_placeable, venue, zone_info
+from .venues import (
+    PairVerdict,
+    Structure,
+    can_pair,
+    legs_are_placeable,
+    venue,
+    zone_info,
+)
 
 # Quotes older than this are treated as possibly moved (Part I s9.3).
 _STALE_AFTER = timedelta(minutes=10)
@@ -80,6 +85,18 @@ def _binary_outcomes(market: Market) -> Optional[tuple[Quote, Quote]]:
     if a is None or b is None:
         return None
     return a, b
+
+
+def _counterparty(quote: Quote) -> tuple[str, Optional[str]]:
+    """Who actually holds the other side of this bet.
+
+    For most venues that is the venue. For an aggregated feed it is the
+    bookmaker named in `ticker` -- "sportsbook" is the name of a data source,
+    not of anyone you can open an account with.
+    """
+    if venue(quote.venue).structure is Structure.BOOK and quote.ticker:
+        return (quote.venue, quote.ticker)
+    return (quote.venue, None)
 
 
 def _placeable(quotes: Sequence[Quote]) -> PairVerdict:
@@ -167,13 +184,22 @@ def _score(
         notes.append(f"Oldest quote is {age.total_seconds() / 60:.0f} minutes old.")
 
     # Cross-venue rule risk (Part I s9.2, Part II s6.2).
-    venues = {q.venue for q in quotes}
-    if len(venues) > 1:
+    #
+    # Counted by COUNTERPARTY, not by venue name. Every quote from The Odds API
+    # carries venue="sportsbook" with the actual bookmaker in `ticker`, so a
+    # DraftKings/FanDuel pair looked like a single-venue trade: two accounts,
+    # two rulebooks, and no CROSS_VENUE_RULES flag on any of it. An aggregated
+    # book is identified by its ticker; a venue that is its own counterparty is
+    # identified by its name.
+    counterparties = {_counterparty(q) for q in quotes}
+    if len(counterparties) > 1:
         flags.append(RiskFlag.CROSS_VENUE_RULES)
         score -= 6.0
         notes.append(
-            "Legs sit on different venues; confirm the resolution criteria and "
-            "settlement dates agree before treating this as risk-free."
+            "Legs sit with different counterparties ("
+            + ", ".join(sorted(str(c[1] or c[0]) for c in counterparties))
+            + "); confirm the resolution criteria and settlement dates agree "
+            "before treating this as risk-free."
         )
     if match is not None:
         flags.append(RiskFlag.FUZZY_MATCH)
@@ -212,6 +238,74 @@ def _score(
     return int(max(0.0, min(100.0, score))), tuple(dict.fromkeys(flags)), tuple(notes)
 
 
+def expiry_for(
+    quotes: Sequence[Quote], close_time: Optional[datetime]
+) -> Optional[datetime]:
+    """When this opportunity stops being assertable.
+
+    Every input here is a fact a provider gave us. Nothing is invented, which
+    is the whole point: a countdown running against a number somebody picked is
+    theatre, and a trader who learns that once will never trust the timer again.
+
+    Two real bounds, and the earlier one wins.
+
+    THE MARKET CLOSING. At kickoff the book comes down. Nothing priced against
+    it survives that instant, so it is a hard ceiling.
+
+    QUOTE STALENESS. Each leg carries the timestamp its venue last moved the
+    price. A quote is evidence about the book at that moment and decays from
+    there; past `stale_quote_seconds` it is no longer evidence we would stake
+    on. The binding leg is the OLDEST one, because an arbitrage is only as
+    current as its stalest price.
+
+    Returns None when neither bound is knowable -- a venue that publishes no
+    timestamps and no close time gives us nothing to count down to, and
+    inventing a duration would be exactly the fabrication this avoids.
+    """
+    horizon = settings.stale_quote_seconds
+    bounds: list[datetime] = []
+
+    if close_time is not None:
+        bounds.append(close_time)
+
+    stamps = [q.last_update for q in quotes if q.last_update is not None]
+    if stamps and horizon > 0:
+        bounds.append(min(stamps) + timedelta(seconds=horizon))
+
+    return min(bounds) if bounds else None
+
+
+def _within_window(close_time: Optional[datetime], category: str) -> bool:
+    """Does this fixture start soon enough to be worth the capital?
+
+    An arbitrage locks stake on every leg until settlement, so the annualised
+    return on a 2% edge falls with the horizon: collected in two days it is
+    excellent, collected in nine months it is worse than a deposit account, and
+    it carries nine months of rule changes, voids and account closures on top
+    (Part I s8.2).
+
+    Scoped to SPORT deliberately. A fixture has a kickoff, so "short-dated" is a
+    meaningful constraint there and a 72-hour window is most of the tradeable
+    universe. A prediction-market contract resolves on an election or a Fed
+    meeting -- applying the same window would reject every Polymarket and Kalshi
+    contract on the book and silently reduce the engine to one venue, which is
+    not a horizon policy, it is turning off the feature the zone rules exist to
+    serve. Long-dated contracts are still scored down for it (LONG_DATED).
+
+    An opportunity with no stated close time is kept: refusing those would drop
+    a venue that omits the field rather than a horizon.
+    """
+    if settings.max_hours_to_start <= 0 or close_time is None:
+        return True
+    if category != "sports":
+        return True
+    hours = (close_time - utcnow()).total_seconds() / 3600.0
+    # Already under way: not tradeable at these prices, whatever they say.
+    if hours <= 0:
+        return False
+    return hours <= settings.max_hours_to_start
+
+
 def _finalise(
     kind: ArbKind,
     title: str,
@@ -223,6 +317,15 @@ def _finalise(
     match: Optional[MatchResult] = None,
 ) -> Optional[Arb]:
     if not (settings.min_arb_margin <= sized.net_margin <= settings.max_arb_margin):
+        return None
+
+    # Horizon before executability: a long-dated opportunity is not a
+    # lower-quality one to rank down, it is capital committed for longer than
+    # the edge justifies.
+    if not _within_window(close_time, category):
+        logger.debug(
+            f"rejected {title!r}: outside the {settings.max_hours_to_start}h window"
+        )
         return None
 
     # Executability first. An unplaceable "arbitrage" is not a lower-confidence
@@ -245,6 +348,14 @@ def _finalise(
                 + ", ".join(verdict.jurisdictions)
                 + " -- both venues must accept an account there.",
             )
+    elif verdict.excluded:
+        # "Broadly available" still has holes, and the operator needs to see
+        # them: a wildcard used to swallow the exclusion list entirely.
+        notes = notes + (
+            "Broadly available, but not from "
+            + ", ".join(verdict.excluded)
+            + " -- at least one venue turns those away.",
+        )
 
     if confidence < settings.min_confidence:
         return None
@@ -254,6 +365,7 @@ def _finalise(
 
     return Arb(
         id=_arb_id(kind, quotes),
+        expires_at=expiry_for(quotes, close_time),
         kind=kind,
         title=title,
         category=category,
@@ -650,19 +762,23 @@ def find_near_misses(events: Sequence[Event]) -> list[NearMiss]:
                 n = len(yes_quotes)
                 if n >= 2:
                     yes_sum = sum(q.effective_price for q in yes_quotes)
-                    # Same exhaustiveness guard as the detector: a set summing
-                    # far below 1 is missing outcomes, not close to arbing.
+                    # Same exhaustiveness guard as the detector, and it has to
+                    # cover BOTH sides. The NO branch used to sit outside this
+                    # check, so an incomplete outcome set was suppressed as a
+                    # DUTCH_YES near miss and then published as a DUTCH_NO one
+                    # -- a tight gap on a set `detect_dutch` refuses outright,
+                    # advertising an opportunity the engine cannot ever take.
                     if yes_sum >= _DUTCH_COMPLETENESS_FLOOR:
                         keep(_near_miss(ev, ArbKind.DUTCH_YES, yes_quotes))
-                    if n >= 3:
-                        keep(
-                            _near_miss(
-                                ev,
-                                ArbKind.DUTCH_NO,
-                                no_quotes,
-                                payout_multiple=float(n - 1),
+                        if n >= 3:
+                            keep(
+                                _near_miss(
+                                    ev,
+                                    ArbKind.DUTCH_NO,
+                                    no_quotes,
+                                    payout_multiple=float(n - 1),
+                                )
                             )
-                        )
         except Exception as exc:  # noqa: BLE001 - telemetry must never break a scan
             logger.debug(f"near-miss scan failed on {ev.id}: {exc}")
 
@@ -688,7 +804,10 @@ def scan(
 ) -> ScanResult:
     """Detection pass: opportunities, near misses, and what was ruled out."""
     kw = {"target_stake": target_stake, "venue_limits": venue_limits}
-    wanted = kinds or set(ArbKind)
+    # `kinds or set(ArbKind)` treated an EMPTY set as "unspecified", because an
+    # empty set is falsy -- so a caller asking for no kinds at all got every
+    # detector instead of none. Only `None` means "unspecified".
+    wanted = set(ArbKind) if kinds is None else kinds
     result = ScanResult()
 
     for ev in events:
