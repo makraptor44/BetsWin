@@ -1,114 +1,397 @@
 # BetsWin
-An automated profitable sports bet and prediction market finder and placer available from the tips of your fingers.
 
-How the prouct Works?
-1. API's scan across prediction market events, including sports, politics and crypto
-2. We find the mispriced odds across high margin, low liquid order books.
-3. We provide the service to place an arbitrage bet for a given event across mutiple exchanges
-4. Gives the opportunity to place risk free bets within minutes.
+**An arbitrage scanner for prediction markets and sportsbooks.**
 
+BetsWin polls Polymarket, Kalshi and Smarkets (Betfair and US sportsbooks with
+credentials), looks for sets of positions that cost less than they are
+guaranteed to return, sizes each one against real order-book depth, and scores
+it for the failure modes that turn a theoretical edge into a real loss.
 
-Why is this product useful?
-1. The first centralised platform which incorporates arbitrage free programatic betting without needing to program.
-2. free money for users, competing against manual users who place bets and lose out to slippage.
-3. Free to use, only expense is commission on your winnings.  We only win if you win.
+The hard part is not finding a number below 1. It is deciding whether that
+number survives contact with reality — fees, depth, stale prices, mismatched
+markets, and above all whether a single person could actually place every leg.
+Most of this repository exists to answer that question honestly, which is why
+the scanner reports *fewer* opportunities than a naive one, not more.
 
+> **[▶ Live demo — this branch](https://makraptor44.github.io/BetsWin/anthony/)**
+> &nbsp;·&nbsp; [`main`](https://makraptor44.github.io/BetsWin/)
+>
+> A static snapshot captured from the real engine. The detectors, sizing and risk scoring genuinely
+> ran to produce those numbers; nothing is polling live venues. The calculators
+> are fully interactive.
 
-Why prediction markets as opposed to sportbooks?
-1. Lower liquidity, more mispricings
-2. competing in a pvp platform rather than against a bookie
-3. less arbers on prediction markets -> though short time span for this product to be profitable.
+**It does not place bets.** It detects, sizes, and alerts. See
+[Scope and limits](#scope-and-limits).
 
-
-Roles:
-Ethan -> Stake Calculation, Notifier System, base.py, odds_api
-Tom -> Scanning, Execution, main (entry point)
-Harry -> Backtest (historical replay), storage (SQL), alerts
-Anthony -> normalise.py (make sure man u or 1 ex and man utd are the same reference), detector, betfair.py(exchange client)
-
-Very much open to change roles
+```
+Python 3.12 / FastAPI  ── engine, detectors, sizing, storage, backtest
+Next.js 16 / React 19  ── dashboard, market explorer, analytics, calculators
+SQLite                 ── scan tape, price history, logged placements
+```
 
 ---
 
-# Implementation
+## Table of contents
 
-> **[▶ Live demo — `main`](https://makraptor44.github.io/BetsWin/)** &nbsp;·&nbsp;
-> **[▶ Live demo — `ANTHONYS-BRANCH`](https://makraptor44.github.io/BetsWin/anthony/)**
->
-> Static snapshots captured from the real engine. The detectors, sizing and risk
-> scoring genuinely ran to produce those numbers; nothing is polling live venues.
-> The calculators are fully interactive. Each branch deploys to its own URL and
-> rebuilds on every push, and the ribbon at the top of the page names the exact
-> commit the build came from.
+- [Features](#features)
+- [Requirements](#requirements)
+- [Setup](#setup)
+  - [1. Clone the repository](#1-clone-the-repository)
+  - [2. Install the engine](#2-install-the-engine)
+  - [3. Configure the engine](#3-configure-the-engine)
+  - [4. Install the dashboard](#4-install-the-dashboard)
+  - [5. Run both](#5-run-both)
+  - [6. Verify it works](#6-verify-it-works)
+- [Running with Docker](#running-with-docker)
+- [Command reference](#command-reference)
+- [Configuration](#configuration)
+- [Project structure](#project-structure)
+- [How detection works](#how-detection-works)
+  - [Execution zones](#execution-zones)
+  - [The parts that matter](#the-parts-that-matter)
+- [Using the dashboard](#using-the-dashboard)
+- [API](#api)
+- [Testing](#testing)
+- [The demo deployment](#the-demo-deployment)
+- [Contributing](#contributing)
+- [Scope and limits](#scope-and-limits)
+- [Background and roles](#background-and-roles)
 
-A working build of the system described above. It polls Polymarket, Kalshi and
-Smarkets (Betfair too, with credentials), finds sets of positions that cost less
-than they are guaranteed to return, sizes each one against real order-book depth,
-and scores it for the failure modes that turn a theoretical edge into a real
-loss — including the one that matters most, whether a single person could
-actually place every leg.
+---
 
-Built from the two PDFs in this repo: `arbitrage_betting_theory.pdf` for the
-mathematics and risk model, `arbitrage_betting_python.pdf` for the architecture.
-Section references throughout the code point back to them.
+## Features
 
-```
-Python / FastAPI  ── engine, detectors, sizing, storage, backtest
-Next.js / React   ── dashboard, market explorer, analytics, calculators
-```
+**Detection**
 
-## Where each role's work lives
+- Four arbitrage detectors — binary complement, Dutch book (both directions),
+  cross-venue, and cross-sportsbook — all resting on the same condition.
+- Correlation arbitrage on jointly-priced event contracts, via a Gaussian
+  copula, reported as a *directional* edge rather than a risk-free one.
+- Near-miss watchlist: the tightest books that did not cross, in basis points,
+  so an idle dashboard is distinguishable from a dead one.
+- Completeness guard that rejects outcome sets which do not partition the
+  sample space.
 
-The file layout follows the split agreed in the plan above:
+**Pricing and sizing**
 
-| Area | Files |
-|---|---|
-| Stake calculation, notifier, base source, odds API | `backend/arbengine/sizing.py`, `alerts.py`, `sources/base.py`, `sources/odds_api.py` |
-| Scanning, execution, entry point | `backend/arbengine/scanner.py`, `api.py`, `main.py` |
-| Backtest, storage, alerts | `backend/arbengine/backtest.py`, `storage.py`, `alerts.py` |
-| Normalisation, detection, exchange clients | `backend/arbengine/normalise.py`, `detector.py`, `venues.py`, `sources/polymarket.py`, `sources/kalshi.py`, `sources/smarkets.py`, `sources/betfair.py` |
+- Per-venue fee models applied *before* detection, so every quoted edge is one
+  that survives the fee schedule.
+- Order-book walking for volume-weighted fills, with capacity counted only
+  within 2% of best.
+- Equal-profit stake allocation, conservative rounding, and an explicit
+  worst-case profit recomputed after rounding.
+- Void-adjusted edge alongside the nominal figure.
 
-`betfair.py` is there as planned, alongside `smarkets.py`. Both slot in as
-`Source` subclasses without the detectors changing, which is the point of the
-`sources/base.py` interface. Smarkets' market-data API is public, so it works
-with no credentials; Betfair's needs an application key and stays dark without
-one.
+**Risk and safety**
 
-## Quick start
+- Execution-zone pairing: legs are only combined across venues one operator
+  could realistically hold accounts on, in one currency.
+- Confidence scoring with explicit risk flags; a large margin *lowers*
+  confidence rather than raising it.
+- Circuit breaker that halts scanning on a burst of implausible margins.
+- Credential redaction on every stored error message.
 
-**Prerequisites:** Python 3.11+, Node 18+.
+**Interface and operations**
+
+- Live dashboard over WebSocket with a polling fallback.
+- Market explorer, venue/zone registry, analytics, and standalone calculators.
+- Monte-Carlo backtester over the stored tape with a per-venue void model.
+- Optional Telegram alerts above configurable margin and confidence floors.
+- Offline demo mode with deterministic fixtures and no network access.
+
+---
+
+## Requirements
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | 3.12 recommended | `backend/Dockerfile` and CI both use 3.12. `start.sh` accepts 3.11+. |
+| Node.js | 22 recommended | `frontend/Dockerfile` and CI both use 22. `start.sh` accepts 18+. |
+| npm | ships with Node | The repository uses `package-lock.json`. |
+| Docker | optional | Only for [the container path](#running-with-docker). |
+
+**No database server is needed.** Storage is SQLite; the file and its parent
+directory are created on first run, and the schema is applied automatically.
+**There are no migrations to run.**
+
+**No API keys are needed to start.** Polymarket, Kalshi and Smarkets all publish
+market data publicly. Betfair and The Odds API are optional and stay dark
+without credentials.
+
+---
+
+## Setup
+
+### 1. Clone the repository
 
 ```bash
-cd backend && pip install -r requirements.txt && cp .env.example .env
-cd ../frontend && npm install
+git clone https://github.com/makraptor44/BetsWin.git
 ```
 
-Then from the project root:
+```bash
+cd BetsWin
+```
+
+### 2. Install the engine
+
+Python dependencies can be installed from the repository root:
+
+```bash
+pip install -r requirements.txt
+```
+
+That file simply includes `backend/requirements.txt`, which stays self-contained
+so the Docker build (whose context is `backend/`) keeps working. Installing from
+`backend/` works too:
+
+```bash
+cd backend && pip install -r requirements.txt
+```
+
+A virtual environment is recommended but not required:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+```
+
+On Windows, activate with `.venv\Scripts\activate` instead.
+
+### 3. Configure the engine
+
+Copy the annotated example and edit it:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+**The defaults work with no edits.** Every setting is documented inline in
+`backend/.env.example`; see [Configuration](#configuration) for the ones worth
+knowing about first. Never commit a `.env` containing real keys — `.gitignore`
+already excludes it.
+
+### 4. Install the dashboard
+
+```bash
+cd frontend && npm install
+```
+
+### 5. Run both
+
+From the repository root, the launcher starts the engine and the dashboard
+together:
 
 ```bash
 ./start.sh
 ```
 
-Windows PowerShell:
+On Windows PowerShell:
 
 ```powershell
 .\start.ps1
 ```
 
-Dashboard at <http://localhost:3000>, API at <http://127.0.0.1:8000> (docs at
-`/docs`). No credentials needed — Polymarket, Kalshi and Smarkets all publish
-market data publicly. Turn the UK exchange zone on with `ENABLE_SMARKETS=true`.
+For offline fixtures and no network access:
 
-Run `./start.sh --demo` for offline fixtures and no network. If a port is
-already taken the launcher moves to a free one and says so rather than dying.
+```bash
+./start.sh --demo
+```
 
-Docker: `docker compose up --build`.
+Ports can be overridden, and if one is already taken the launcher moves to a
+free port and tells you rather than failing:
 
-## What it looks for
+```bash
+API_PORT=8001 WEB_PORT=3001 ./start.sh
+```
 
-All four detectors rest on one condition from the theory volume: take the best
-price on each outcome, sum the implied probabilities, and check whether the total
-falls below what the position pays.
+<details>
+<summary>Running the two processes separately</summary>
+
+Engine, from `backend/`:
+
+```bash
+python -m arbengine.main
+```
+
+Dashboard, from `frontend/`:
+
+```bash
+npm run dev
+```
+
+The dashboard proxies `/api` to `http://127.0.0.1:8000` by default. Point it
+elsewhere with `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`.
+
+</details>
+
+### 6. Verify it works
+
+The dashboard is at <http://localhost:3000> and the API at
+<http://127.0.0.1:8000>, with interactive docs at `/docs`.
+
+Check the engine is answering:
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+Run a single scan cycle and print what it finds, without starting a server:
+
+```bash
+cd backend && python -m arbengine.main --scan
+```
+
+Run the test suite:
+
+```bash
+cd backend && python -m pytest tests/ -q
+```
+
+**Finding zero opportunities is the expected result**, not a failure. A
+reasonably efficient market crosses rarely. The signals that the engine is
+working are the scan log and the near-miss watchlist, both of which move every
+cycle — see [An empty dashboard](#an-empty-dashboard-has-to-look-different-from-a-broken-one).
+
+---
+
+## Running with Docker
+
+```bash
+docker compose up --build
+```
+
+This builds both images and starts them together. It reads `backend/.env`, so
+[step 3](#3-configure-the-engine) still applies. The SQLite database and logs
+are bind-mounted to `backend/data` and `backend/logs`, so they survive container
+replacement.
+
+---
+
+## Command reference
+
+Every command below is defined in the repository. Run engine commands from
+`backend/` and dashboard commands from `frontend/`.
+
+### Engine
+
+| Command | What it does |
+|---|---|
+| `python -m arbengine.main` | Serve the API and run the scanner. |
+| `python -m arbengine.main --scan` | Run one scan cycle, print results, exit. |
+| `python -m arbengine.main --demo` | Serve using offline fixtures, no network. |
+| `python -m arbengine.main --reload` | Auto-reload on code changes. |
+| `python -m arbengine.main --host H --port P` | Override the bind address. |
+| `python -m pytest tests/ -q` | Run the test suite. |
+| `python -m scripts.generate_demo_fixtures` | Regenerate the demo JSON fixtures. |
+
+### Dashboard
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Development server on port 3000. |
+| `npm run build` | Production build. |
+| `npm run start` | Serve a production build on port 3000. |
+| `npm run lint` | ESLint over the app. |
+| `npm run lint:fix` | The same, applying fixable rules. |
+| `npm run test` | Vitest unit tests. |
+| `npm run typecheck` | `tsc --noEmit`. |
+| `npm run build:demo` | Static export against the JSON fixtures. |
+| `npm run preview:demo` | Serve the static export from `out/`. |
+
+> `build:demo` goes through `cross-env`, so it works on Windows as well as on
+> a POSIX shell. On `main` it does not — that script sets the variable with
+> shell syntax, and `npm run lint` there is broken besides. Both are fixed on
+> this branch.
+
+---
+
+## Configuration
+
+All engine settings are environment variables, read from `backend/.env`.
+`backend/.env.example` documents every one of them inline; these are the ones to
+look at first.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DEMO_MODE` | `false` | `true` uses deterministic fixtures and makes no network calls. |
+| `ENABLE_POLYMARKET` / `ENABLE_KALSHI` / `ENABLE_SMARKETS` | `true` | Public data, no credentials required. |
+| `ENABLE_BETFAIR` | `false` | Needs `BETFAIR_APP_KEY` plus a session token or login. |
+| `ODDS_API_KEY` | empty | Optional; enables US sportsbook odds. Without it that source stays dark. |
+| `ENFORCE_ZONE_PAIRING` | `true` | Restricts cross-venue pairing to a single execution zone. |
+| `OPERATOR_JURISDICTION` | empty | ISO-3166 alpha-2. Set it to hide trades you could not place from where you are. |
+| `MIN_ARB_MARGIN` | `0.004` | Floor below which fees eat the edge. |
+| `SUSPECT_MARGIN` | `0.05` | Anything fatter is flagged and penalised. |
+| `BANKROLL` / `DEFAULT_STAKE` | `10000` / `500` | Sizing inputs. |
+| `POLL_INTERVAL_SECONDS` | `45` | Scan cadence. |
+| `DATABASE_PATH` | `data/betswin.db` | SQLite file; created automatically. |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | empty | Optional push alerts. |
+
+Secrets belong in `backend/.env`, which is git-ignored. The engine redacts
+credentials from stored error messages, because an API key passed as a query
+parameter otherwise travels inside exception text into the database and back out
+through the analytics endpoint.
+
+---
+
+## Project structure
+
+```
+backend/
+  arbengine/
+    odds.py         Odds mathematics — every formula from the theory volume
+    fees.py         Per-venue fee models (Kalshi's, and exchange commission)
+    venues.py       Venue registry and the execution-zone pairing rule
+    models.py       Canonical Quote → Outcome → Market → Event → Arb
+    normalise.py    Cross-venue title matching and its hard guards
+    detector.py     The four detectors, near misses, confidence scoring
+    correlation_arb.py       Gaussian-copula joint-probability model
+    correlation_detector.py  Correlation edges as directional positions
+    sizing.py       Order-book walking and equal-profit allocation
+    storage.py      SQLite: arbs, placements, scans, price history
+    alerts.py       Telegram push + in-process broadcast to the dashboard
+    scanner.py      Pipeline orchestration, dedupe, circuit breaker
+    backtest.py     Void-model replay and threshold sweep
+    api.py          FastAPI: REST + WebSocket
+    config.py       Settings, read from the environment
+    main.py         CLI entry point
+    demo_data.py    Deterministic offline fixtures
+    sources/        base.py · polymarket.py · kalshi.py · smarkets.py ·
+                    betfair.py · odds_api.py
+  scripts/          Demo fixture generation
+  tests/            463 tests, including the PDFs' worked examples
+  Dockerfile        Python 3.12 image
+  .env.example      Annotated configuration reference
+
+frontend/
+  app/              Opportunities (/) · Positions · Markets · Venues ·
+                    Analytics · Calculators · Settings
+  components/       Table, detail drawer, place-bet modal, charts, primitives
+  lib/              API client, types, formatting, live-data hook, demo shim
+  public/demo/      JSON fixtures captured from the real engine
+  Dockerfile        Node 22 image
+
+.github/workflows/
+  deploy-demo.yml   Tests, captures fixtures, publishes the static demo
+
+start.sh / start.ps1   Launchers that start engine and dashboard together
+docker-compose.yml     Both services, with data and logs bind-mounted
+requirements.txt       Root entry point; includes backend/requirements.txt
+```
+
+Everything venue-specific stops at `sources/`. Adding a venue means writing one
+`Source` subclass; the detectors do not change. That is the point of the
+`sources/base.py` interface.
+
+Two PDFs in the repository root are the source material: `arbitrage_betting_theory.pdf`
+for the mathematics and risk model, `arbitrage_betting_python.pdf` for the
+architecture. Section references throughout the code point back to them.
+
+---
+
+## How detection works
+
+All detectors rest on one condition: take the best price on each outcome, sum
+the implied probabilities, and check whether the total falls below what the
+position pays.
 
 | Type | Condition | What it is |
 |---|---|---|
@@ -122,9 +405,14 @@ Prices reaching the detectors are already fee-adjusted, so a "1.5% edge" is one
 that survives Kalshi's trading fee (or Smarkets' commission) rather than a
 headline number that evaporates at execution.
 
-## Execution zones
+Correlation arbitrage is handled separately and reported as a **directional**
+position, not a risk-free one: it prices a joint-event contract against a
+Gaussian copula and a historical correlation prior, and the full stake is at
+risk if the model is wrong.
 
-The single largest change to what this system will show you. A cross-venue
+### Execution zones
+
+The single largest constraint on what this system will show you. A cross-venue
 arbitrage is only real if **one person can place both legs**. The detector is
 perfectly happy to pair a Kalshi contract against a Betfair price, and the
 arithmetic looks immaculate, but nobody can take that trade: the accounts sit in
@@ -165,16 +453,16 @@ narrows further to what you could legitimately place from where you are. The
 every verdict, and the pairs the rule declined on the last scan — so a blocked
 pair is auditable rather than an invisible absence.
 
-The rule is policy, not hard-coded blindness: `ENFORCE_ZONE_PAIRING=false`
-turns it off. The currency guard does not turn off, because hedging dollars with
+The rule is policy, not hard-coded blindness: `ENFORCE_ZONE_PAIRING=false` turns
+it off. The currency guard does not turn off, because hedging dollars with
 pounds is wrong arithmetic rather than a configurable preference.
 
-## The parts that matter
+### The parts that matter
 
 Most of the code is plumbing. These are the pieces that decide whether the
 output is trustworthy.
 
-### Fees are priced in before detection, not after.
+#### Fees are priced in before detection, not after
 
 Kalshi charges `ceil(0.07 × contracts × P × (1−P))`, which peaks at `P = 0.50` —
 exactly where most arbitrage candidates live. A 2.04% gross edge on a two-leg
@@ -182,7 +470,7 @@ trade at mid-price nets **0.25%** after fees. Detecting on quoted prices and
 subtracting fees later would surface a stream of opportunities that lose money.
 Every quote carries an `effective_price` from the moment it enters the system.
 
-### Depth is walked, not assumed
+#### Depth is walked, not assumed
 
 Top-of-book tells you a price exists, not that your size can have it. Each leg's
 order book is walked for the requested notional to get a volume-weighted fill,
@@ -194,7 +482,7 @@ the whole ask stack is arithmetically true and practically useless: Polymarket
 books have resting size out to $0.999, and counting it would advertise
 **$566,000** of capacity on a trade whose realistic size is **$21,000**.
 
-### Outcome sets are checked for completeness
+#### Outcome sets are checked for completeness
 
 A Dutch book is only valid if the outcomes partition the sample space. If a venue
 paginates a 20-outcome event, or one leg is dropped for having a one-sided book,
@@ -208,11 +496,11 @@ cluster tightly at 1.00, exactly as the theory predicts.
 For the same reason, liquidity filters are applied per *event*, never per
 outcome — dropping one thin leg would silently break exhaustiveness.
 
-### Cross-venue matching fails closed
+#### Cross-venue matching fails closed
 
 Pairing two markets that are not the same bet is the most expensive mistake the
 system can make, because the "hedge" does not hedge. Before any fuzzy comparison
-runs, four hard guards reject the pair outright:
+runs, hard guards reject the pair outright:
 
 - **Thresholds** must match exactly. `$100k` and `100,000` are normalised to the
   same token; `$100k` and `$120k` never pair. Calendar fragments are stripped
@@ -224,16 +512,16 @@ Only then does a similarity score apply, and that score travels with the
 opportunity to discount its confidence. A paired title is weaker evidence than a
 shared identifier, and the UI says so.
 
-### A large margin lowers confidence
+#### A large margin lowers confidence
 
 The overwhelming majority of very large apparent arbitrages are mismatched lines,
 stale prices, or bad data. Margin is never coloured by size anywhere in the
-interface, and anything above 5% is flagged and penalised rather than
-celebrated. A circuit breaker halts scanning entirely if a burst of implausible
-margins appears, on the reasoning that the feed is more likely wrong than the
-market.
+interface, and anything above `SUSPECT_MARGIN` is flagged and penalised rather
+than celebrated. A circuit breaker halts scanning entirely if a burst of
+implausible margins appears, on the reasoning that the feed is more likely wrong
+than the market.
 
-### An empty dashboard has to look different from a broken one
+#### An empty dashboard has to look different from a broken one
 
 Zero opportunities is the normal state of a reasonably efficient market. On a
 typical live scan of ~890 events the engine finds two to four, and often none at
@@ -253,40 +541,16 @@ So every cycle pushes three things, not one:
   schedule. Showing the gross and net gaps side by side says which of the two
   problems you are looking at.
 
-### Void-adjusted edge is the number that matters
+#### Void-adjusted edge is the number that matters
 
 An arbitrage is risk-free only if every leg settles. At a 2% void rate costing
 30% of stake, a 1.01% nominal margin is worth **0.39%**. Every opportunity shows
 both figures, and the backtester Monte-Carlos the stored tape under a per-venue
 void model rather than reporting the naive sum.
 
-## Layout
+---
 
-```
-backend/
-  arbengine/
-    odds.py         Odds mathematics — every formula from the theory volume
-    fees.py         Per-venue fee models (Kalshi's, and exchange commission)
-    venues.py       Venue registry and the execution-zone pairing rule
-    models.py       Canonical Quote → Outcome → Market → Event → Arb
-    normalise.py    Cross-venue title matching and its hard guards
-    detector.py     The four detectors, near misses, confidence scoring
-    sizing.py       Order-book walking and equal-profit allocation
-    storage.py      SQLite: arbs, placements, scans, price history
-    alerts.py       Telegram push + in-process broadcast to the dashboard
-    scanner.py      Pipeline orchestration, dedupe, circuit breaker
-    backtest.py     Void-model replay and threshold sweep
-    api.py          FastAPI: REST + WebSocket
-    demo_data.py    Deterministic offline fixtures
-    sources/        polymarket.py · kalshi.py · smarkets.py · betfair.py · odds_api.py
-  tests/            138 tests, including the PDFs' worked examples
-frontend/
-  app/              Opportunities · Markets · Venues · Analytics · Calculators · Settings
-  components/       Table, detail drawer, charts, design primitives
-  lib/              API client, types, formatting, live-data hook, demo shim
-```
-
-## Using it
+## Using the dashboard
 
 **Opportunities** is the live table. Click any row for the full breakdown: an
 interactive stake calculator, the payout in every state of the world, and the
@@ -297,9 +561,9 @@ guarantee is only real if profit is positive in *every* row — after rounding,
 the outcomes are no longer exactly equal.
 
 Below the table, the **watchlist** carries the books that did not cross and the
-**scan activity** feed carries the cycles that produced them. Together they are
-the answer to "the terminal is busy but the dashboard is empty": the tape is
-moving, it just is not crossing.
+**scan activity** feed carries the cycles that produced them.
+
+**Positions** tracks logged placements, unwind quotes and settlement.
 
 **Markets** browses the normalised tape the detectors see, with each event's
 combined book and overround.
@@ -317,72 +581,93 @@ stakes, void-adjusted edge, Kelly sizing, and odds conversion.
 **Settings** tunes thresholds live, and shows what each setting implies —
 including the zone-pairing rule and the jurisdiction you trade from.
 
-### CLI
+---
+
+## API
+
+Interactive documentation is served at `/docs` when the engine is running. The
+main groups:
+
+| Group | Endpoints |
+|---|---|
+| System | `/api/health`, `/api/status`, `/api/config`, `/api/venues`, `/api/providers` |
+| Opportunities | `/api/arbs`, `/api/arbs/{id}`, `/api/arbs/{id}/resize`, `/api/near-misses` |
+| Placements | `/api/arbs/{id}/place`, `/api/arbs/{id}/log-placement` |
+| Positions | `/api/positions`, `/api/positions/{id}/unwind-quote`, `/api/positions/{id}/sell-back`, `/api/positions/{id}/settle` |
+| Markets | `/api/markets`, `/api/history` |
+| Analytics | `/api/analytics`, `/api/backtest`, `/api/backtest/sweep` |
+| Calculators | `/api/calc/stakes`, `/api/calc/kelly`, `/api/calc/convert`, `/api/calc/void-adjusted`, `/api/calc/correlation` |
+| Correlation | `/api/correlation/pairs` and nested outcome routes |
+| Scanner control | `/api/scanner/scan`, `/api/scanner/start`, `/api/scanner/stop`, `/api/scanner/reset-breaker` |
+| Live updates | `/ws` (WebSocket) |
+
+---
+
+## Testing
 
 ```bash
-cd backend
-python -m arbengine.main --scan      # one cycle, print results, exit
-python -m arbengine.main --demo      # serve with offline fixtures
-python -m pytest tests/ -q           # the backend test suite
+cd backend && python -m pytest tests/ -q
 ```
+
+463 tests, covering the odds mathematics against the worked examples in the PDFs,
+the detectors, sizing and order-book walking, venue pairing, the circuit breaker,
+scanner retirement, correlation arbitrage, and placement/settlement flows.
+
+Frontend:
+
+```bash
+cd frontend && npm run typecheck && npm run lint && npm test
+```
+
+The Vitest suite asserts the TypeScript odds port in `frontend/lib/staticMath.ts`
+against the same vectors the Python suite uses, so the two implementations
+cannot drift apart unnoticed.
+
+CI runs all of the above plus the static demo build on every push to this
+branch and to `main`.
+
+---
 
 ## The demo deployment
 
 `.github/workflows/deploy-demo.yml` publishes the dashboard to GitHub Pages on
-every push to `main` or `ANTHONYS-BRANCH`. The build runs the test suite, boots
-the engine in demo mode, captures its real API responses as JSON, then exports
-the frontend as static files that read those fixtures instead of calling a
-backend.
+every push to `main`. The build runs the test suite, boots the engine in demo
+mode, captures its real API responses as JSON, then exports the frontend as
+static files that read those fixtures instead of calling a backend.
 
-**One demo per branch.** Pages serves a single site per repository and
-`actions/deploy-pages` replaces all of it on every deployment, so whichever
-branch published last owned the URL -- and with a `main`-only trigger, every
-branch demo was in fact the `main` build. The workflow now *assembles* the site
-instead of replacing it: a `gh-pages` branch accumulates one subdirectory per
-branch, and each run rewrites only its own directory before deploying the whole
-tree. Several demos are live at once:
+Pure-arithmetic endpoints (stake sizing, Kelly, void adjustment, odds conversion,
+the backtest Monte Carlo) are ported to TypeScript in
+`frontend/lib/staticMath.ts`, so the calculators stay genuinely interactive on
+the demo rather than being frozen screenshots. Those ports are formula-for-formula
+copies of `backend/arbengine/odds.py`.
+
+Pages serves one site per repository, so branches would otherwise take turns
+overwriting each other's demo. The workflow assembles the site instead: a
+`gh-pages` branch accumulates one subdirectory per branch, and each run
+rewrites only its own before deploying the whole tree.
 
 | Branch | URL |
 |---|---|
 | `main` | https://makraptor44.github.io/BetsWin/ |
 | `ANTHONYS-BRANCH` | https://makraptor44.github.io/BetsWin/anthony/ |
 
-Each run rewrites only its own subdirectory and rebases if another branch
-published while it was building, so the two never clobber each other. Fixtures
-are regenerated from that commit's engine on every run, so a branch demo is
-always that branch's current behaviour rather than a checked-in snapshot.
-
-`gh-pages` is storage here, not the serving root: the assembled tree is uploaded
-as the Pages artifact, so this needs no change to the repository's Pages source.
-The deploy job deliberately does not declare the `github-pages` environment --
-that environment's deployment branch policy allows `main` only, and widening it
-needs repository admin. The policy gates the environment, not the Pages API, so
-a job that does not claim it deploys normally.
-Until `main` merges this workflow, a push to `main` still runs main's older
-single-branch deploy and drops the branch subdirectories until the next branch
-build restores them.
-
-`frontend/components/BuildRibbon.tsx` renders the branch, short SHA, commit
-subject and build age at the top of every demo page, linked to the commit and
-the workflow run -- two static exports otherwise look identical, and the
-regenerated fixtures move on every build for reasons unrelated to the branch.
-
-
-Pure-arithmetic endpoints (stake sizing, Kelly, void adjustment, odds
-conversion, the backtest Monte Carlo) are ported to TypeScript in
-`frontend/lib/staticMath.ts`, so the calculators stay genuinely interactive on
-the demo rather than being frozen screenshots.
-
-Two implementations of one formula drift -- and these had: the odds converter
-returned `Infinity` in TypeScript where Python raised, and the demo backtest
-silently dropped per-venue void rates. Both suites therefore assert against one
-shared fixture, `shared/odds-vectors.json`, whose expected values are generated
-from the Python implementation. The Python half is
-`backend/tests/test_shared_vectors.py`; the TypeScript half is
-`frontend/lib/__tests__/sharedVectors.test.ts` (`npm test`). A divergence now
-fails a test instead of reaching a user.
+A ribbon at the top of each demo page names the branch, commit and build time,
+since two static exports are otherwise indistinguishable.
 
 To enable it once: **Settings → Pages → Source: GitHub Actions**.
+
+---
+
+## Contributing
+
+`.github/workflows/attribution.yml` on `main` rejects AI co-author trailers, and
+runs against pull requests targeting it as well as pushes -- so it gates work on
+this branch at merge time even though the workflow file itself lives on `main`. GitHub reads a `Co-Authored-By` trailer and credits that address as a
+repository contributor, and the credit outlives the commit — force-pushing it
+away leaves the sidebar entry standing. Several coding tools append such trailers
+by default; if yours does, turn it off before committing.
+
+---
 
 ## Scope and limits
 
@@ -403,24 +688,38 @@ figure once you have history — the engine logs every candidate so you can.
 **Polymarket restricts US persons** from trading, whatever its market data says.
 Kalshi is the CFTC-regulated US venue. Check what you are eligible to use.
 
+**Correlation arbitrage is not arbitrage.** It is a modelled directional edge
+sized by fractional Kelly, and the full stake is lost if the model is wrong. The
+interface labels it as such.
 
-## Strategies
+---
 
-Implemented, and covered by the test suite:
+## Background and roles
 
-1. **Single-event arbitrage** — binary complement, Dutch books (YES and NO
-   side), cross-venue pairs, and best-price-per-outcome across sportsbooks.
-   All risk-free once every leg fills; see `arbengine/detector.py`.
-2. **Correlation arbitrage** — a joint-event contract priced against a
-   Gaussian-copula fair value from its two marginals. Directional, not
-   risk-free, and reported as such; see `arbengine/correlation_arb.py`.
+The product concept: scan prediction-market and sportsbook events, find
+mispriced odds across high-margin, low-liquidity order books, and surface
+positions that are profitable regardless of outcome — without the user needing
+to write code.
 
-### Roadmap
+Prediction markets rather than sportsbooks, because they carry lower liquidity
+and therefore more mispricing, they are peer-to-peer rather than a contest
+against a bookmaker's margin, and fewer people are currently arbitraging them.
+That last advantage is expected to be temporary.
 
-Not implemented. Listed so the ambition is visible, not because any code
-exists for them yet:
+Work is split across the team as follows.
 
-- Distribution arbitrage across strike ladders.
-- Long-tail arbitrage on many-outcome events.
-- Model-derived true probabilities (data-driven value betting).
+| Contributor | Area | Files |
+|---|---|---|
+| Ethan | Stake calculation, notifier, base source, odds API | `sizing.py`, `alerts.py`, `sources/base.py`, `sources/odds_api.py` |
+| Tom | Scanning, execution, entry point | `scanner.py`, `api.py`, `main.py` |
+| Harry | Backtest, storage, alerts | `backtest.py`, `storage.py`, `alerts.py` |
+| Anthony | Normalisation, detection, exchange clients | `normalise.py`, `detector.py`, `venues.py`, `sources/betfair.py` |
 
+### Strategy roadmap
+
+1. **Single-event arbitrage** — binary complement, Dutch book, cross-venue,
+   sportsbook. *Implemented.*
+2. **Structured products** — correlation arbitrage *(implemented)*, distribution
+   arbitrage and long-tail arbitrage *(not yet implemented)*.
+3. **Model-driven pricing** — predicted true probabilities from data-driven
+   models. *Not yet implemented.*
