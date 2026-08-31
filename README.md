@@ -164,8 +164,7 @@ cp backend/.env.example backend/.env
 
 **The defaults work with no edits.** Every setting is documented inline in
 `backend/.env.example`; see [Configuration](#configuration) for the ones worth
-knowing about first. Never commit a `.env` containing real keys — `.gitignore`
-already excludes it.
+knowing about first.
 
 ### 4. Install the dashboard
 
