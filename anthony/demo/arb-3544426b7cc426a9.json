@@ -1,0 +1,106 @@
+{
+ "arb": {
+  "id": "3544426b7cc426a9",
+  "kind": "correlation",
+  "strategy": "directional",
+  "title": "GOP presidency + Senate (2028, demo) - correlation edge on \"Yes\"",
+  "category": "correlation",
+  "venues": [
+   "kalshi"
+  ],
+  "market_key": "correlation",
+  "legs": [
+   {
+    "venue": "kalshi",
+    "market_id": "KXDEMO-BOTH28:Y",
+    "ticker": "KXDEMO-BOTH28:Y",
+    "outcome": "Yes",
+    "side": "YES",
+    "price": 0.48,
+    "effective_price": 0.497488,
+    "decimal_odds": 2.0833333333333335,
+    "effective_decimal_odds": 2.010098427920033,
+    "stake": 156.46,
+    "contracts": 314.5,
+    "fee": 5.5,
+    "size_available": 8704.0,
+    "url": "https://example.invalid/kalshi/KXDEMO-BOTH28:Y",
+    "event_title": "GOP presidency + Senate (2028, demo)",
+    "payout": 314.50000003236835,
+    "net_payout": 314.50000003236835
+   }
+  ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
+  "total_stake": 156.46,
+  "book": 1.0,
+  "margin": 0.06322,
+  "net_margin": 0.06322,
+  "profit": 9.89,
+  "worst_case_profit": -156.46,
+  "payout_if": {
+   "Yes resolves YES": 158.04,
+   "Yes resolves against": -156.46
+  },
+  "max_stake_available": 156.46,
+  "confidence": 100,
+  "flags": [
+   "statistical_edge"
+  ],
+  "notes": [
+   "Directional bet that the market's implied correlation (rho_impl=0.50) converges toward the prior (rho_prior=0.68, historical, n=8) -- not a risk-free arbitrage. The full stake is at risk if the joint contract resolves the other way."
+  ],
+  "detected_at": "2026-08-31T09:44:04.926846Z",
+  "close_time": "2027-11-04T09:44:06.225163Z",
+  "last_seen": "2026-08-31T09:44:06.791803Z",
+  "last_updated_at": "2026-08-31T09:44:04.926847Z",
+  "expires_at": "2026-08-31T09:53:42.226725Z",
+  "invalidated_at": null,
+  "is_suspect": false,
+  "roi_pct": -100.0,
+  "seconds_to_expiry": 575.425562,
+  "status": "live",
+  "hours_to_close": 10319.999839998613
+ },
+ "payout_matrix": [
+  {
+   "outcome": "Yes resolves YES",
+   "venue": "kalshi",
+   "gross_return": 314.5,
+   "total_stake": 156.46,
+   "profit": 158.04,
+   "roi_pct": 101.01
+  },
+  {
+   "outcome": "Yes resolves against",
+   "venue": "kalshi",
+   "gross_return": 0.0,
+   "total_stake": 156.46,
+   "profit": -156.46,
+   "roi_pct": -100.0
+  }
+ ],
+ "maths": {
+  "implied_probs": [
+   0.49749
+  ],
+  "book_quoted": 0.48,
+  "book_effective": 1.0,
+  "margin_gross": 0.06322,
+  "margin_net": 0.06322,
+  "vig_equivalent": -1.08333,
+  "void_rate": 0.02,
+  "void_loss": 0.3,
+  "margin_after_voids": 0.05596,
+  "kelly_arb_fraction": 2.9503,
+  "kelly_arb_unbounded": false,
+  "devig_fair_probs": [
+   1.0
+  ],
+  "bankroll_cap": 500.0
+ }
+}

@@ -1,0 +1,125 @@
+{
+ "arb": {
+  "id": "ada41f580085957f",
+  "kind": "binary_complement",
+  "strategy": "arbitrage",
+  "title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
+  "category": "economics",
+  "venues": [
+   "polymarket"
+  ],
+  "market_key": "binary",
+  "legs": [
+   {
+    "venue": "polymarket",
+    "market_id": "demo-fed:Y",
+    "ticker": "demo-fed:Y",
+    "outcome": "Yes",
+    "side": "YES",
+    "price": 0.462,
+    "effective_price": 0.462,
+    "decimal_odds": 2.1645021645021645,
+    "effective_decimal_odds": 2.1645021645021645,
+    "stake": 234.75,
+    "contracts": 508.1169,
+    "fee": 0.0,
+    "size_available": 19584.0,
+    "url": "https://example.invalid/polymarket/demo-fed:Y",
+    "event_title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
+    "payout": 508.1168831168831,
+    "net_payout": 508.1168831168831
+   },
+   {
+    "venue": "polymarket",
+    "market_id": "demo-fed:N",
+    "ticker": "demo-fed:N",
+    "outcome": "No",
+    "side": "NO",
+    "price": 0.522,
+    "effective_price": 0.522,
+    "decimal_odds": 1.9157088122605364,
+    "effective_decimal_odds": 1.9157088122605364,
+    "stake": 265.24,
+    "contracts": 508.1226,
+    "fee": 0.0,
+    "size_available": 19584.0,
+    "url": "https://example.invalid/polymarket/demo-fed:N",
+    "event_title": "Will the Federal Reserve cut rates at the December 2026 meeting?",
+    "payout": 508.1226053639847,
+    "net_payout": 508.1226053639847
+   }
+  ],
+  "zone": "us_prediction",
+  "zone_label": "USD prediction markets",
+  "currency": "USD",
+  "placeable_from": [
+   "*"
+  ],
+  "total_stake": 499.99,
+  "book": 0.984,
+  "margin": 0.016260162601626105,
+  "net_margin": 0.016260162601626105,
+  "profit": 8.13,
+  "worst_case_profit": 8.13,
+  "payout_if": {
+   "Yes (polymarket)": 508.12,
+   "No (polymarket)": 508.12
+  },
+  "max_stake_available": 19304.04,
+  "confidence": 100,
+  "flags": [],
+  "notes": [
+   "Broadly available, but not from US -- at least one venue turns those away."
+  ],
+  "detected_at": "2026-08-31T09:44:04.908845Z",
+  "close_time": "2026-10-15T09:44:06.225163Z",
+  "last_seen": "2026-08-31T09:44:06.791803Z",
+  "last_updated_at": "2026-08-31T09:44:04.908849Z",
+  "expires_at": "2026-08-31T09:52:58.225196Z",
+  "invalidated_at": null,
+  "is_suspect": false,
+  "roi_pct": 1.6260325206504131,
+  "seconds_to_expiry": 531.420228,
+  "status": "live",
+  "hours_to_close": 1079.9998389416667
+ },
+ "payout_matrix": [
+  {
+   "outcome": "Yes",
+   "venue": "polymarket",
+   "gross_return": 508.12,
+   "total_stake": 499.99,
+   "profit": 8.13,
+   "roi_pct": 1.625
+  },
+  {
+   "outcome": "No",
+   "venue": "polymarket",
+   "gross_return": 508.12,
+   "total_stake": 499.99,
+   "profit": 8.13,
+   "roi_pct": 1.627
+  }
+ ],
+ "maths": {
+  "implied_probs": [
+   0.462,
+   0.522
+  ],
+  "book_quoted": 0.984,
+  "book_effective": 0.984,
+  "margin_gross": 0.016260162601626105,
+  "margin_net": 0.016260162601626105,
+  "vig_equivalent": -0.01626,
+  "void_rate": 0.02,
+  "void_loss": 0.3,
+  "margin_after_voids": 0.00993,
+  "kelly_arb_fraction": 2.0367,
+  "kelly_arb_unbounded": false,
+  "devig_fair_probs": [
+   0.46951,
+   0.53049
+  ],
+  "bankroll_cap": 500.0
+ }
+}

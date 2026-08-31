@@ -1,0 +1,164 @@
+{
+ "arb": {
+  "id": "d37b7d4db9682a72",
+  "kind": "dutch_yes",
+  "strategy": "arbitrage",
+  "title": "Arsenal vs Brighton - Full-time result - buy every outcome",
+  "category": "sports",
+  "venues": [
+   "smarkets"
+  ],
+  "market_key": "dutch_yes",
+  "legs": [
+   {
+    "venue": "smarkets",
+    "market_id": "demo-sm-3way-0:Y",
+    "ticker": "demo-sm-3way-0:Y",
+    "outcome": "Arsenal",
+    "side": "YES",
+    "price": 0.515,
+    "effective_price": 0.520044,
+    "decimal_odds": 1.941747572815534,
+    "effective_decimal_odds": 1.9229126213592231,
+    "stake": 262.58,
+    "contracts": 504.9184,
+    "fee": 2.547,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/smarkets/demo-sm-3way-0:Y",
+    "event_title": "Arsenal vs Brighton - Full-time result",
+    "payout": 504.91839611650477,
+    "net_payout": 504.91839611650477
+   },
+   {
+    "venue": "smarkets",
+    "market_id": "demo-sm-3way-1:Y",
+    "ticker": "demo-sm-3way-1:Y",
+    "outcome": "Draw",
+    "side": "YES",
+    "price": 0.255,
+    "effective_price": 0.258857,
+    "decimal_odds": 3.9215686274509802,
+    "effective_decimal_odds": 3.8631372549019605,
+    "stake": 130.7,
+    "contracts": 504.912,
+    "fee": 1.9474,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/smarkets/demo-sm-3way-1:Y",
+    "event_title": "Arsenal vs Brighton - Full-time result",
+    "payout": 504.9120392156862,
+    "net_payout": 504.9120392156862
+   },
+   {
+    "venue": "smarkets",
+    "market_id": "demo-sm-3way-2:Y",
+    "ticker": "demo-sm-3way-2:Y",
+    "outcome": "Brighton",
+    "side": "YES",
+    "price": 0.208,
+    "effective_price": 0.211348,
+    "decimal_odds": 4.8076923076923075,
+    "effective_decimal_odds": 4.731538461538462,
+    "stake": 106.71,
+    "contracts": 504.9025,
+    "fee": 1.6903,
+    "size_available": 13056.0,
+    "url": "https://example.invalid/smarkets/demo-sm-3way-2:Y",
+    "event_title": "Arsenal vs Brighton - Full-time result",
+    "payout": 504.90246923076927,
+    "net_payout": 504.90246923076927
+   }
+  ],
+  "zone": "uk_exchange",
+  "zone_label": "UK/EU betting exchanges",
+  "currency": "GBP",
+  "placeable_from": [
+   "AT",
+   "DE",
+   "ES",
+   "FI",
+   "GB",
+   "IE",
+   "MT",
+   "SE"
+  ],
+  "total_stake": 499.99,
+  "book": 0.9902491481497665,
+  "margin": 0.02249488752556239,
+  "net_margin": 0.009846867193425535,
+  "profit": 4.92,
+  "worst_case_profit": 4.91,
+  "payout_if": {
+   "Arsenal (smarkets)": 504.92,
+   "Draw (smarkets)": 504.91,
+   "Brighton (smarkets)": 504.9
+  },
+  "max_stake_available": 11532.41,
+  "confidence": 88,
+  "flags": [
+   "fee_sensitive"
+  ],
+  "notes": [
+   "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
+  ],
+  "detected_at": "2026-08-31T09:44:04.910168Z",
+  "close_time": "2026-09-03T09:44:06.225163Z",
+  "last_seen": "2026-08-31T09:44:06.791803Z",
+  "last_updated_at": "2026-08-31T09:44:04.910170Z",
+  "expires_at": "2026-08-31T09:52:37.226430Z",
+  "invalidated_at": null,
+  "is_suspect": false,
+  "roi_pct": 0.9820196403928079,
+  "seconds_to_expiry": 510.41895,
+  "status": "live",
+  "hours_to_close": 71.99983824388889
+ },
+ "payout_matrix": [
+  {
+   "outcome": "Arsenal",
+   "venue": "smarkets",
+   "gross_return": 504.92,
+   "total_stake": 499.99,
+   "profit": 4.93,
+   "roi_pct": 0.986
+  },
+  {
+   "outcome": "Draw",
+   "venue": "smarkets",
+   "gross_return": 504.91,
+   "total_stake": 499.99,
+   "profit": 4.92,
+   "roi_pct": 0.984
+  },
+  {
+   "outcome": "Brighton",
+   "venue": "smarkets",
+   "gross_return": 504.9,
+   "total_stake": 499.99,
+   "profit": 4.91,
+   "roi_pct": 0.983
+  }
+ ],
+ "maths": {
+  "implied_probs": [
+   0.52004,
+   0.25886,
+   0.21135
+  ],
+  "book_quoted": 0.978,
+  "book_effective": 0.99025,
+  "margin_gross": 0.02249488752556239,
+  "margin_net": 0.009846867193425535,
+  "vig_equivalent": -0.02249,
+  "void_rate": 0.02,
+  "void_loss": 0.3,
+  "margin_after_voids": 0.00365,
+  "kelly_arb_fraction": 1.2356,
+  "kelly_arb_unbounded": false,
+  "devig_fair_probs": [
+   0.52658,
+   0.26074,
+   0.21268
+  ],
+  "bankroll_cap": 500.0
+ }
+}

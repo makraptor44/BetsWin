@@ -1,0 +1,349 @@
+{
+ "stored": {
+  "window_days": 30,
+  "total_detected": 6,
+  "avg_margin": 0.036185100341296766,
+  "max_margin": 0.07602941893768289,
+  "avg_confidence": 86.16666666666667,
+  "theoretical_turnover": 2656.4,
+  "theoretical_profit": -79.55000000000001,
+  "settled_count": 0,
+  "realised_pnl": 0.0,
+  "by_kind": [
+   {
+    "kind": "cross_venue",
+    "n": 2,
+    "avg_margin": 0.04575707110045779,
+    "profit": 45.75
+   },
+   {
+    "kind": "dutch_yes",
+    "n": 2,
+    "avg_margin": 0.023058148622619457,
+    "profit": 23.03
+   },
+   {
+    "kind": "binary_complement",
+    "n": 1,
+    "avg_margin": 0.016260162601626105,
+    "profit": 8.13
+   },
+   {
+    "kind": "correlation",
+    "n": 1,
+    "avg_margin": 0.06322,
+    "profit": -156.46
+   }
+  ],
+  "by_venue": {
+   "kalshi": 2,
+   "polymarket": 3,
+   "smarkets": 2,
+   "betfair": 1
+  },
+  "by_zone": [
+   {
+    "zone": "us_prediction",
+    "n": 4,
+    "avg_margin": 0.04794475289778059,
+    "turnover": 1656.42,
+    "profit": -92.2
+   },
+   {
+    "zone": "uk_exchange",
+    "n": 2,
+    "avg_margin": 0.012665795228329113,
+    "turnover": 999.98,
+    "profit": 12.65
+   }
+  ],
+  "by_day": [
+   {
+    "day": "2026-08-31",
+    "n": 6,
+    "avg_margin": 0.036185100341296766,
+    "profit": -79.55000000000001
+   }
+  ]
+ },
+ "margin_histogram": [
+  {
+   "from": 0.0,
+   "to": 0.005,
+   "count": 0
+  },
+  {
+   "from": 0.005,
+   "to": 0.01,
+   "count": 1
+  },
+  {
+   "from": 0.01,
+   "to": 0.015,
+   "count": 0
+  },
+  {
+   "from": 0.015,
+   "to": 0.02,
+   "count": 2
+  },
+  {
+   "from": 0.02,
+   "to": 0.025,
+   "count": 0
+  },
+  {
+   "from": 0.025,
+   "to": 0.03,
+   "count": 0
+  },
+  {
+   "from": 0.03,
+   "to": 0.035,
+   "count": 0
+  },
+  {
+   "from": 0.035,
+   "to": 0.04,
+   "count": 1
+  },
+  {
+   "from": 0.04,
+   "to": 0.045,
+   "count": 0
+  },
+  {
+   "from": 0.045,
+   "to": 0.05,
+   "count": 0
+  },
+  {
+   "from": 0.05,
+   "to": 0.055,
+   "count": 0
+  },
+  {
+   "from": 0.055,
+   "to": 0.06,
+   "count": 2
+  }
+ ],
+ "recent_scans": [
+  {
+   "id": 1,
+   "started_at": "2026-08-31T09:44:04.098191+00:00",
+   "duration": 1.025,
+   "events_scanned": 20,
+   "markets_scanned": 29,
+   "quotes_scanned": 58,
+   "arbs_found": 6,
+   "new_arbs": 6,
+   "errors": "[]"
+  },
+  {
+   "id": 2,
+   "started_at": "2026-08-31T09:44:05.126141+00:00",
+   "duration": 0.549,
+   "events_scanned": 20,
+   "markets_scanned": 29,
+   "quotes_scanned": 58,
+   "arbs_found": 6,
+   "new_arbs": 0,
+   "errors": "[]"
+  },
+  {
+   "id": 3,
+   "started_at": "2026-08-31T09:44:05.677594+00:00",
+   "duration": 0.545,
+   "events_scanned": 20,
+   "markets_scanned": 29,
+   "quotes_scanned": 58,
+   "arbs_found": 6,
+   "new_arbs": 0,
+   "errors": "[]"
+  },
+  {
+   "id": 4,
+   "started_at": "2026-08-31T09:44:06.225139+00:00",
+   "duration": 0.568,
+   "events_scanned": 20,
+   "markets_scanned": 29,
+   "quotes_scanned": 58,
+   "arbs_found": 6,
+   "new_arbs": 0,
+   "errors": "[]"
+  }
+ ],
+ "zones": {
+  "active": [
+   "uk_exchange",
+   "us_prediction"
+  ],
+  "enforced": true,
+  "operator_jurisdiction": "",
+  "cross_zone_rejected": 4
+ },
+ "near_misses": [
+  {
+   "id": "0aa11b183445766f",
+   "title": "Labour to win the next UK general election",
+   "venue": "betfair",
+   "zone": "uk_exchange",
+   "category": "politics",
+   "kind": "binary_complement",
+   "book": 1.00745,
+   "gap_bps": 74.5,
+   "gap_bps_gross": -180.0,
+   "best_outcome": "Not Yes",
+   "outcomes": 2,
+   "liquidity_usd": 115000.0,
+   "close_time": "2027-06-27T09:44:06.225163Z",
+   "url": "https://example.invalid/betfair/ge-labour",
+   "seen_at": "2026-08-31T09:44:06.791016Z"
+  },
+  {
+   "id": "3136164427b9da0f",
+   "title": "2028 Presidential nominee",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "category": "politics",
+   "kind": "binary_complement",
+   "book": 1.012,
+   "gap_bps": 120.0,
+   "gap_bps_gross": 120.0,
+   "best_outcome": "Vance",
+   "outcomes": 2,
+   "liquidity_usd": 920000.0,
+   "close_time": "2026-12-29T09:44:06.225163Z",
+   "url": "https://example.invalid/polymarket/nominee-2028",
+   "seen_at": "2026-08-31T09:44:06.790858Z"
+  },
+  {
+   "id": "b2ef6edc97815ba4",
+   "title": "Will SpaceX land Starship on the Moon before 2029?",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "category": "science",
+   "kind": "binary_complement",
+   "book": 1.012,
+   "gap_bps": 120.0,
+   "gap_bps_gross": 120.0,
+   "best_outcome": "Yes",
+   "outcomes": 2,
+   "liquidity_usd": 43491.0,
+   "close_time": "2027-07-15T09:44:06.225163Z",
+   "url": "https://example.invalid/polymarket/noise-0",
+   "seen_at": "2026-08-31T09:44:06.791123Z"
+  },
+  {
+   "id": "65a40190819fc5e4",
+   "title": "Will Bitcoin close above $150,000 on Dec 31, 2026?",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "category": "crypto",
+   "kind": "binary_complement",
+   "book": 1.012,
+   "gap_bps": 120.0,
+   "gap_bps_gross": 120.0,
+   "best_outcome": "Yes",
+   "outcomes": 2,
+   "liquidity_usd": 121963.0,
+   "close_time": "2026-10-17T09:44:06.225163Z",
+   "url": "https://example.invalid/polymarket/noise-2",
+   "seen_at": "2026-08-31T09:44:06.791140Z"
+  },
+  {
+   "id": "9e996bb506c76029",
+   "title": "Will global average temperature set a record in 2026?",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "category": "climate",
+   "kind": "binary_complement",
+   "book": 1.012,
+   "gap_bps": 120.0,
+   "gap_bps_gross": 120.0,
+   "best_outcome": "No",
+   "outcomes": 2,
+   "liquidity_usd": 78038.0,
+   "close_time": "2027-01-18T09:44:06.225163Z",
+   "url": "https://example.invalid/polymarket/noise-4",
+   "seen_at": "2026-08-31T09:44:06.791157Z"
+  },
+  {
+   "id": "2e29a2b25ca2ef82",
+   "title": "Will the S&P 500 close above 8000 in 2026?",
+   "venue": "polymarket",
+   "zone": "us_prediction",
+   "category": "economics",
+   "kind": "binary_complement",
+   "book": 1.012,
+   "gap_bps": 120.0,
+   "gap_bps_gross": 120.0,
+   "best_outcome": "Yes",
+   "outcomes": 2,
+   "liquidity_usd": 125926.0,
+   "close_time": "2027-05-29T09:44:06.225163Z",
+   "url": "https://example.invalid/polymarket/noise-6",
+   "seen_at": "2026-08-31T09:44:06.791173Z"
+  },
+  {
+   "id": "7e6c22e9293244c8",
+   "title": "Super Bowl LXI winner",
+   "venue": "kalshi",
+   "zone": "us_prediction",
+   "category": "sports",
+   "kind": "binary_complement",
+   "book": 1.01282,
+   "gap_bps": 128.2,
+   "gap_bps_gross": -110.0,
+   "best_outcome": "Chiefs",
+   "outcomes": 2,
+   "liquidity_usd": 410000.0,
+   "close_time": "2026-11-29T09:44:06.225163Z",
+   "url": "https://example.invalid/kalshi/superbowl-61",
+   "seen_at": "2026-08-31T09:44:06.790934Z"
+  },
+  {
+   "id": "b8f168e49cce72cb",
+   "title": "Arsenal vs Brighton - Full-time result",
+   "venue": "smarkets",
+   "zone": "uk_exchange",
+   "category": "sports",
+   "kind": "binary_complement",
+   "book": 1.01456,
+   "gap_bps": 145.6,
+   "gap_bps_gross": 80.0,
+   "best_outcome": "Brighton",
+   "outcomes": 2,
+   "liquidity_usd": 86000.0,
+   "close_time": "2026-09-03T09:44:06.225163Z",
+   "url": "https://example.invalid/smarkets/arsenal-brighton",
+   "seen_at": "2026-08-31T09:44:06.791076Z"
+  }
+ ],
+ "live": {
+  "count": 6,
+  "by_kind": {
+   "correlation": 1,
+   "cross_venue": 2,
+   "dutch_yes": 2,
+   "binary_complement": 1
+  },
+  "by_venue": {
+   "kalshi": 2,
+   "polymarket": 3,
+   "smarkets": 2,
+   "betfair": 1
+  },
+  "by_zone": {
+   "us_prediction": 4,
+   "uk_exchange": 2
+  },
+  "total_profit_available": 76.91,
+  "directional_at_risk": 156.46,
+  "directional_count": 1,
+  "total_stake_required": 2656.4,
+  "avg_margin": 0.03619,
+  "avg_confidence": 86.2
+ }
+}

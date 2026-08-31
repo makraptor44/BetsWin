@@ -1,0 +1,2 @@
+:HL["/BetsWin/anthony/_next/static/chunks/1ma1gfjs-82j_.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":4176,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":4192,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":4256,"slots":null}}}}},"staleTime":300,"buildId":"qFujN662C7TIecP_eSZz7"}
