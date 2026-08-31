@@ -238,6 +238,43 @@ def _score(
     return int(max(0.0, min(100.0, score))), tuple(dict.fromkeys(flags)), tuple(notes)
 
 
+def expiry_for(
+    quotes: Sequence[Quote], close_time: Optional[datetime]
+) -> Optional[datetime]:
+    """When this opportunity stops being assertable.
+
+    Every input here is a fact a provider gave us. Nothing is invented, which
+    is the whole point: a countdown running against a number somebody picked is
+    theatre, and a trader who learns that once will never trust the timer again.
+
+    Two real bounds, and the earlier one wins.
+
+    THE MARKET CLOSING. At kickoff the book comes down. Nothing priced against
+    it survives that instant, so it is a hard ceiling.
+
+    QUOTE STALENESS. Each leg carries the timestamp its venue last moved the
+    price. A quote is evidence about the book at that moment and decays from
+    there; past `stale_quote_seconds` it is no longer evidence we would stake
+    on. The binding leg is the OLDEST one, because an arbitrage is only as
+    current as its stalest price.
+
+    Returns None when neither bound is knowable -- a venue that publishes no
+    timestamps and no close time gives us nothing to count down to, and
+    inventing a duration would be exactly the fabrication this avoids.
+    """
+    horizon = settings.stale_quote_seconds
+    bounds: list[datetime] = []
+
+    if close_time is not None:
+        bounds.append(close_time)
+
+    stamps = [q.last_update for q in quotes if q.last_update is not None]
+    if stamps and horizon > 0:
+        bounds.append(min(stamps) + timedelta(seconds=horizon))
+
+    return min(bounds) if bounds else None
+
+
 def _within_window(close_time: Optional[datetime], category: str) -> bool:
     """Does this fixture start soon enough to be worth the capital?
 
@@ -328,6 +365,7 @@ def _finalise(
 
     return Arb(
         id=_arb_id(kind, quotes),
+        expires_at=expiry_for(quotes, close_time),
         kind=kind,
         title=title,
         category=category,

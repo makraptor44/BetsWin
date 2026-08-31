@@ -231,6 +231,29 @@ class ArbLeg(BaseModel):
         return self.payout
 
 
+class ArbStatus(str, Enum):
+    """Where an opportunity sits in its lifecycle.
+
+    The distinction between the last two is the one that matters operationally.
+    EXPIRED means the window we could vouch for has passed -- the prices may
+    still be good, but we can no longer assert it. INVALIDATED means we looked
+    again and the arbitrage was gone. Collapsing them loses the signal that
+    tells you whether your scan interval is too slow or the market is simply
+    efficient.
+    """
+
+    LIVE = "live"
+    EXPIRING = "expiring"
+    EXPIRED = "expired"
+    INVALIDATED = "invalidated"
+
+
+#: Inside this many seconds an opportunity reports EXPIRING rather than LIVE.
+#: Thirty seconds is roughly one scan interval: past that point the next
+#: observation may not arrive before the window closes.
+EXPIRING_WINDOW_SECONDS = 30.0
+
+
 class RiskFlag(str, Enum):
     """Named failure modes from Part I s9 and s5.3."""
 
@@ -290,6 +313,19 @@ class Arb(BaseModel):
     detected_at: datetime = Field(default_factory=utcnow)
     close_time: Optional[datetime] = None
     last_seen: datetime = Field(default_factory=utcnow)
+    #: Bumped only when the PRICES moved, unlike `last_seen`, which is bumped
+    #: every time the scan re-observes the same opportunity. A feed that says
+    #: "updated 2s ago" when nothing has changed for ten minutes is noise.
+    last_updated_at: datetime = Field(default_factory=utcnow)
+    #: The instant beyond which this opportunity can no longer be asserted.
+    #:
+    #: Derived, never assigned arbitrarily -- see `detector.expiry_for`. It is
+    #: the earliest of: the market closing, and the point at which the oldest
+    #: quote behind it has aged past the staleness horizon. Both are facts the
+    #: providers gave us.
+    expires_at: Optional[datetime] = None
+    #: Set when the scanner retires the opportunity, so the reason survives.
+    invalidated_at: Optional[datetime] = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -303,6 +339,34 @@ class Arb(BaseModel):
         if self.total_stake <= 0:
             return 0.0
         return 100.0 * self.worst_case_profit / self.total_stake
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def seconds_to_expiry(self) -> Optional[float]:
+        """Seconds until this can no longer be asserted. Negative once past."""
+        if self.expires_at is None:
+            return None
+        return (self.expires_at - utcnow()).total_seconds()
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def status(self) -> ArbStatus:
+        """Lifecycle state, derived rather than stored.
+
+        Storing it would mean a row could be LIVE in the database while its own
+        expires_at had passed -- the two would need reconciling on every read,
+        and whichever won would be the one nobody was looking at.
+        """
+        if self.invalidated_at is not None:
+            return ArbStatus.INVALIDATED
+        remaining = self.seconds_to_expiry
+        if remaining is None:
+            return ArbStatus.LIVE
+        if remaining <= 0:
+            return ArbStatus.EXPIRED
+        if remaining <= EXPIRING_WINDOW_SECONDS:
+            return ArbStatus.EXPIRING
+        return ArbStatus.LIVE
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -377,6 +441,14 @@ class ScanStats(BaseModel):
     quotes_scanned: int = 0
     arbs_found: int = 0
     new_arbs: int = 0
+    #: Re-observed this cycle at a different price. Distinct from `new_arbs`:
+    #: an opportunity that moved is not a new one, but it is not unchanged
+    #: either, and the activity stream needs to say which.
+    updated_arbs: int = 0
+    #: Retired because the window we could vouch for had passed.
+    expired_arbs: int = 0
+    #: Retired because we re-priced it and the edge was gone.
+    invalidated_arbs: int = 0
     near_misses: int = 0
     #: Tightest book seen this cycle, in basis points from crossing. The number
     #: that moves every scan even when `arbs_found` is stuck at zero.

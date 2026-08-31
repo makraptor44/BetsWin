@@ -182,6 +182,16 @@ class Settings(BaseSettings):
 
     # --------------------------------------------------------------- scanner
     poll_interval_seconds: int = 45
+
+    # How long a quote stays evidence.
+    #
+    # A price is a fact about the book at the instant its venue published it,
+    # and it decays from there. This is the horizon past which the engine will
+    # not assert an opportunity still holds -- it drives `expires_at` and so the
+    # countdown the operator sees. Ten minutes matches the STALE_QUOTE risk
+    # flag, so the point at which a quote is flagged as possibly-moved is the
+    # same point at which the opportunity built on it expires.
+    stale_quote_seconds: float = 600.0
     dedup_window_seconds: int = 300
     autostart_scanner: bool = True
     demo_mode: bool = False            # serve deterministic fixtures, no network

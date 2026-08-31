@@ -82,6 +82,27 @@ class CircuitBreaker:
         self.reason = None
 
 
+#: How many retired opportunities to keep in memory for the activity stream.
+_RETIRED_KEEP = 200
+
+
+def _prices_moved(before: Arb, after: Arb) -> bool:
+    """Did any leg re-price, or the edge change materially?
+
+    Compared on the effective prices rather than the margin alone: two legs can
+    both move and leave the margin almost unchanged, and that is still news --
+    the book you were going to hit is not the book that is there now.
+    """
+    if abs(before.net_margin - after.net_margin) > 1e-6:
+        return True
+    old_legs = {(l.venue, l.market_id, l.outcome): l.effective_price for l in before.legs}
+    for leg in after.legs:
+        prior = old_legs.get((leg.venue, leg.market_id, leg.outcome))
+        if prior is None or abs(prior - leg.effective_price) > 1e-6:
+            return True
+    return len(before.legs) != len(after.legs)
+
+
 class Scanner:
     """Polls every enabled venue, detects, sizes, persists and alerts."""
 
@@ -102,6 +123,8 @@ class Scanner:
         self._seen: dict[str, datetime] = {}
         self._live: dict[str, Arb] = {}
         self._events: list[Event] = []
+        #: Recently retired, newest last -- the activity stream reads this.
+        self._retired: list[Arb] = []
         self._near_misses: list[NearMiss] = []
         self._cross_zone_rejected: list[str] = []
         self._task: Optional[asyncio.Task] = None
@@ -331,20 +354,51 @@ class Scanner:
             return []
 
         fresh: list[Arb] = []
+        now = utcnow()
         for arb in found:
             existing = self._live.get(arb.id)
             if existing is not None:
+                # `last_seen` says when we last observed it; `last_updated_at`
+                # says when it last MOVED. Bumping both on every scan makes an
+                # opportunity that has not changed in ten minutes report as
+                # updated a second ago, which is the one thing a trader reads
+                # the field for.
+                moved = _prices_moved(existing, arb)
                 arb = arb.model_copy(
-                    update={"detected_at": existing.detected_at, "last_seen": utcnow()}
+                    update={
+                        "detected_at": existing.detected_at,
+                        "last_seen": now,
+                        "last_updated_at": now if moved else existing.last_updated_at,
+                    }
                 )
+                if moved:
+                    stats.updated_arbs += 1
             self._live[arb.id] = arb
             if self._is_new(arb):
                 fresh.append(arb)
 
-        # Retire opportunities that no longer price as arbs.
+        # Retire what is no longer live, and record WHY.
+        #
+        # An opportunity that vanished because we re-priced it and the edge was
+        # gone is a different event from one whose quotes simply aged out. The
+        # first says the market corrected; the second says our scan interval is
+        # slower than the book. Collapsing them into "removed" throws away the
+        # only signal that distinguishes an efficient market from a slow poller.
         current_ids = {a.id for a in found}
-        for gone in [k for k in self._live if k not in current_ids]:
-            self._live.pop(gone, None)
+        for gone_id in [k for k in self._live if k not in current_ids]:
+            gone = self._live.pop(gone_id, None)
+            if gone is None:
+                continue
+            remaining = gone.seconds_to_expiry
+            if remaining is not None and remaining <= 0:
+                stats.expired_arbs += 1
+                self._retired.append(gone.model_copy(update={"last_seen": now}))
+            else:
+                stats.invalidated_arbs += 1
+                self._retired.append(gone.model_copy(update={"invalidated_at": now}))
+        # Bounded: this feeds a UI activity stream, not an audit log. The store
+        # keeps the durable history.
+        del self._retired[:-_RETIRED_KEEP]
 
         for arb in fresh:
             try:
