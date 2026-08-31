@@ -84,12 +84,17 @@
    "Markets were paired by title similarity (100/100), not by a shared identifier.",
    "Resolution is 0.8 years out; capital is locked for the duration, so annualised return is far below the headline."
   ],
-  "detected_at": "2026-08-30T13:58:14.531102Z",
-  "close_time": "2027-06-26T13:58:17.642652Z",
-  "last_seen": "2026-08-30T13:58:19.103801Z",
+  "detected_at": "2026-08-31T07:10:58.942513Z",
+  "close_time": "2027-06-27T07:11:01.944284Z",
+  "last_seen": "2026-08-31T07:11:03.415822Z",
+  "last_updated_at": "2026-08-31T07:10:58.942515Z",
+  "expires_at": "2026-08-31T07:19:47.944844Z",
+  "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": 1.5480309606192124,
-  "hours_to_close": 7199.9995880825
+  "seconds_to_expiry": 524.507091,
+  "status": "live",
+  "hours_to_close": 7199.999585145
  },
  "payout_matrix": [
   {

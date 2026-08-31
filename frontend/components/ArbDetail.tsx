@@ -188,9 +188,9 @@ function Summary({ arb }: { arb: Arb }) {
       hint: "what the book can absorb",
     },
     {
-      label: "Closes in",
-      value: <Countdown iso={arb.close_time} showIcon />,
-      hint: "capital lock-up",
+      label: "Expires in",
+      value: <Countdown iso={arb.expires_at} showIcon />,
+      hint: "derived from close time and quote age",
     },
   ];
   return (

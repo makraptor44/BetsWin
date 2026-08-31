@@ -191,3 +191,20 @@ class TestPricesMoved:
             update={"legs": tuple(legs), "net_margin": arb.net_margin}
         )
         assert moved(arb, after) is True
+
+
+def test_every_kind_of_opportunity_carries_an_expiry():
+    """Including correlation, which builds its Arb outside `_finalise`.
+
+    That path constructs the model directly, so it does not inherit anything
+    the shared finaliser adds -- and a correlation row was briefly the one kind
+    of opportunity on the board with no countdown against it.
+    """
+    from arbengine.demo_data import demo_events  # noqa: PLC0415 - demo-only import
+
+    from arbengine.detector import scan_events
+
+    arbs = scan_events(demo_events())
+    assert arbs, "the demo fixture should produce opportunities"
+    missing = [a.title for a in arbs if a.expires_at is None]
+    assert not missing, f"no expiry on: {missing}"

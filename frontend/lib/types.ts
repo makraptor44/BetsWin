@@ -84,9 +84,47 @@ export interface Arb {
   detected_at: string;
   close_time: string | null;
   last_seen: string;
+  /** When the prices last MOVED, as opposed to when we last looked. */
+  last_updated_at: string;
+  /**
+   * When this stops being assertable. Derived by the engine from the market
+   * close and the age of the stalest quote behind it -- never assigned, so the
+   * countdown drawn against it is counting down to something real.
+   */
+  expires_at: string | null;
+  invalidated_at: string | null;
   is_suspect: boolean;
   roi_pct: number;
   hours_to_close: number | null;
+  seconds_to_expiry: number | null;
+  status: ArbStatus;
+}
+
+export type ArbStatus = "live" | "expiring" | "expired" | "invalidated";
+
+export interface ProviderRow {
+  name: string;
+  label: string;
+  enabled: boolean;
+  health: "healthy" | "degraded" | "rate_limited" | "offline";
+  requests: number;
+  failures: number;
+  consecutive_failures: number;
+  error_rate: number;
+  latency_p50_ms: number | null;
+  latency_p95_ms: number | null;
+  last_success: string | null;
+  last_failure: string | null;
+  last_error: string | null;
+  rate_limited_until: string | null;
+  quota_remaining: number | null;
+  events_last_scan: number;
+}
+
+export interface ProvidersResponse {
+  providers: ProviderRow[];
+  online: number;
+  total: number;
 }
 
 export interface NearMiss {

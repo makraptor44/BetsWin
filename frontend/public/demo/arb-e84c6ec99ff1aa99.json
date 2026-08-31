@@ -111,12 +111,17 @@
   "notes": [
    "Broadly available, but not from US -- at least one venue turns those away."
   ],
-  "detected_at": "2026-08-30T13:58:14.530037Z",
-  "close_time": "2026-12-28T13:58:17.642652Z",
-  "last_seen": "2026-08-30T13:58:19.103765Z",
+  "detected_at": "2026-08-31T07:10:58.941229Z",
+  "close_time": "2026-12-29T07:11:01.944284Z",
+  "last_seen": "2026-08-31T07:11:03.415822Z",
+  "last_updated_at": "2026-08-31T07:10:58.941230Z",
+  "expires_at": "2026-08-31T07:19:35.944546Z",
+  "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": 3.624144965798632,
-  "hours_to_close": 2879.999589328889
+  "seconds_to_expiry": 512.509981,
+  "status": "live",
+  "hours_to_close": 2879.9995860316667
  },
  "payout_matrix": [
   {

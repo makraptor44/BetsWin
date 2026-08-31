@@ -19,7 +19,7 @@ import {
   activatable,
 } from "@/components/ui";
 import { KIND_LABEL, money, pct, placeableLabel } from "@/lib/format";
-import type { Arb } from "@/lib/types";
+import type { Arb, ArbStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,6 +62,47 @@ function SortIcon({ dir }: { dir: false | "asc" | "desc" }) {
     >
       <path d="M12 5v14M7 10l5-5 5 5" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" />
     </svg>
+  );
+}
+
+/**
+ * Lifecycle state, as a word rather than only a colour.
+ *
+ * Colour alone fails for anyone who cannot separate the hues, and this is the
+ * field that says whether a row is actionable at all -- so the label carries
+ * the meaning and the tint only reinforces it.
+ */
+const STATUS_STYLE: Record<ArbStatus, string> = {
+  live: "bg-positive-soft text-positive",
+  expiring: "bg-caution-soft text-caution",
+  expired: "bg-neutral-soft text-faint",
+  invalidated: "bg-danger-soft text-danger",
+};
+
+const STATUS_LABEL: Record<ArbStatus, string> = {
+  live: "Live",
+  expiring: "Expiring",
+  expired: "Expired",
+  invalidated: "Invalidated",
+};
+
+function StatusPill({ status }: { status: ArbStatus }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[5px] px-[7px] py-[2px] text-[11px] font-semibold",
+        STATUS_STYLE[status],
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "h-1.5 w-1.5 rounded-full bg-current",
+          status === "live" && "animate-pulse",
+        )}
+      />
+      {STATUS_LABEL[status]}
+    </span>
   );
 }
 
@@ -207,13 +248,21 @@ export function OpportunityTable({
           );
         },
       }),
-      col.accessor((a) => a.hours_to_close, {
-        id: "closes",
-        header: "Closes",
+      col.accessor((a) => a.seconds_to_expiry, {
+        id: "expiry",
+        header: "Expires",
         meta: { align: "right" },
+        // Against expires_at, not the market close. The close is one of the two
+        // bounds the engine derives the expiry from; the other is how stale the
+        // quotes behind the price have gone, and on a live book that is usually
+        // the binding one.
         sortingFn: (a, b) =>
-          nullsLast(a.original.hours_to_close, b.original.hours_to_close),
-        cell: (c) => <Countdown iso={c.row.original.close_time} showIcon />,
+          nullsLast(a.original.seconds_to_expiry, b.original.seconds_to_expiry),
+        cell: (c) => <Countdown iso={c.row.original.expires_at} showIcon />,
+      }),
+      col.accessor("status", {
+        header: "Status",
+        cell: (c) => <StatusPill status={c.getValue()} />,
       }),
     ],
     [],

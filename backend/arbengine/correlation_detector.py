@@ -33,7 +33,7 @@ from loguru import logger
 from . import correlation_arb as ca
 from . import odds as om
 from .config import settings
-from .detector import _binary_outcomes, _NEAR_RESOLUTION_HOURS, _STALE_AFTER
+from .detector import _NEAR_RESOLUTION_HOURS, _STALE_AFTER, _binary_outcomes, expiry_for
 from .models import Arb, ArbKind, ArbLeg, Event, Market, Quote, RiskFlag, Side, utcnow
 from .sizing import SizedCorrelationTrade, size_correlation_trade
 from .storage import ArbStore
@@ -289,6 +289,11 @@ def evaluate_pair(
         flags=flags,
         notes=notes,
         close_time=close_time,
+        # The same derivation the arbitrage detectors use. This path builds its
+        # Arb directly rather than through `_finalise`, so it has to ask for the
+        # expiry explicitly -- and without it a correlation row was the one kind
+        # of opportunity on the board with no countdown against it.
+        expires_at=expiry_for([quote], close_time),
     )
 
 

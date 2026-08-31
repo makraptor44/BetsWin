@@ -1,12 +1,12 @@
 {
  "stored": {
   "window_days": 30,
-  "total_detected": 7,
-  "avg_margin": 0.032970965569271045,
+  "total_detected": 6,
+  "avg_margin": 0.036185100341296766,
   "max_margin": 0.07602941893768289,
-  "avg_confidence": 86.0,
-  "theoretical_turnover": 3156.4,
-  "theoretical_profit": -72.68,
+  "avg_confidence": 86.16666666666667,
+  "theoretical_turnover": 2656.4,
+  "theoretical_profit": -79.55000000000001,
   "settled_count": 0,
   "realised_pnl": 0.0,
   "by_kind": [
@@ -33,16 +33,10 @@
     "n": 1,
     "avg_margin": 0.06322,
     "profit": -156.46
-   },
-   {
-    "kind": "dutch_no",
-    "n": 1,
-    "avg_margin": 0.013686156937116722,
-    "profit": 6.87
    }
   ],
   "by_venue": {
-   "kalshi": 3,
+   "kalshi": 2,
    "polymarket": 3,
    "smarkets": 2,
    "betfair": 1
@@ -50,10 +44,10 @@
   "by_zone": [
    {
     "zone": "us_prediction",
-    "n": 5,
-    "avg_margin": 0.04109303370564782,
-    "turnover": 2156.42,
-    "profit": -85.33000000000001
+    "n": 4,
+    "avg_margin": 0.04794475289778059,
+    "turnover": 1656.42,
+    "profit": -92.2
    },
    {
     "zone": "uk_exchange",
@@ -65,10 +59,10 @@
   ],
   "by_day": [
    {
-    "day": "2026-08-30",
-    "n": 7,
-    "avg_margin": 0.032970965569271045,
-    "profit": -72.68
+    "day": "2026-08-31",
+    "n": 6,
+    "avg_margin": 0.036185100341296766,
+    "profit": -79.55000000000001
    }
   ]
  },
@@ -86,7 +80,7 @@
   {
    "from": 0.01,
    "to": 0.015,
-   "count": 1
+   "count": 0
   },
   {
    "from": 0.015,
@@ -137,45 +131,45 @@
  "recent_scans": [
   {
    "id": 1,
-   "started_at": "2026-08-30T13:58:12.856522+00:00",
-   "duration": 1.765,
+   "started_at": "2026-08-31T07:10:57.308783+00:00",
+   "duration": 1.681,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
-   "arbs_found": 7,
-   "new_arbs": 7,
+   "arbs_found": 6,
+   "new_arbs": 6,
    "errors": "[]"
   },
   {
    "id": 2,
-   "started_at": "2026-08-30T13:58:14.626306+00:00",
-   "duration": 1.49,
+   "started_at": "2026-08-31T07:10:58.995187+00:00",
+   "duration": 1.431,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
-   "arbs_found": 7,
+   "arbs_found": 6,
    "new_arbs": 0,
    "errors": "[]"
   },
   {
    "id": 3,
-   "started_at": "2026-08-30T13:58:16.120456+00:00",
-   "duration": 1.518,
+   "started_at": "2026-08-31T07:11:00.432907+00:00",
+   "duration": 1.506,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
-   "arbs_found": 7,
+   "arbs_found": 6,
    "new_arbs": 0,
    "errors": "[]"
   },
   {
    "id": 4,
-   "started_at": "2026-08-30T13:58:17.642631+00:00",
-   "duration": 1.465,
+   "started_at": "2026-08-31T07:11:01.944256+00:00",
+   "duration": 1.476,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
-   "arbs_found": 7,
+   "arbs_found": 6,
    "new_arbs": 0,
    "errors": "[]"
   }
@@ -203,9 +197,9 @@
    "best_outcome": "Not Yes",
    "outcomes": 2,
    "liquidity_usd": 115000.0,
-   "close_time": "2027-06-26T13:58:17.642652Z",
+   "close_time": "2027-06-27T07:11:01.944284Z",
    "url": "https://example.invalid/betfair/ge-labour",
-   "seen_at": "2026-08-30T13:58:19.103169Z"
+   "seen_at": "2026-08-31T07:11:03.415119Z"
   },
   {
    "id": "3136164427b9da0f",
@@ -220,9 +214,9 @@
    "best_outcome": "Vance",
    "outcomes": 2,
    "liquidity_usd": 920000.0,
-   "close_time": "2026-12-28T13:58:17.642652Z",
+   "close_time": "2026-12-29T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/nominee-2028",
-   "seen_at": "2026-08-30T13:58:19.103031Z"
+   "seen_at": "2026-08-31T07:11:03.414991Z"
   },
   {
    "id": "b2ef6edc97815ba4",
@@ -237,9 +231,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 43491.0,
-   "close_time": "2027-07-14T13:58:17.642652Z",
+   "close_time": "2027-07-15T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-0",
-   "seen_at": "2026-08-30T13:58:19.103238Z"
+   "seen_at": "2026-08-31T07:11:03.415185Z"
   },
   {
    "id": "65a40190819fc5e4",
@@ -254,9 +248,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 121963.0,
-   "close_time": "2026-10-16T13:58:17.642652Z",
+   "close_time": "2026-10-17T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-2",
-   "seen_at": "2026-08-30T13:58:19.103253Z"
+   "seen_at": "2026-08-31T07:11:03.415198Z"
   },
   {
    "id": "9e996bb506c76029",
@@ -271,9 +265,9 @@
    "best_outcome": "No",
    "outcomes": 2,
    "liquidity_usd": 78038.0,
-   "close_time": "2027-01-17T13:58:17.642652Z",
+   "close_time": "2027-01-18T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-4",
-   "seen_at": "2026-08-30T13:58:19.103267Z"
+   "seen_at": "2026-08-31T07:11:03.415212Z"
   },
   {
    "id": "2e29a2b25ca2ef82",
@@ -288,9 +282,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 125926.0,
-   "close_time": "2027-05-28T13:58:17.642652Z",
+   "close_time": "2027-05-29T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-6",
-   "seen_at": "2026-08-30T13:58:19.103282Z"
+   "seen_at": "2026-08-31T07:11:03.415225Z"
   },
   {
    "id": "7e6c22e9293244c8",
@@ -305,9 +299,9 @@
    "best_outcome": "Chiefs",
    "outcomes": 2,
    "liquidity_usd": 410000.0,
-   "close_time": "2026-11-28T13:58:17.642652Z",
+   "close_time": "2026-11-29T07:11:01.944284Z",
    "url": "https://example.invalid/kalshi/superbowl-61",
-   "seen_at": "2026-08-30T13:58:19.103095Z"
+   "seen_at": "2026-08-31T07:11:03.415051Z"
   },
   {
    "id": "b8f168e49cce72cb",
@@ -322,35 +316,34 @@
    "best_outcome": "Brighton",
    "outcomes": 2,
    "liquidity_usd": 86000.0,
-   "close_time": "2026-09-02T13:58:17.642652Z",
+   "close_time": "2026-09-03T07:11:01.944284Z",
    "url": "https://example.invalid/smarkets/arsenal-brighton",
-   "seen_at": "2026-08-30T13:58:19.103206Z"
+   "seen_at": "2026-08-31T07:11:03.415154Z"
   }
  ],
  "live": {
-  "count": 7,
+  "count": 6,
   "by_kind": {
    "correlation": 1,
    "cross_venue": 2,
    "dutch_yes": 2,
-   "binary_complement": 1,
-   "dutch_no": 1
+   "binary_complement": 1
   },
   "by_venue": {
-   "kalshi": 3,
+   "kalshi": 2,
    "polymarket": 3,
    "smarkets": 2,
    "betfair": 1
   },
   "by_zone": {
-   "us_prediction": 5,
+   "us_prediction": 4,
    "uk_exchange": 2
   },
-  "total_profit_available": 83.78,
+  "total_profit_available": 76.91,
   "directional_at_risk": 156.46,
   "directional_count": 1,
-  "total_stake_required": 3156.4,
-  "avg_margin": 0.03297,
-  "avg_confidence": 86.0
+  "total_stake_required": 2656.4,
+  "avg_margin": 0.03619,
+  "avg_confidence": 86.2
  }
 }

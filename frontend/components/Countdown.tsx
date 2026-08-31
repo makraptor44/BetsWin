@@ -81,12 +81,22 @@ export function formatRemaining(ms: number): string {
 
   if (days >= 1) return days >= 365 ? `${(days / 365).toFixed(1)}y` : `${days}d ${hours}h`;
   if (hours >= 1) return `${hours}h ${pad(mins)}m`;
+  // Under ten seconds the tenths are the difference between acting and not,
+  // and above it they are a flickering digit nobody reads.
+  if (ms < 10_000) return `${secs}.${Math.floor((ms % 1000) / 100)}s`;
   return `${mins}:${pad(secs)}`;
 }
 
-/** Under this many ms the countdown is treated as urgent. */
-const URGENT_MS = 15 * 60 * 1000;
-const SOON_MS = 60 * 60 * 1000;
+/**
+ * Urgency bands.
+ *
+ * Deliberately narrow. On a short-dated book the difference between "worth
+ * reading" and "already gone" is seconds, so the escalation happens where the
+ * decision actually changes rather than spread evenly across the hour.
+ */
+const URGENT_MS = 5_000;
+const PRESSING_MS = 10_000;
+const SOON_MS = 30_000;
 
 export function Countdown({
   iso,
@@ -103,24 +113,43 @@ export function Countdown({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  if (!iso) return <span className={cn("text-faint", className)}>—</span>;
+  // The shared clock ticks once a second, which is the right rate for almost
+  // every row. Inside the last ten seconds the display carries tenths, so those
+  // rows -- and only those -- run a local interval on top. A table of two
+  // hundred countdowns still holds one timer; the handful genuinely about to
+  // expire hold one more each, which is the cost worth paying.
+  const [fast, setFast] = useState(0);
+  const target = iso ? new Date(iso).getTime() : Number.NaN;
+  const needsTenths =
+    Number.isFinite(target) && target - clock > 0 && target - clock <= PRESSING_MS;
 
-  const target = new Date(iso).getTime();
-  if (Number.isNaN(target)) {
+  useEffect(() => {
+    if (!needsTenths) return;
+    // The timestamp is captured in the interval, not read during render:
+    // calling Date.now() while rendering is impure and the compiler rejects it.
+    const id = setInterval(() => setFast(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [needsTenths]);
+
+  if (!iso || Number.isNaN(target)) {
     return <span className={cn("text-faint", className)}>—</span>;
   }
 
-  const remaining = target - clock;
-  const urgent = remaining > 0 && remaining <= URGENT_MS;
-  const soon = remaining > URGENT_MS && remaining <= SOON_MS;
+  // Inside the tenths window `fast` is the newer of the two clocks; outside it
+  // stays 0 and the shared one-second tick drives the display.
+  const remaining = target - Math.max(clock, fast);
   const closed = remaining <= 0;
+  const urgent = remaining > 0 && remaining <= URGENT_MS;
+  const pressing = remaining > URGENT_MS && remaining <= PRESSING_MS;
+  const soon = remaining > PRESSING_MS && remaining <= SOON_MS;
 
   return (
     <span
       className={cn(
         "num inline-flex items-center gap-1 tabular-nums",
         closed && "text-faint line-through",
-        urgent && "text-danger",
+        urgent && "font-semibold text-danger",
+        pressing && "text-danger",
         soon && "text-caution",
         className,
       )}

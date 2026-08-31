@@ -16,9 +16,9 @@
    "best_outcome": "Not Yes",
    "outcomes": 2,
    "liquidity_usd": 115000.0,
-   "close_time": "2027-06-26T13:58:17.642652Z",
+   "close_time": "2027-06-27T07:11:01.944284Z",
    "url": "https://example.invalid/betfair/ge-labour",
-   "seen_at": "2026-08-30T13:58:19.103169Z"
+   "seen_at": "2026-08-31T07:11:03.415119Z"
   },
   {
    "id": "3136164427b9da0f",
@@ -33,9 +33,9 @@
    "best_outcome": "Vance",
    "outcomes": 2,
    "liquidity_usd": 920000.0,
-   "close_time": "2026-12-28T13:58:17.642652Z",
+   "close_time": "2026-12-29T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/nominee-2028",
-   "seen_at": "2026-08-30T13:58:19.103031Z"
+   "seen_at": "2026-08-31T07:11:03.414991Z"
   },
   {
    "id": "b2ef6edc97815ba4",
@@ -50,9 +50,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 43491.0,
-   "close_time": "2027-07-14T13:58:17.642652Z",
+   "close_time": "2027-07-15T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-0",
-   "seen_at": "2026-08-30T13:58:19.103238Z"
+   "seen_at": "2026-08-31T07:11:03.415185Z"
   },
   {
    "id": "65a40190819fc5e4",
@@ -67,9 +67,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 121963.0,
-   "close_time": "2026-10-16T13:58:17.642652Z",
+   "close_time": "2026-10-17T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-2",
-   "seen_at": "2026-08-30T13:58:19.103253Z"
+   "seen_at": "2026-08-31T07:11:03.415198Z"
   },
   {
    "id": "9e996bb506c76029",
@@ -84,9 +84,9 @@
    "best_outcome": "No",
    "outcomes": 2,
    "liquidity_usd": 78038.0,
-   "close_time": "2027-01-17T13:58:17.642652Z",
+   "close_time": "2027-01-18T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-4",
-   "seen_at": "2026-08-30T13:58:19.103267Z"
+   "seen_at": "2026-08-31T07:11:03.415212Z"
   },
   {
    "id": "2e29a2b25ca2ef82",
@@ -101,9 +101,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 125926.0,
-   "close_time": "2027-05-28T13:58:17.642652Z",
+   "close_time": "2027-05-29T07:11:01.944284Z",
    "url": "https://example.invalid/polymarket/noise-6",
-   "seen_at": "2026-08-30T13:58:19.103282Z"
+   "seen_at": "2026-08-31T07:11:03.415225Z"
   },
   {
    "id": "7e6c22e9293244c8",
@@ -118,9 +118,9 @@
    "best_outcome": "Chiefs",
    "outcomes": 2,
    "liquidity_usd": 410000.0,
-   "close_time": "2026-11-28T13:58:17.642652Z",
+   "close_time": "2026-11-29T07:11:01.944284Z",
    "url": "https://example.invalid/kalshi/superbowl-61",
-   "seen_at": "2026-08-30T13:58:19.103095Z"
+   "seen_at": "2026-08-31T07:11:03.415051Z"
   },
   {
    "id": "b8f168e49cce72cb",
@@ -135,9 +135,9 @@
    "best_outcome": "Brighton",
    "outcomes": 2,
    "liquidity_usd": 86000.0,
-   "close_time": "2026-09-02T13:58:17.642652Z",
+   "close_time": "2026-09-03T07:11:01.944284Z",
    "url": "https://example.invalid/smarkets/arsenal-brighton",
-   "seen_at": "2026-08-30T13:58:19.103206Z"
+   "seen_at": "2026-08-31T07:11:03.415154Z"
   }
  ]
 }
