@@ -131,8 +131,8 @@
  "recent_scans": [
   {
    "id": 1,
-   "started_at": "2026-08-31T10:23:38.129888+00:00",
-   "duration": 1.469,
+   "started_at": "2026-08-31T11:46:11.369384+00:00",
+   "duration": 0.781,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
@@ -142,8 +142,8 @@
   },
   {
    "id": 2,
-   "started_at": "2026-08-31T10:23:39.601067+00:00",
-   "duration": 1.038,
+   "started_at": "2026-08-31T11:46:12.153007+00:00",
+   "duration": 0.489,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
@@ -153,8 +153,8 @@
   },
   {
    "id": 3,
-   "started_at": "2026-08-31T10:23:40.641657+00:00",
-   "duration": 1.036,
+   "started_at": "2026-08-31T11:46:12.644176+00:00",
+   "duration": 0.485,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
@@ -164,8 +164,8 @@
   },
   {
    "id": 4,
-   "started_at": "2026-08-31T10:23:41.679703+00:00",
-   "duration": 1.054,
+   "started_at": "2026-08-31T11:46:13.131047+00:00",
+   "duration": 0.463,
    "events_scanned": 20,
    "markets_scanned": 29,
    "quotes_scanned": 58,
@@ -197,9 +197,9 @@
    "best_outcome": "Not Yes",
    "outcomes": 2,
    "liquidity_usd": 115000.0,
-   "close_time": "2027-06-27T10:23:41.679726Z",
+   "close_time": "2027-06-27T11:46:13.131070Z",
    "url": "https://example.invalid/betfair/ge-labour",
-   "seen_at": "2026-08-31T10:23:42.731007Z"
+   "seen_at": "2026-08-31T11:46:13.592315Z"
   },
   {
    "id": "3136164427b9da0f",
@@ -214,9 +214,9 @@
    "best_outcome": "Vance",
    "outcomes": 2,
    "liquidity_usd": 920000.0,
-   "close_time": "2026-12-29T10:23:41.679726Z",
+   "close_time": "2026-12-29T11:46:13.131070Z",
    "url": "https://example.invalid/polymarket/nominee-2028",
-   "seen_at": "2026-08-31T10:23:42.730834Z"
+   "seen_at": "2026-08-31T11:46:13.592120Z"
   },
   {
    "id": "b2ef6edc97815ba4",
@@ -231,9 +231,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 43491.0,
-   "close_time": "2027-07-15T10:23:41.679726Z",
+   "close_time": "2027-07-15T11:46:13.131070Z",
    "url": "https://example.invalid/polymarket/noise-0",
-   "seen_at": "2026-08-31T10:23:42.731100Z"
+   "seen_at": "2026-08-31T11:46:13.592400Z"
   },
   {
    "id": "65a40190819fc5e4",
@@ -248,9 +248,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 121963.0,
-   "close_time": "2026-10-17T10:23:41.679726Z",
+   "close_time": "2026-10-17T11:46:13.131070Z",
    "url": "https://example.invalid/polymarket/noise-2",
-   "seen_at": "2026-08-31T10:23:42.731121Z"
+   "seen_at": "2026-08-31T11:46:13.592418Z"
   },
   {
    "id": "9e996bb506c76029",
@@ -265,9 +265,9 @@
    "best_outcome": "No",
    "outcomes": 2,
    "liquidity_usd": 78038.0,
-   "close_time": "2027-01-18T10:23:41.679726Z",
+   "close_time": "2027-01-18T11:46:13.131070Z",
    "url": "https://example.invalid/polymarket/noise-4",
-   "seen_at": "2026-08-31T10:23:42.731141Z"
+   "seen_at": "2026-08-31T11:46:13.592436Z"
   },
   {
    "id": "2e29a2b25ca2ef82",
@@ -282,9 +282,9 @@
    "best_outcome": "Yes",
    "outcomes": 2,
    "liquidity_usd": 125926.0,
-   "close_time": "2027-05-29T10:23:41.679726Z",
+   "close_time": "2027-05-29T11:46:13.131070Z",
    "url": "https://example.invalid/polymarket/noise-6",
-   "seen_at": "2026-08-31T10:23:42.731160Z"
+   "seen_at": "2026-08-31T11:46:13.592454Z"
   },
   {
    "id": "7e6c22e9293244c8",
@@ -299,9 +299,9 @@
    "best_outcome": "Chiefs",
    "outcomes": 2,
    "liquidity_usd": 410000.0,
-   "close_time": "2026-11-29T10:23:41.679726Z",
+   "close_time": "2026-11-29T11:46:13.131070Z",
    "url": "https://example.invalid/kalshi/superbowl-61",
-   "seen_at": "2026-08-31T10:23:42.730916Z"
+   "seen_at": "2026-08-31T11:46:13.592228Z"
   },
   {
    "id": "b8f168e49cce72cb",
@@ -316,9 +316,9 @@
    "best_outcome": "Brighton",
    "outcomes": 2,
    "liquidity_usd": 86000.0,
-   "close_time": "2026-09-03T10:23:41.679726Z",
+   "close_time": "2026-09-03T11:46:13.131070Z",
    "url": "https://example.invalid/smarkets/arsenal-brighton",
-   "seen_at": "2026-08-31T10:23:42.731048Z"
+   "seen_at": "2026-08-31T11:46:13.592354Z"
   }
  ],
  "live": {

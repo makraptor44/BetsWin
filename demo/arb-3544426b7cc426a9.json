@@ -54,17 +54,17 @@
   "notes": [
    "Directional bet that the market's implied correlation (rho_impl=0.50) converges toward the prior (rho_prior=0.68, historical, n=8) -- not a risk-free arbitrage. The full stake is at risk if the joint contract resolves the other way."
   ],
-  "detected_at": "2026-08-31T10:23:39.589330Z",
-  "close_time": "2027-11-04T10:23:41.679726Z",
-  "last_seen": "2026-08-31T10:23:42.731940Z",
-  "last_updated_at": "2026-08-31T10:23:39.589333Z",
-  "expires_at": "2026-08-31T10:33:17.681333Z",
+  "detected_at": "2026-08-31T11:46:12.143152Z",
+  "close_time": "2027-11-04T11:46:13.131070Z",
+  "last_seen": "2026-08-31T11:46:13.593105Z",
+  "last_updated_at": "2026-08-31T11:46:12.143153Z",
+  "expires_at": "2026-08-31T11:55:49.132647Z",
   "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": -100.0,
-  "seconds_to_expiry": 574.93796,
+  "seconds_to_expiry": 575.530347,
   "status": "live",
-  "hours_to_close": 10319.99970454
+  "hours_to_close": 10319.99986910139
  },
  "payout_matrix": [
   {

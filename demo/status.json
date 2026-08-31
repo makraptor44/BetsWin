@@ -2,9 +2,9 @@
  "running": false,
  "demo_mode": true,
  "last_scan": {
-  "started_at": "2026-08-31T10:23:41.679703Z",
-  "finished_at": "2026-08-31T10:23:42.733674Z",
-  "duration_seconds": 1.054,
+  "started_at": "2026-08-31T11:46:13.131047Z",
+  "finished_at": "2026-08-31T11:46:13.594329Z",
+  "duration_seconds": 0.463,
   "events_scanned": 20,
   "markets_scanned": 29,
   "quotes_scanned": 58,
@@ -34,7 +34,7 @@
  "poll_interval": 45,
  "live_arbs": 6,
  "total_detected": 6,
- "uptime_seconds": 4.6102752270000025,
+ "uptime_seconds": 2.2303666050000004,
  "sources": {
   "polymarket": true,
   "kalshi": true,
