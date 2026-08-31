@@ -71,6 +71,39 @@ jobs:
         # with no JavaScript or CSS at all.
         run: touch frontend/out/.nojekyll
 
+      # Pages serves ONE site per repository and this action replaces all of it,
+      # so a deploy from main used to take every branch preview down with it --
+      # they are published under their own subdirectories and were simply not in
+      # main's build output. The previews live in the `gh-pages` branch, which
+      # acts as the accumulator; carry them across so main's deploy publishes the
+      # whole site rather than its own share of it.
+      - name: Preserve branch previews
+        env:
+          REMOTE: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads "$REMOTE" gh-pages >/dev/null 2>&1; then
+            echo "No gh-pages branch yet; nothing to preserve."
+            exit 0
+          fi
+
+          work="$(mktemp -d)"
+          git clone --depth 1 --branch gh-pages "$REMOTE" "$work" --quiet
+
+          # Only directories, and never one main itself just produced: a preview
+          # is a subdirectory, and anything colliding with main's own output is
+          # main's to define.
+          restored=0
+          for dir in "$work"/*/; do
+            name="$(basename "$dir")"
+            [ "$name" = "_next" ] && continue
+            if [ -e "frontend/out/$name" ]; then continue; fi
+            cp -a "$dir" "frontend/out/$name"
+            echo "  preserved /$name/"
+            restored=$((restored + 1))
+          done
+          echo "Carried across $restored branch preview(s)."
+
       - uses: actions/configure-pages@v5
         with:
           # Turn Pages on for the repo if it is not already, so a fresh clone
