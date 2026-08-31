@@ -100,17 +100,17 @@
   "notes": [
    "Fees and slippage consume 56% of the gross edge (2.25% -> 0.98%)."
   ],
-  "detected_at": "2026-08-31T09:38:16.159241Z",
-  "close_time": "2026-09-03T09:38:18.419471Z",
-  "last_seen": "2026-08-31T09:38:19.540010Z",
-  "last_updated_at": "2026-08-31T09:38:16.159242Z",
-  "expires_at": "2026-08-31T09:46:49.420692Z",
+  "detected_at": "2026-08-31T09:41:58.024349Z",
+  "close_time": "2026-09-03T09:42:00.411739Z",
+  "last_seen": "2026-08-31T09:42:01.069657Z",
+  "last_updated_at": "2026-08-31T09:41:58.024350Z",
+  "expires_at": "2026-08-31T09:50:31.412857Z",
   "invalidated_at": null,
   "is_suspect": false,
   "roi_pct": 0.9820196403928079,
-  "seconds_to_expiry": 509.865702,
+  "seconds_to_expiry": 510.328918,
   "status": "live",
-  "hours_to_close": 71.99968457666667
+  "hours_to_close": 71.99981327694445
  },
  "payout_matrix": [
   {
